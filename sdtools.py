@@ -36,7 +36,7 @@ def read_opt(path_case, keys = None, quiet = False):
 
             if "[" in line[0]:
                 # If category
-                category = line.split("[")[1].split("]")[0] 
+                category = line.split("[")[1].split("]")[0].lower() 
                 categories.append(category)
 
             else:
@@ -92,8 +92,8 @@ def set_opt(path_case, opt, new_value):
     for i, line in enumerate(lines):
         if "[" in line[0]:
         # If category
-            category = line.split("[")[1].split("]")[0] 
-            print(category)
+            category = line.split("[")[1].split("]")[0].lower() 
+            
         # If the correct line, replace.
         # Prints done without \n for formatting reasons
         if category == opt.split(":")[0] and opt.split(":")[1] in line and old_value in line:
