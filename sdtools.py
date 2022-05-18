@@ -119,22 +119,24 @@ def clone(path_case, new_case, force = False, c=False):
     f is for Force, or overwrite
     c is for clean, remove all files but .inp and .settings from new cases
     """
-
-    if new_case in os.listdir():
+    
+    path_root = os.path.dirname(path_case)
+    path_new_case = path_root + os.path.sep + new_case
+    # print(os.listdir(path_root))
+    if new_case in os.listdir(path_root):
         print(f"Case {new_case} already exists!")
         if force == True:
             print(f"Force enabled, deleting {new_case}")
-            shutil.rmtree(new_case)
+            shutil.rmtree(path_new_case)
+
         else:
             print("-> Exiting")
         
-    path_root = os.path.dirname(path_case)
-    shutil.copytree(path_case, new_case)
+    shutil.copytree(path_case, path_new_case)
     print(f"-> Copied case {path_case} into {new_case}")
     
     if c==True:
-        clean(new_case)
-        print(f"{new_case} cleaned")
+        clean(path_new_case)
     
     
 def clean(path_case):
@@ -156,12 +158,57 @@ def clean(path_case):
             
 
     if len(files_removed)>0:
-        print(f"Files removed: {files_removed}")
+        print(f"Case cleaned, files removed: {files_removed}")
     else:
         print("Nothing to clean")
         
     # Get back to the original directory
     os.chdir(original_dir)
+    
+    
+def make_scan(case, overwrite = False)
+    """
+    Takes one case and creates density scans to hardcoded density
+    New cases are renamed and a suffix -x is appended to indicate unfinished case
+    Cases are cleaned and if overwrite=True, new cases overwrite any old ones
+    """
+    # case = "c1-r1-2"
+    # path_case = os.getcwd()+"\\cases\\"+case
+    
+    prefix = case.split("-")[0]
+    caseid = case.split("-")[1]
+    densid = case.split("-")[2]
+
+    intend_dens = float(densid) * 1e19
+    dens_scan = [1e19, 2e19, 3e19, 5e19, 7e19, 10e19]
+
+    print("-----------------------------------------------------------")
+    print(f"Cloning case {case} onto density scan {dens_scan}")
+    if overwrite:
+        print("Overwrite set to true!\n")
+
+    case_dens = float(read_opt(path_case, quiet = True)["ne:function"]) * 1e20
+
+    if intend_dens != case_dens:
+        print(f"Case {case} density mismatch. Found: {case_dens:.1E} || Case name implies: {intend_dens:.1E}")
+        print("Correcting density to match case name.")
+        set_opt(path_case, "ne:function", intend_dens/1e20)
+
+    if intend_dens in dens_scan:
+        dens_scan.remove(intend_dens)
+
+    new_names = []
+
+    for i, dens in enumerate(dens_scan):
+        new_names.append(prefix + "-" + caseid + "-" + str(int(dens/1e19)) + "-x")
+
+    for i, new_case in enumerate(new_names):
+        clone(path_case, new_case, force = overwrite, c = True)
+
+        path_new_case = os.path.dirname(path_case) + os.path.sep + new_case
+        set_opt(path_new_case, "ne:function", dens_scan[i]/1e20)
+
+        print("Created new case {}\n".format(path_new_case))
     
     
 # def time_stats(path_case, quiet = False):
@@ -190,15 +237,20 @@ if __name__ == '__main__':
     p_set_opt = subparser.add_parser("set_opt")
     p_clone = subparser.add_parser("clone")
     p_clean = subparser.add_parser("clean")
+    p_make_scan = subparser.add_parser("make_scan")
 
 
     p_opt_read.add_argument('-i', type=str, nargs="+", required = True, help="Read settings from case. First input is case folder, remaining are keys to search for in options") 
     p_set_opt.add_argument("-i", type=str, nargs=3, required = True, help = "Change setting in a case. --set_opt(case_folder, setting_name, new_value")
+    
     p_clone.add_argument("-i", type=str, nargs=2, required = True, help = "Clone case. --clone(case_folder, new_name)")
     p_clone.add_argument( "-f", action="store_true", help = "Overwrite old case")
     p_clone.add_argument( "-c", action="store_true", help = "Clean new case")
     p_clean.add_argument("-i", type=str, nargs=1, required=True, help = "Removes all but input and settings files. clean(case_folder)")
-
+    
+    p_make_scan.add_argument("-i", type=str, nargs=1, required=True, help = "Clones case into a density scan. -i to provide case name")
+    p_make_scan.add_argument("-f", action="store_true", help = "Overwrite old cases")
+    
     args = parser.parse_args()
 
     if args.command == "read_opt":
@@ -212,6 +264,9 @@ if __name__ == '__main__':
 
     if args.command == "clean":
         clean(args.i[0])
+        
+    if args.command == "make_scan":
+        clean(args.i[0], overwrite = args.f)
 
     # print('Hello,', args.read_opt)
 
