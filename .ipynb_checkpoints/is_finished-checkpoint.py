@@ -1,7 +1,11 @@
 from boutdata.data import BoutData
 import os
+import sys
+import getopt
 
-def is_finished(path, key, quiet = False):
+def is_finished(argv):
+    
+    
     """
     -> is_finished(path, key, quiet = False)
     Will print status of all cases with names matching key in path
@@ -12,6 +16,10 @@ def is_finished(path, key, quiet = False):
     Not started - Input file exists but no dump file
     Missing input file - No input file
     """
+    quiet = False
+    
+    path = sys.argv[0]
+    key = sys.argv[1]
     
     folders = os.listdir(path)
     
