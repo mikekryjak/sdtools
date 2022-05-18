@@ -8,7 +8,7 @@ from optparse import OptionParser
 import argparse
 
 
-# def is_finished():
+#def is_finished():
     
     
 """
@@ -22,13 +22,14 @@ Not started - Input file exists but no dump file
 Missing input file - No input file
 """
 
-# path = sys.argv[0]
-# key = sys.argv[1]
-
-folders = os.listdir(os.getcwd())
+#path = sys.argv[0]
+#key = sys.argv[1]
+quiet = False
+path = os.getcwd()
+folders = os.listdir(path)
 
 for folder in folders:
-    if key in folder and "." not in folder:
+    if "." not in folder:
 
         path_folder = path + os.path.sep + folder
 
@@ -68,13 +69,13 @@ for folder in folders:
         if found_inp == False:
             status = "Missing input file"
 
-        # if quiet == False:
+        #if quiet == False:
         print(f"{folder} || {status}")
-        # else:
-            # return status
+        #else:
+            #return status
             
-# parser = argparse.ArgumentParser()
-# parser.add_argument("-quiet", action="store_false", help = "suppress print")
-# args = parser.parse_args()
+#parser = argparse.ArgumentParser()
+#parser.add_argument("-quiet", action="store_false", help = "suppress print")
+#args = parser.parse_args()
 
-# is_finished(args.i[0], args.i[1], quiet = quiet)
+#is_finished(args.i[0], args.i[1], quiet = quiet)
