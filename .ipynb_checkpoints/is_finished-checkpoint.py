@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from boutdata.data import BoutData
 import os
 import sys
