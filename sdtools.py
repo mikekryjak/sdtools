@@ -5,6 +5,7 @@ import platform
 from optparse import OptionParser
 import argparse
 import shutil
+from boutdata.data import BoutData
 
 
 system = platform.system()
@@ -166,7 +167,7 @@ def clean(path_case):
     os.chdir(original_dir)
     
     
-def make_scan(case, overwrite = False)
+def make_scan(case, overwrite = False):
     """
     Takes one case and creates density scans to hardcoded density
     New cases are renamed and a suffix -x is appended to indicate unfinished case
@@ -209,6 +210,22 @@ def make_scan(case, overwrite = False)
         set_opt(path_new_case, "ne:function", dens_scan[i]/1e20)
 
         print("Created new case {}\n".format(path_new_case))
+        
+def is_finished(case_path, quiet = False):
+    """
+    Returns true if case finished
+    """
+    data = BoutData(case_path)
+
+    if data["options"]["timestep"] * data["options"]["nout"] == data["outputs"]["tt"]:
+        is_finished = True
+    else:
+        is_finished = False
+        
+    if quiet == False:
+        print(is_finished)
+        
+    return is_finished
     
     
 # def time_stats(path_case, quiet = False):
@@ -231,6 +248,8 @@ def make_scan(case, overwrite = False)
 # Create the parser
 
 if __name__ == '__main__':
+    
+    # Make parsers
     parser = argparse.ArgumentParser()
     subparser = parser.add_subparsers(dest="command")
     p_opt_read = subparser.add_parser("read_opt")
@@ -238,19 +257,33 @@ if __name__ == '__main__':
     p_clone = subparser.add_parser("clone")
     p_clean = subparser.add_parser("clean")
     p_make_scan = subparser.add_parser("make_scan")
+    p_is_finished = subparser.add_parser("is_finished")
 
-
-    p_opt_read.add_argument('-i', type=str, nargs="+", required = True, help="Read settings from case. First input is case folder, remaining are keys to search for in options") 
-    p_set_opt.add_argument("-i", type=str, nargs=3, required = True, help = "Change setting in a case. --set_opt(case_folder, setting_name, new_value")
+    # Add arguments to parsers
+    p_opt_read.add_argument('-i', type=str, nargs="+", required = True, 
+                            help="Read settings from case. First input is case folder, remaining are keys to search for in options") 
+    p_set_opt.add_argument("-i", type=str, nargs=3, required = True, 
+                           help = "Change setting in a case. --set_opt(case_folder, setting_name, new_value")
     
-    p_clone.add_argument("-i", type=str, nargs=2, required = True, help = "Clone case. --clone(case_folder, new_name)")
-    p_clone.add_argument( "-f", action="store_true", help = "Overwrite old case")
-    p_clone.add_argument( "-c", action="store_true", help = "Clean new case")
-    p_clean.add_argument("-i", type=str, nargs=1, required=True, help = "Removes all but input and settings files. clean(case_folder)")
+    p_clone.add_argument("-i", type=str, nargs=2, required = True, 
+                         help = "Clone case. --clone(case_folder, new_name)")
+    p_clone.add_argument( "-f", action="store_true", 
+                         help = "Overwrite old case")
+    p_clone.add_argument( "-c", action="store_true", 
+                         help = "Clean new case")
     
-    p_make_scan.add_argument("-i", type=str, nargs=1, required=True, help = "Clones case into a density scan. -i to provide case name")
-    p_make_scan.add_argument("-f", action="store_true", help = "Overwrite old cases")
+    p_clean.add_argument("-i", type=str, nargs=1, required=True, 
+                         help = "Removes all but input and settings files. clean(case_folder)")
     
+    p_make_scan.add_argument("-i", type=str, nargs=1, required=True, 
+                             help = "Clones case into a density scan. -i to provide case name")
+    p_make_scan.add_argument("-f", action="store_true", 
+                             help = "Overwrite old cases")
+    
+    p_is_finished.add_argument("-i", type=str, nargs=1, required = True, 
+                         help = "Tell you if case finished")
+    
+    # Link parser arguments to functions
     args = parser.parse_args()
 
     if args.command == "read_opt":
@@ -267,6 +300,8 @@ if __name__ == '__main__':
         
     if args.command == "make_scan":
         clean(args.i[0], overwrite = args.f)
+        
+    if args.command == "is_finished":
+        clean(args.i[0])
 
-    # print('Hello,', args.read_opt)
 
