@@ -123,6 +123,7 @@ def clone(path_case, new_case, force = False, c=False):
     
     path_root = os.path.dirname(path_case)
     path_new_case = path_root + os.path.sep + new_case
+    
     # print(os.listdir(path_root))
     if new_case in os.listdir(path_root):
         print(f"Case {new_case} already exists!")
@@ -299,9 +300,9 @@ if __name__ == '__main__':
         clean(args.i[0])
         
     if args.command == "make_scan":
-        clean(args.i[0], overwrite = args.f)
+        make_scan(args.i[0], overwrite = args.f)
         
     if args.command == "is_finished":
-        clean(args.i[0])
+        is_finished(args.i[0])
 
 
