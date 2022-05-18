@@ -2,8 +2,11 @@ from boutdata.data import BoutData
 import os
 import sys
 import getopt
+from optparse import OptionParser
+import argparse
 
-def is_finished(argv):
+
+def is_finished(path, key, quiet = False):
     
     
     """
@@ -16,7 +19,6 @@ def is_finished(argv):
     Not started - Input file exists but no dump file
     Missing input file - No input file
     """
-    quiet = False
     
     path = sys.argv[0]
     key = sys.argv[1]
@@ -68,3 +70,9 @@ def is_finished(argv):
                 print(f"{folder} || {status}")
             else:
                 return status
+            
+parser = argparse.ArgumentParser()
+parser.add_argument("-quiet", action="store_false", help = "suppress print")
+args = parser.parse_args()
+
+is_finished(args.i[0], args.i[1], quiet = quiet)
