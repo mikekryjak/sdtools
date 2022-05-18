@@ -182,34 +182,36 @@ def clean(path_case):
     
     
 # Create the parser
-parser = argparse.ArgumentParser()
-subparser = parser.add_subparsers(dest="command")
-p_opt_read = subparser.add_parser("read_opt")
-p_set_opt = subparser.add_parser("set_opt")
-p_clone = subparser.add_parser("clone")
-p_clean = subparser.add_parser("clean")
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    subparser = parser.add_subparsers(dest="command")
+    p_opt_read = subparser.add_parser("read_opt")
+    p_set_opt = subparser.add_parser("set_opt")
+    p_clone = subparser.add_parser("clone")
+    p_clean = subparser.add_parser("clean")
 
 
-p_opt_read.add_argument('-i', type=str, nargs="+", required = True, help="Read settings from case. First input is case folder, remaining are keys to search for in options") 
-p_set_opt.add_argument("-i", type=str, nargs=3, required = True, help = "Change setting in a case. --set_opt(case_folder, setting_name, new_value")
-p_clone.add_argument("-i", type=str, nargs=2, required = True, help = "Clone case. --clone(case_folder, new_name)")
-p_clone.add_argument( "-f", action="store_true", help = "Overwrite old case")
-p_clone.add_argument( "-c", action="store_true", help = "Clean new case")
-p_clean.add_argument("-i", type=str, nargs=1, required=True, help = "Removes all but input and settings files. clean(case_folder)")
+    p_opt_read.add_argument('-i', type=str, nargs="+", required = True, help="Read settings from case. First input is case folder, remaining are keys to search for in options") 
+    p_set_opt.add_argument("-i", type=str, nargs=3, required = True, help = "Change setting in a case. --set_opt(case_folder, setting_name, new_value")
+    p_clone.add_argument("-i", type=str, nargs=2, required = True, help = "Clone case. --clone(case_folder, new_name)")
+    p_clone.add_argument( "-f", action="store_true", help = "Overwrite old case")
+    p_clone.add_argument( "-c", action="store_true", help = "Clean new case")
+    p_clean.add_argument("-i", type=str, nargs=1, required=True, help = "Removes all but input and settings files. clean(case_folder)")
 
-args = parser.parse_args()
+    args = parser.parse_args()
 
-if args.command == "read_opt":
-    read_opt(args.i[0], args.i[1:])
+    if args.command == "read_opt":
+        read_opt(args.i[0], args.i[1:])
 
-if args.command == "set_opt":
-    set_opt(args.i[0], args.i[1], args.i[2])
- 
-if args.command == "clone":
-    clone(args.i[0], args.i[1], force = args.f, c = args.c)
-    
-if args.command == "clean":
-    clean(args.i[0])
+    if args.command == "set_opt":
+        set_opt(args.i[0], args.i[1], args.i[2])
 
-# print('Hello,', args.read_opt)
+    if args.command == "clone":
+        clone(args.i[0], args.i[1], force = args.f, c = args.c)
+
+    if args.command == "clean":
+        clean(args.i[0])
+
+    # print('Hello,', args.read_opt)
 
