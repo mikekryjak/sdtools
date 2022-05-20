@@ -1,0 +1,473 @@
+BOUT++ version 5.0.0-alpha
+Revision: 22abcdf396fd089dbfae5cf33a62979c04d4d818
+Code compiled on May  4 2022 at 18:13:25
+
+B.Dudson (University of York), M.Umansky (LLNL) 2007
+Based on BOUT by Xueqiao Xu, 1999
+
+Processor number: 0 of 1
+
+pid: 3100083
+
+Compile-time options:
+	Runtime error checking disabled
+	Parallel NetCDF support disabled
+	Metrics mode is 2D
+	FFT support enabled
+	Natural language support enabled
+	LAPACK support enabled
+	NetCDF support enabled (NetCDF4)
+	PETSc support enabled
+	Pretty function name support enabled
+	PVODE support enabled
+	Score-P support disabled
+	SLEPc support disabled
+	SUNDIALS support enabled
+	Backtrace in exceptions enabled
+	Colour in logs enabled
+	OpenMP parallelisation disabled
+	Extra debug output disabled
+	Floating-point exceptions disabled
+	Signal handling support enabled
+	Field name tracking enabled
+	Message stack disabled
+	Compiled with flags : "-Wall -Wextra -Wnull-dereference -Wno-cast-function-type -DCHECK=0 -O3 -DNDEBUG"
+	Command line options for this run : ./sd1d -d /ssd_scratch/cases//a-e3-1-x 
+Reading options file /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+	Option datadir = /ssd_scratch/cases//a-e3-1-x (Command line)
+	Option optionfile = BOUT.inp (default)
+	Option settingsfile = BOUT.settings (default)
+Writing options to file /ssd_scratch/cases//a-e3-1-x/BOUT.settings
+	Option mesh:type = bout (default)
+
+Getting grid data from options
+	Option mesh:calcParallelSlices_on_communicate = 1 (default)
+	Option mesh:maxregionblocksize = 64 (default)
+	Option mesh:staggergrids = 0 (default)
+	Option mesh:include_corner_cells = 1 (default)
+	Option mesh:ddy:first = C2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:ddy:second = C2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:ddy:upwind = W3 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:ddy:first = C2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:ddy:second = C2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:ddy:upwind = W3 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:ddy:first = C2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:ddy:second = C2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:ddy:upwind = W3 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:ddy:first = C2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:ddy:second = C2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:ddy:upwind = W3 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:ddz:fft_filter = 0 (default)
+	Option mesh:symmetricGlobalX = 1 (default)
+	Option mesh:symmetricGlobalY = true (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+Loading mesh
+	Option input:transform_from_field_aligned = 1 (default)
+	Option input:max_recursion_depth = 0 (default)
+	Option mesh:nx = 1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:ny = 200 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+Variable 'nz' not in mesh options. Setting to 0
+	Option MZ = 1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option nz = 1 (default)
+	Grid size: 1 x 200 x 1
+Variable 'MXG' not in mesh options. Setting to 0
+	Option MXG = 0 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+Variable 'MYG' not in mesh options. Setting to 0
+	Option MYG = 2 (default)
+	Guard cells (x,y,z): 0, 2, 0
+	Option mesh:ixseps1 = -1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:ixseps2 = -1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+Variable 'jyseps1_1' not in mesh options. Setting to -1
+Variable 'jyseps1_2' not in mesh options. Setting to 100
+Variable 'jyseps2_1' not in mesh options. Setting to 100
+Variable 'jyseps2_2' not in mesh options. Setting to 199
+Variable 'ny_inner' not in mesh options. Setting to 100
+Finding value for NXPE (ideal = 0.070711)
+	Candidate value: 1
+	 -> Good value
+	Domain split (NXPE=1, NYPE=1) into domains (localNx=1, localNy=200)
+	Option IncIntShear = 0 (default)
+	Option periodicX = 0 (default)
+	Option async_send = 0 (default)
+	Option ZMIN = 0 (default)
+	Option ZMAX = 1 (default)
+	EQUILIBRIUM IS SINGLE NULL (SND) 
+	MYPE_IN_CORE = false
+	DXS = 0, DIN = -1. DOUT = -1
+	UXS = 0, UIN = -1. UOUT = -1
+	XIN = -1, XOUT = -1
+	Twist-shift: 
+	Option twistshift = 0 (default)
+Variable 'ShiftAngle' not in mesh options. Setting to empty vector
+Possible boundary regions are: lower_target, upper_target, Boundary regions in this processor: upper_target, lower_target, 
+Constructing default regions
+	Boundary region inner X
+	Boundary region outer X
+	Option mesh:extrapolate_x = 0 (default)
+	Option mesh:extrapolate_y = 0 (default)
+	Option mesh:dx = 1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:dy = (length / ny) * (1 + (1-dymin)*(1-y/pi)) (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:length = 10.18 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:ny = 200 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:dymin = 0.01 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option ZMIN = 0 (default)
+	Option ZMAX = 1 (default)
+Variable 'dz' not in mesh options. Setting to 6.283185e+00
+	Option mesh:paralleltransform:type = identity (default)
+Variable 'g11' not in mesh options. Setting to 1.000000e+00
+Variable 'g22' not in mesh options. Setting to 1.000000e+00
+Variable 'g33' not in mesh options. Setting to 1.000000e+00
+Variable 'g12' not in mesh options. Setting to 0.000000e+00
+Variable 'g13' not in mesh options. Setting to 0.000000e+00
+Variable 'g23' not in mesh options. Setting to 0.000000e+00
+	Local maximum error in diagonal inversion is 0.000000e+00
+	Local maximum error in off-diagonal inversion is 0.000000e+00
+Variable 'J' not in mesh options. Setting to 0.000000e+00
+	WARNING: Jacobian 'J' not found. Calculating from metric tensor
+	Option mesh:Bxy = 1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Maximum difference in Bxy is 0.000000e+00
+Variable 'ShiftTorsion' not in mesh options. Setting to 0.000000e+00
+	WARNING: No Torsion specified for zShift. Derivatives may not be correct
+Calculating differential geometry terms
+	Communicating connection terms
+	Option non_uniform = 1 (default)
+Variable 'd2x' not in mesh options. Setting to 0.000000e+00
+	WARNING: differencing quantity 'd2x' not found. Calculating from dx
+Variable 'd2y' not in mesh options. Setting to 0.000000e+00
+	WARNING: differencing quantity 'd2y' not found. Calculating from dy
+	done
+	Option append = 0 (default)
+	Option dump_format = nc (default)
+Setting up output (dump) file
+	Option output:parallel = 0 (default)
+	Option output:flush = 1 (default)
+	Option output:guards = 1 (default)
+	Option output:floats = 0 (default)
+	Option output:openclose = 1 (default)
+	Option output:enabled = 1 (default)
+	Option output:init_missing = 0 (default)
+	Option output:shiftoutput = 0 (default)
+	Option output:shiftinput = 0 (default)
+	Option output:flushfrequency = 1 (default)
+	Using NetCDF4 format for file '/ssd_scratch/cases//a-e3-1-x/BOUT.dmp.nc'
+Variable 'grid_id' not in mesh options. Setting to 
+Variable 'hypnotoad_version' not in mesh options. Setting to 
+Variable 'hypnotoad_git_hash' not in mesh options. Setting to 
+Variable 'hypnotoad_git_diff' not in mesh options. Setting to 
+Variable 'hypnotoad_geqdsk_filename' not in mesh options. Setting to 
+	Option restart_files:parallel = 0 (default)
+	Option restart_files:flush = 1 (default)
+	Option restart_files:guards = 1 (default)
+	Option restart_files:floats = 0 (default)
+	Option restart_files:openclose = 1 (default)
+	Option restart_files:enabled = 1 (default)
+	Option restart_files:init_missing = 0 (default)
+	Option restart_files:shiftoutput = 0 (default)
+	Option restart_files:shiftinput = 0 (default)
+	Option restart_files:flushfrequency = 1 (default)
+	Option solver:type = beuler (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option solver:monitor_timestep = 0 (default)
+	Option solver:is_nonsplit_model_diffusive = 1 (default)
+	Option solver:mms = 0 (default)
+	Option solver:mms_initialise = 0 (default)
+Initialising PETSc
+	Option restart = 0 (default)
+
+Git Version of SD1D: %s
+	Option sd1d:cfl_info = 0 (default)
+	Option sd1d:Tnorm = 100 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:Nnorm = 1e+20 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:Bnorm = 1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:AA = 2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:vwall = 0 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:frecycle = 1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:fredistribute = 0 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:density_sheath = 0 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:pressure_sheath = 0 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:gaspuff = 0 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:include_dneut = 1 (default)
+	Option sd1d:dneut = 1.0 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:nloss = 0 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:Eionize = 13.6 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:sheath_gamma = 6 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:neutral_gamma = 0 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:anomalous_D = -1 (default)
+	Option sd1d:anomalous_chi = -1 (default)
+	Option sd1d:tn_floor = 0.5 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:atomic = true (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:neutral_f_pn = 1 (default)
+	Option sd1d:hyper = -1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:ADpar = -1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:viscos = -1 (default)
+	Option sd1d:ion_viscosity = false (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:heat_conduction = true (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:kappa_limit_alpha = -1 (default)
+	Option sd1d:snb_model = 0 (default)
+	Option sd1d:charge_exchange = 1 (default)
+	Option sd1d:charge_exchange_escape = 0 (default)
+	Option sd1d:charge_exchange_return_fE = 1 (default)
+	Option sd1d:recombination = 1 (default)
+	Option sd1d:ionisation = 1 (default)
+	Option sd1d:elastic_scattering = 0 (default)
+	Option sd1d:excitation = true (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:gamma_sound = 1.66667 (default)
+	Option sd1d:bndry_flux_fix = 1 (default)
+	Option input:transform_from_field_aligned = true (default)
+	Option input:max_recursion_depth = 0 (default)
+	Option sd1d:volume_source = true (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option Ne:source = 0.0 (default)
+	Option P:source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y) (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option P:powerflux = 1e6 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:length_xpt = 3.75 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin) (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:dymin = 0.01 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:source = length_xpt / length (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:length = 10.18 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+Variable 'source_weight' not in mesh options. Setting to 0.000000e+00
+	Option sd1d:density_upstream = -1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option NVn:evolve = false (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option Pn:evolve = false (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+Setting boundary for variable Ne
+	upper_target region: 	Option all:bndry_all = neumann_o2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+
+	lower_target region: 	Option all:bndry_all = neumann_o2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+
+	Option input:transform_from_field_aligned = true (default)
+	Option input:max_recursion_depth = 0 (default)
+	Option Ne:function = 0.1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option Ne:scale = 1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option all:evolve_bndry = 0 (default)
+	Option Ne:evolve_bndry = 0 (default)
+Setting boundary for variable NVi
+	upper_target region: 	Option NVi:bndry_all = dirichlet_o2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+
+	lower_target region: 	Option NVi:bndry_all = dirichlet_o2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+
+	Option input:transform_from_field_aligned = true (default)
+	Option input:max_recursion_depth = 0 (default)
+	Option NVi:function = vtarg * Ne:scale * Ne:function * y / (2*pi) (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option NVi:vtarg = 0.3 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option Ne:scale = 1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option Ne:function = 0.1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option NVi:scale = 1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option all:evolve_bndry = false (default)
+	Option NVi:evolve_bndry = 0 (default)
+Setting boundary for variable P
+	upper_target region: 	Option all:bndry_all = neumann_o2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+
+	lower_target region: 	Option all:bndry_all = neumann_o2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+
+	Option input:transform_from_field_aligned = true (default)
+	Option input:max_recursion_depth = 0 (default)
+	Option P:function = 0.1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option P:scale = 1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option all:evolve_bndry = false (default)
+	Option P:evolve_bndry = 0 (default)
+Setting boundary for variable Nn
+	upper_target region: 	Option all:bndry_all = neumann_o2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+
+	lower_target region: 	Option all:bndry_all = neumann_o2 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+
+	Option input:transform_from_field_aligned = true (default)
+	Option input:max_recursion_depth = 0 (default)
+	Option Nn:function = 1e-4 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option Nn:scale = 1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option all:evolve_bndry = false (default)
+	Option Nn:evolve_bndry = 0 (default)
+	Option mesh:Rxy = 1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:Bpxy = 1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:Btxy = 0 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:hthe = 1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option mesh:sinty = 0 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+Variable 'dpsi' not in mesh options. Setting to 0.000000e+00
+	Using dx as the x grid spacing
+Calculating differential geometry terms
+	Communicating connection terms
+	Option non_uniform = true (default)
+Variable 'd2x' not in mesh options. Setting to 0.000000e+00
+	WARNING: differencing quantity 'd2x' not found. Calculating from dx
+Variable 'd2y' not in mesh options. Setting to 0.000000e+00
+	WARNING: differencing quantity 'd2y' not found. Calculating from dy
+	Option sd1d:area = 1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:fimp = -1 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:impurity_adas = 0 (default)
+	Option sd1d:diagnose = true (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:output_ddt = 0 (default)
+	Option sd1d:redist_weight = H(y - pi) (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option sd1d:split_operator = 0 (default)
+	Option datadir = datadir (default)
+	Option datadir = /ssd_scratch/cases//a-e3-1-x (Command line)
+	Option dump_format = dump_format (default)
+	Option dump_format = nc (default)
+Variable 'grid_id' not in mesh options. Setting to 
+Variable 'hypnotoad_version' not in mesh options. Setting to 
+Variable 'hypnotoad_git_hash' not in mesh options. Setting to 
+Variable 'hypnotoad_git_diff' not in mesh options. Setting to 
+Variable 'hypnotoad_geqdsk_filename' not in mesh options. Setting to 
+	Using NetCDF4 format for file '/ssd_scratch/cases//a-e3-1-x/BOUT.restart.nc'
+	Option wall_limit = -1 (default)
+	Option stopCheck = 0 (default)
+	Option stopCheckName = BOUT.stop (default)
+	Option datadir = /ssd_scratch/cases//a-e3-1-x (Command line)
+	Option solver:save_repeat_run_id = 0 (default)
+	Option nout = 100 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option timestep = 1000 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option solver:nout = 100 (default)
+	Option solver:output_step = 1000 (default)
+Solver running for 100 outputs with output timestep of 1.000000e+03
+
+	SNES steady state solver
+	3d fields = 4, 2d fields = 0 neq=800, local_N=800
+	Option solver:timestep = 1 (default)
+	Option solver:dt_min_reset = 1e-06 (default)
+	Option solver:max_timestep = 1e+37 (default)
+	Option solver:diagnose = 0 (default)
+	Option solver:diagnose_failures = 0 (default)
+	Option solver:predictor = 1 (default)
+	Option solver:equation_form = rearranged_backward_euler (default)
+	Option solver:snes_type = newtonls (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option solver:line_search_type = default (default)
+	Option solver:matrix_free = false (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option solver:use_coloring = 1 (default)
+Setting Jacobian matrix sizes
+Pre-allocating Jacobian
+Marking non-zero Jacobian entries
+Assembling Jacobian matrix
+Creating Jacobian coloring
+	Option solver:lag_jacobian = 50 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option solver:atol = 1e-10 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option solver:rtol = 1e-05 (/ssd_scratch/cases//a-e3-1-x/BOUT.inp)
+	Option solver:stol = 1e-08 (default)
+	Option solver:max_nonlinear_iterations = 20 (default)
+	Option solver:upper_its = 16 (default)
+	Option solver:lower_its = 10 (default)
+	Option solver:use_precon = 0 (default)
+	Option solver:ksp_type = default (default)
+	Option solver:kspsetinitialguessnonzero = 0 (default)
+	Option solver:maxl = 20 (default)
+	Option solver:pc_type = default (default)
+SNES Type : newtonls
+KSP Type  : gmres
+PC Type   : ilu
+Running simulation
+
+Run ID: d1dcc73e-8d37-4223-bb33-4d7f3fcef6d7
+
+Run started at  : Mon May 16 13:30:58 2022
+	Option restart = false (default)
+	Option append = false (default)
+	Option dump_on_restart = 1 (default)
+	Option input:validate = 0 (default)
+	Option input:error_on_unused_options = 1 (default)
+	Option optionfile = BOUT.inp (default)
+	Option datadir = /ssd_scratch/cases//a-e3-1-x (Command line)
+Sim Time  |  RHS evals  | Wall Time |  Calc    Inv   Comm    I/O   SOLVER
+
+0.000e+00          1       2.38e-02    37.7    0.0    0.4   63.3   -1.5
+1.000e+03      19231       1.68e+02    99.5    0.0    0.0    0.0    0.4
+2.000e+03       9196       8.04e+01    99.5    0.0    0.0    0.0    0.5
+3.000e+03       7838       6.86e+01    99.5    0.0    0.0    0.0    0.5
+4.000e+03       6919       6.08e+01    99.5    0.0    0.0    0.0    0.5
+5.000e+03       6222       5.46e+01    99.5    0.0    0.0    0.0    0.5
+6.000e+03       5120       4.51e+01    99.4    0.0    0.0    0.1    0.5
+7.000e+03       4790       4.19e+01    99.4    0.0    0.0    0.1    0.5
+8.000e+03       4332       3.79e+01    99.4    0.0    0.0    0.1    0.5
+9.000e+03       3716       3.25e+01    99.4    0.0    0.0    0.1    0.5
+1.000e+04       3853       3.37e+01    99.4    0.0    0.0    0.1    0.5
+1.100e+04       3531       3.09e+01    99.4    0.0    0.0    0.1    0.5
+1.200e+04       3770       3.29e+01    99.4    0.0    0.0    0.1    0.5
+1.300e+04       3736       3.25e+01    99.4    0.0    0.0    0.1    0.5
+1.400e+04       2931       2.55e+01    99.3    0.0    0.0    0.1    0.5
+1.500e+04       3154       2.75e+01    99.4    0.0    0.0    0.1    0.5
+1.600e+04       3244       2.83e+01    99.4    0.0    0.0    0.1    0.5
+1.700e+04       2735       2.40e+01    99.4    0.0    0.0    0.1    0.5
+1.800e+04       4090       3.57e+01    99.4    0.0    0.0    0.1    0.5
+1.900e+04      11425       9.97e+01    99.5    0.0    0.0    0.0    0.4
+2.000e+04       6899       6.02e+01    99.5    0.0    0.0    0.0    0.5
+2.100e+04       4221       3.73e+01    99.4    0.0    0.0    0.1    0.5
+2.200e+04       3569       3.14e+01    99.4    0.0    0.0    0.1    0.5
+2.300e+04       2951       2.57e+01    99.3    0.0    0.0    0.1    0.5
+2.400e+04       2625       2.29e+01    99.3    0.0    0.0    0.1    0.5
+2.500e+04       2918       2.54e+01    99.4    0.0    0.0    0.1    0.5
+2.600e+04       2906       2.53e+01    99.4    0.0    0.0    0.1    0.5
+2.700e+04       2551       2.22e+01    99.4    0.0    0.0    0.1    0.5
+2.800e+04       2498       2.18e+01    99.4    0.0    0.0    0.1    0.5
+2.900e+04       2205       1.92e+01    99.3    0.0    0.0    0.1    0.5
+3.000e+04       2105       1.84e+01    99.3    0.0    0.0    0.1    0.5
+3.100e+04       1619       1.41e+01    99.2    0.0    0.0    0.2    0.6
+3.200e+04       1518       1.32e+01    99.3    0.0    0.0    0.2    0.5
+3.300e+04       1509       1.32e+01    99.2    0.0    0.0    0.2    0.5
+3.400e+04        370       3.27e+00    98.1    0.0    0.0    0.8    1.0
+3.500e+04        607       5.32e+00    98.7    0.0    0.0    0.5    0.7
+3.600e+04        982       8.61e+00    99.1    0.0    0.0    0.3    0.6
+3.700e+04        567       4.98e+00    98.7    0.0    0.0    0.5    0.8
+3.800e+04        728       6.37e+00    98.9    0.0    0.0    0.4    0.6
+3.900e+04       1324       1.16e+01    99.2    0.0    0.0    0.2    0.5
+4.000e+04        876       7.68e+00    99.0    0.0    0.0    0.3    0.6
+4.100e+04        506       4.45e+00    98.5    0.0    0.0    0.6    0.8
+4.200e+04        755       6.62e+00    98.9    0.0    0.0    0.4    0.7
+4.300e+04        941       8.23e+00    99.0    0.0    0.0    0.3    0.6
+4.400e+04       2038       1.78e+01    99.3    0.0    0.0    0.2    0.5
+4.500e+04       1673       1.46e+01    99.2    0.0    0.0    0.2    0.6
+4.600e+04       1394       1.22e+01    99.1    0.0    0.0    0.2    0.6
+4.700e+04        938       8.30e+00    99.0    0.0    0.0    0.3    0.7
+4.800e+04        499       4.48e+00    98.4    0.0    0.0    0.7    0.8
+4.900e+04        511       4.49e+00    98.5    0.0    0.0    0.6    0.8
+5.000e+04        526       4.62e+00    98.6    0.0    0.0    0.6    0.8
+5.100e+04        358       3.16e+00    98.2    0.0    0.0    0.8    0.9
+5.200e+04        288       2.55e+00    97.9    0.0    0.0    1.1    1.1
+5.300e+04        444       3.91e+00    98.4    0.0    0.0    0.7    0.9
+5.400e+04        295       2.61e+00    97.8    0.0    0.0    1.0    1.2
+5.500e+04        349       3.08e+00    98.3    0.0    0.0    0.9    0.8
+5.600e+04        487       4.33e+00    98.6    0.0    0.0    0.6    0.7
+5.700e+04        221       2.05e+00    97.4    0.0    0.0    1.4    1.2
+5.800e+04        755       6.86e+00    98.9    0.0    0.0    0.4    0.6
+5.900e+04        641       5.83e+00    98.8    0.0    0.0    0.5    0.6
+6.000e+04        573       5.21e+00    98.7    0.0    0.0    0.5    0.7
+6.100e+04        402       3.68e+00    98.4    0.0    0.0    0.8    0.8
+6.200e+04        581       5.30e+00    98.7    0.0    0.0    0.5    0.7
+6.300e+04        930       8.21e+00    99.1    0.0    0.0    0.3    0.6
+6.400e+04        518       4.58e+00    98.6    0.0    0.0    0.6    0.7
+6.500e+04        598       5.27e+00    98.6    0.0    0.0    0.6    0.8
+6.600e+04       1173       1.03e+01    99.2    0.0    0.0    0.3    0.5
+6.700e+04        663       5.82e+00    98.8    0.0    0.0    0.5    0.7
+6.800e+04       1082       9.46e+00    99.2    0.0    0.0    0.3    0.5
+6.900e+04        722       6.32e+00    98.9    0.0    0.0    0.4    0.6
+7.000e+04        851       7.46e+00    99.0    0.0    0.0    0.4    0.6
+7.100e+04        260       2.32e+00    97.6    0.0    0.0    1.2    1.2
+7.200e+04       1035       9.08e+00    99.2    0.0    0.0    0.3    0.5
+7.300e+04        760       6.68e+00    99.0    0.0    0.0    0.4    0.6
+7.400e+04       1230       1.08e+01    99.2    0.0    0.0    0.3    0.5
+7.500e+04        876       7.70e+00    99.0    0.0    0.0    0.4    0.6
+7.600e+04        427       3.79e+00    98.3    0.0    0.0    0.7    0.9
+7.700e+04       1091       9.58e+00    99.1    0.0    0.0    0.3    0.5
+7.800e+04        888       7.81e+00    99.0    0.0    0.0    0.3    0.6
+7.900e+04        227       2.03e+00    97.4    0.0    0.0    1.3    1.2
+8.000e+04        525       4.63e+00    98.7    0.0    0.0    0.6    0.7
+8.100e+04        373       3.30e+00    98.3    0.0    0.0    0.8    0.8
+8.200e+04        278       2.48e+00    97.9    0.0    0.0    1.1    1.0
+8.300e+04        505       4.46e+00    98.6    0.0    0.0    0.6    0.7
+8.400e+04        881       7.74e+00    99.0    0.0    0.0    0.4    0.6
+8.500e+04       1216       1.07e+01    99.2    0.0    0.0    0.3    0.5
+8.600e+04        519       4.58e+00    98.7    0.0    0.0    0.6    0.6
+8.700e+04        511       4.51e+00    98.7    0.0    0.0    0.6    0.6
+8.800e+04        766       6.74e+00    99.1    0.0    0.0    0.4    0.5
+8.900e+04        406       3.60e+00    98.5    0.0    0.0    0.8    0.7
+9.000e+04        949       8.34e+00    99.2    0.0    0.0    0.3    0.5
+9.100e+04        769       6.76e+00    99.1    0.0    0.0    0.4    0.5
+9.200e+04        438       3.87e+00    98.6    0.0    0.0    0.7    0.7
+9.300e+04        532       4.69e+00    98.8    0.0    0.0    0.6    0.6
+9.400e+04        757       6.67e+00    99.0    0.0    0.0    0.4    0.6
+9.500e+04       1063       9.35e+00    99.2    0.0    0.0    0.3    0.5
+9.600e+04        647       5.70e+00    98.9    0.0    0.0    0.5    0.6
+9.700e+04        779       6.90e+00    99.0    0.0    0.0    0.4    0.5
+9.800e+04        748       6.58e+00    99.0    0.0    0.0    0.4    0.5
+9.900e+04        760       6.68e+00    99.0    0.0    0.0    0.4    0.5
+1.000e+05        903       7.92e+00    99.1    0.0    0.0    0.4    0.5
+
+Run finished at  : Mon May 16 13:59:54 2022
+Run time : 28 m 56 s
+Finalising PETSc
+	Option datadir = /ssd_scratch/cases//a-e3-1-x (Command line)
+	Option settingsfile = BOUT.settings (default)
+Writing options to file /ssd_scratch/cases//a-e3-1-x/BOUT.settings
+	Option time_report:show = 0 (default)

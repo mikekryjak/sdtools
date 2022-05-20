@@ -1,0 +1,163 @@
+#
+#
+
+nout = 100     # number of output time-steps
+timestep = 1000.0  # time between outputs
+
+MZ = 1     # number of points in z direction (2^n + 1)
+MXG = 0    # No guard cells needed in X
+
+[mesh]
+
+ny = 100    # Resolution along field-line
+
+length = 10.18        # Length of the domain in meters
+length_xpt = 3.75  # Length from midplane to X-point [m]
+#area_expansion = 1 # Expansion factor Area(target) / Area(midplane)
+
+# Parallel grid spacing
+dymin = 0.01  # Minimum grid spacing near target. Must be > 0 and < 1
+dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))   # Parallel grid spacing [m]
+
+source = length_xpt / length
+y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
+
+#ypos = y * length / (2*pi) # Y position [m] 
+
+nx = 1
+dx = 1
+ixseps1 = -1   # Branch-cut indices, specifying that
+ixseps2 = -1   # the grid is in the SOL
+
+# The following make the field-aligned
+# metric tensor an identity metric
+Rxy = 1
+Bpxy = 1
+Btxy = 0
+Bxy = 1
+hthe = 1
+sinty = 0
+
+symmetricGlobalY = true
+
+##################################################
+# derivative methods
+
+[mesh:ddy]
+
+first = C2
+second = C2
+upwind = W3
+
+[solver]
+
+# PETSc SOLVER OPTIONS
+type = beuler #backwards euler
+#pc_type = hypre
+atol = 1e-10 #1e-10
+rtol = 1e-05 #1e-5
+matrix_free = false # tells beuler to calculate a jacobian
+lag_jacobian = 50 # 50 tells it not to calculate the jacobian too often
+snes_type = newtonls # newton iterations preconditioned using jacobian
+#equation_form = backward_euler
+#diagnose = true
+
+[sd1d]
+
+diagnose = true  # Output additional diagnostics
+
+# Normalisation factors
+Nnorm = 1e20  # Reference density [m^-3]
+Tnorm = 100   # Reference temperature [eV]
+Bnorm = 1.0   # Reference magnetic field [T]
+AA = 2.0      # Ion atomic number
+
+Eionize = 13.6  # Energy lost per ionisation [eV]
+excitation = true # include electron-neutral excitation
+
+volume_source = true   # Sources spread over a volume
+density_upstream = -1  # Fix upstream density using feedback (<0 = off)
+
+#density_controller_p = 20e-1 # Density controller 'p' parameter
+#density_controller_i = 1e-3 # Density controller 'i' parameter
+#density_integral_positive = true # Error integral must be positive?
+#density_source_positive = false # Source must be positive?
+
+# Model parameters
+vwall = 0.0        # Velocity of neutrals at the wall, as fraction of Franck-Condon energy
+
+frecycle = 1.0            # Recycling fraction
+fredistribute = 0.0        # Fraction of recycled neutrals redistributed evenly along length
+redist_weight = H(y - pi)  # Weighting for redistribution
+
+gaspuff = 0       # NOTE: In normalised units
+dneut = 2.0      # Scale neutral gas diffusion rate
+tn_floor = 0.5    # Minimum neutral gas temperature for diffusion calc [eV]
+nloss = 0         # Neutral gas loss rate [1/s]
+fimp = -1         # Impurity fraction
+
+sheath_gamma = 9.3 # Sheath heat transmission
+neutral_gamma = 0.  # Neutral gas heat transmission
+density_sheath = 0  # 0 = free, 1 = Neumann, 2 = constant nV
+pressure_sheath = 0  # 0 = free, 1 = Neumann, 2 = constant (5/2)Pv + (1/2)nv^3
+
+atomic = true      # Include atomic processes (CX/iz/rc)
+
+# Set flux tube area as function of parallel grid index
+# using normalised y coordinate from 0 to 2pi
+area = 1 #+ (mesh:area_expansion - 1) * H(mesh:ypos - mesh:length_xpt)*(mesh:ypos - mesh:length_xpt)/(mesh:length - mesh:length_xpt)
+
+hyper = -1 # Numerical diffusion parameter on all terms
+ADpar = -1  # 4th-order numerical dissipation
+#viscos = -0.0001 # Parallel viscosity ( < 0 = off )
+ion_viscosity = false  # Braginskii parallel ion viscosity (ions and neutrals)
+
+heat_conduction = true # Heat conduction
+
+[all]
+bndry_all = neumann_o2  # Default boundary condition
+                        # Note: Sheath boundary applied in code
+
+[Ne] # Electron density
+scale = 1
+
+# Initial conditions
+function = 0.1
+
+#flux = 0  # Particles per m^2 per second input
+#source = (flux/(mesh:length_xpt))*H(mesh:length_xpt - mesh:ypos)  # Particle input source as function of normalised y coordinate - new
+#source = (flux/(mesh:length_xpt))*H(mesh:y_xpt - y)                # For log grids
+
+[NVi]  # Parallel ion momentum
+scale = 1
+vtarg = 0.3
+function = vtarg * Ne:scale * Ne:function * y / (2*pi)  # Linear from 0 to 0.03 in y
+bndry_all = dirichlet_o2
+
+[P]    # Plasma pressure P = 2 * Ne * T
+scale = 1
+function = 0.1   # Initial constant pressure
+
+powerflux = 1e6  # Input power flux in W/m^2
+
+#source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:length_xpt - mesh:ypos)  # Input power as function of y New
+source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y) # For log grids
+
+# 1e7 W/m^2 / (L/2) with  L = 100 m , factor of 2 because power only from y = 0 to y=pi
+# * 2/3 to get from energy to Pe
+
+[Nn]
+# Neutral density
+scale = 1
+function = 1e-4   # Initial flat, low density
+
+[NVn]
+evolve = false # Evolve neutral momentum?
+
+[Pn]
+evolve = false # Evolve neutral pressure? Otherwise Tn = Te model
+
+#Tstart = 3.0 # Starting temperature in eV
+#scale = 1.0
+#function = Nn:scale * Nn:function * Pn:Tstart / sd1d:Tnorm
+
