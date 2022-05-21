@@ -62,7 +62,9 @@ def is_finished(key):
                 if data["options"]["timestep"] * data["options"]["nout"] == data["outputs"]["tt"]:
                     status = "Finished"
                 else:
-                    status = "Not finished"
+                    
+                    status = "Not finished: {:.0%} complete".format(data["outputs"]["tt"]/(data["options"]["nout"]*data["options"]["timestep"]))
+                    
                     
             if boutdata_ok == False:
                 status = "Error"

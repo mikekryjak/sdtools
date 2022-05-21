@@ -31,7 +31,15 @@ def set_opt(case, opt, new_value, preserve = False):
             
         # If the correct line, replace.
         # Prints done without \n for formatting reasons
-        if category == opt.split(":")[0] and opt.split(":")[1] in line and old_value in line:
+        found = False
+        
+        if opt in ["timestep", "nout"] and opt in line and old_value in line:
+            found = True
+            
+        elif category == opt.split(":")[0] and opt.split(":")[1] in line and old_value in line:
+            found = True
+            
+        if found == True:
             print("Old line:", line.replace("\n",""))
             line = line.replace(old_value, str(new_value))
             replaced = True
