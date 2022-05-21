@@ -22,7 +22,9 @@ def is_finished(key):
     Not started - Input file exists but no dump file
     Missing input file - No input file
     """
-
+    if key == None:
+        key = "*"
+    key = str(key)
     folders = os.listdir(os.getcwd())
     path = os.getcwd()
     statuses = []
