@@ -77,19 +77,22 @@ if __name__ == "__main__":
 
     # Extract arguments and call function
     args = parser.parse_args()
+    key = str(args.key)
     
     cwd = os.getcwd()
     sep = os.path.sep
     
     to_set = []
     for folder in os.listdir(cwd):
-        if "." not in folder and fnmatch.fnmatch(folder, args.key) and "BOUT.inp" in os.listdir(cwd+sep+folder):
+        if "." not in folder and fnmatch.fnmatch(folder, key) and "BOUT.inp" in os.listdir(cwd+sep+folder):
             to_set.append(folder)
             
+    to_set.sort()
+
     if len(to_set) > 0:
-        print("Modifying the following cases:")
+        print(f"-> Apply {args.opt}={args.new_value} to:")
         [print(x) for x in to_set]
-        answer = input("Confirm y/n:")
+        answer = input("-> Confirm y/n:")
         
         if answer == "y":
             for case in to_set:
