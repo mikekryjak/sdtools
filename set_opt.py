@@ -5,6 +5,7 @@ import os
 import shutil
 from clean import *
 from read_opt import *
+import fnmatch
 
 def set_opt(case, opt, new_value, preserve = False):
     """
@@ -33,9 +34,11 @@ def set_opt(case, opt, new_value, preserve = False):
         # Prints done without \n for formatting reasons
         found = False
         
+        # If one of those options without a category (which are hardcoded):
         if opt in ["timestep", "nout"] and opt in line and old_value in line:
             found = True
             
+        # If one of the other options:
         elif category == opt.split(":")[0] and opt.split(":")[1] in line and old_value in line:
             found = True
             
@@ -67,14 +70,43 @@ if __name__ == "__main__":
     
     # Define arguments
     parser = argparse.ArgumentParser(description = "SD1D options setter")
-    parser.add_argument("case", type=str, help = "Modify this case")
+    parser.add_argument("key", type=str, help = "Modify cases with this in name")
     parser.add_argument("opt", type=str, help = "Modify this option in category:option format")
     parser.add_argument("new_value", type=str, help = "New value to set")
     parser.add_argument("--preserve", action="store_true", help = "Preserve results after changing input?")
 
     # Extract arguments and call function
     args = parser.parse_args()
-    set_opt(args.case, args.opt, args.new_value, preserve = args.preserve)
+    
+    cwd = os.getcwd()
+    sep = os.path.sep
+    
+    to_set = []
+    for folder in os.listdir(cwd):
+        if "." not in folder and fnmatch.fnmatch(folder, args.key) and "BOUT.inp" in os.listdir(cwd+sep+folder):
+            to_set.append(folder)
+            
+    if len(to_set) > 0:
+        print("Modifying the following cases:")
+        [print(x) for x in to_set]
+        answer = input("Confirm y/n:")
+        
+        if answer == "y":
+            for case in to_set:
+                set_opt(case, args.opt, args.new_value, preserve = args.preserve)
+                
+        elif answer == "n":
+            print("Exiting")
+            quit()
+            
+        else:
+            print("You were supposed to type y or n. Exiting")
+            quit()            
+                
+    else:
+        print("Found no cases matching '{}'".format(args.key))
+    
+    
     
     
 

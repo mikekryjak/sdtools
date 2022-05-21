@@ -1,0 +1,222 @@
+IncIntShear = false		# type: bool, source: default
+MXG = 0		# type: int, doc: Number of guard cells on each side in X, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+MYG = 2		# type: int, doc: Number of guard cells on each side in Y, source: default
+MZ = 1		# type: int, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+ZMAX = 1		# type: BoutReal, source: default
+ZMIN = 0		# type: BoutReal, source: default
+append = false		# type: bool, doc: Add new outputs to the end of existing files? If false, overwrite files., source: default
+async_send = false		# type: bool, doc: Whether to use asyncronous MPI sends, source: default
+datadir = /ssd_scratch/cases//a-e3-1-x		# type: string, source: Command line
+dump_format = nc		# type: string, doc: File extension for output files, source: default
+dump_on_restart = true		# type: bool, doc: Write initial state as time point 0?, source: default
+non_uniform = true		# type: bool, source: default
+nout = 100		# type: int, doc: Number of output steps, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+nz = 1		# type: int, source: default
+optionfile = BOUT.inp		# type: string, source: default
+periodicX = false		# type: bool, doc: Make grid periodic in X?, source: default
+restart = false		# type: bool, doc: Load state from restart files?, source: default
+dump_format = nc		# type: string, doc: File extension for output files, source: default
+datadir = /ssd_scratch/cases//a-e3-1-x		# type: string, source: Command line
+settingsfile = BOUT.settings		# type: string, source: default
+stopCheck = false		# type: bool, doc: Check if a file exists, and exit if it does., source: default
+stopCheckName = BOUT.stop		# type: string, doc: Name of file whose existence triggers a stop, source: default
+timestep = 1000.0		# type: BoutReal, doc: Output time step size, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+twistshift = false		# type: bool, doc: Apply a Twist-Shift boundary using ShiftAngle?, source: default
+wall_limit = -1		# type: BoutReal, doc: Wall time limit in hours. By default (< 0), no limit, source: default
+
+[NVi]
+bndry_all = dirichlet_o2		# type: string, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+evolve_bndry = false		# type: bool, source: default
+function = vtarg * Ne:scale * Ne:function * y / (2*pi)		# type: string, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+scale = 1		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+vtarg = 0.3		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+
+[NVn]
+evolve = false		# type: bool, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+
+[Ne]
+evolve_bndry = false		# type: bool, source: default
+function = 0.1		# type: string, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+scale = 1		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+source = 0.0		# type: string, source: default
+
+[Nn]
+evolve_bndry = false		# type: bool, source: default
+function = 1e-4		# type: string, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+scale = 1		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+
+[P]
+evolve_bndry = false		# type: bool, source: default
+function = 0.1		# type: string, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+powerflux = 1e6		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+scale = 1		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)		# type: string, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+
+[Pn]
+evolve = false		# type: bool, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+
+[all]
+bndry_all = neumann_o2		# type: string, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+evolve_bndry = false		# type: bool, source: default
+
+[input]
+error_on_unused_options = true		# type: bool, doc: Error if there are any unused options before starting the main simulation, source: default
+max_recursion_depth = 0		# type: string, doc: Maximum recursion depth allowed in expressions. 0 = no recursion; -1 = unlimited, source: default
+transform_from_field_aligned = true		# type: bool, source: default
+validate = false		# type: bool, doc: Check for unused options and stop, source: default
+
+[mesh]
+Bpxy = 1		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+Btxy = 0		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+Bxy = 1		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+Rxy = 1		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+calcParallelSlices_on_communicate = true		# type: bool, doc: Calculate parallel slices on all communicated fields, source: default
+dx = 1		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+dymin = 0.01		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+extrapolate_x = false		# type: bool, source: default
+extrapolate_y = false		# type: bool, source: default
+hthe = 1		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+include_corner_cells = true		# type: bool, doc: Communicate corner guard and boundary cells. Can be set to false if you are sure that you will not need these cells, for mixed derivatives D2DXDY (or anything else), for example if your grid has orthogonal x- and y-directions. This might slightly reduce communication time., source: default
+ixseps1 = -1		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+ixseps2 = -1		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+length = 10.18		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+length_xpt = 3.75		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+maxregionblocksize = 64		# type: int, doc: (Advanced) Sets the maximum size of continguous blocks when creating Regions, source: default
+nx = 1		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+ny = 200		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+sinty = 0		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+source = length_xpt / length		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+staggergrids = false		# type: bool, doc: Enable staggered grids. By default, all variables are cell centred, source: default
+symmetricGlobalX = true		# type: bool, source: default
+symmetricGlobalY = true		# type: bool, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+type = bout		# type: string, source: default
+y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+
+[mesh:ddy]
+first = C2		# type: string, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+second = C2		# type: string, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+upwind = W3		# type: string, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+
+[mesh:ddz]
+fft_filter = 0		# type: BoutReal, source: default
+
+[mesh:paralleltransform]
+type = identity		# type: string, source: default
+
+[output]
+enabled = true		# type: bool, source: default
+floats = false		# type: bool, source: default
+flush = true		# type: bool, source: default
+flushfrequency = 1		# type: int, source: default
+guards = true		# type: bool, source: default
+init_missing = false		# type: bool, source: default
+openclose = true		# type: bool, source: default
+parallel = false		# type: bool, source: default
+shiftinput = false		# type: bool, source: default
+shiftoutput = false		# type: bool, source: default
+
+[restart_files]
+enabled = true		# type: bool, source: default
+floats = false		# type: bool, source: default
+flush = true		# type: bool, source: default
+flushfrequency = 1		# type: int, source: default
+guards = true		# type: bool, source: default
+init_missing = false		# type: bool, source: default
+openclose = true		# type: bool, source: default
+parallel = false		# type: bool, source: default
+shiftinput = false		# type: bool, source: default
+shiftoutput = false		# type: bool, source: default
+
+[run]
+finished = Mon May 16 13:59:54 2022
+		# source: Output
+revision = 22abcdf396fd089dbfae5cf33a62979c04d4d818		# source: Output
+run_id = d1dcc73e-8d37-4223-bb33-4d7f3fcef6d7		# source: Output
+run_restart_from = zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz		# source: Output
+started = Mon May 16 13:30:57 2022
+		# source: Output
+version = 5.0.0-alpha		# source: Output
+
+[sd1d]
+AA = 2.0		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+ADpar = -1		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+Bnorm = 1.0		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+Eionize = 13.6		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+Nnorm = 1e20		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+Tnorm = 100		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+anomalous_D = -1		# type: BoutReal, source: default
+anomalous_chi = -1		# type: BoutReal, source: default
+area = 1		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+atomic = true		# type: bool, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+bndry_flux_fix = true		# type: bool, doc: Calculate boundary fluxes using simple mid-point (recommended), source: default
+cfl_info = false		# type: bool, source: default
+charge_exchange = true		# type: bool, source: default
+charge_exchange_escape = false		# type: bool, source: default
+charge_exchange_return_fE = 1		# type: BoutReal, source: default
+density_sheath = 0		# type: int, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+density_upstream = -1		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+diagnose = true		# type: bool, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+dneut = 1.0		# source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+elastic_scattering = false		# type: bool, source: default
+excitation = true		# type: bool, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+fimp = -1		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+frecycle = 1.0		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+fredistribute = 0.0		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+gamma_sound = 1.66667		# type: BoutReal, source: default
+gaspuff = 0		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+heat_conduction = true		# type: bool, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+hyper = -1		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+impurity_adas = false		# type: bool, source: default
+include_dneut = true		# type: bool, source: default
+ion_viscosity = false		# type: bool, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+ionisation = true		# type: bool, source: default
+kappa_limit_alpha = -1		# type: BoutReal, doc: Flux limiter. Turned off if < 0 (default), source: default
+neutral_f_pn = true		# type: bool, source: default
+neutral_gamma = 0.		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+nloss = 0		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+output_ddt = false		# type: bool, source: default
+pressure_sheath = 0		# type: int, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+recombination = true		# type: bool, source: default
+redist_weight = H(y - pi)		# type: string, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+revision = 7bd6bc9165a35219eb9d1481a8937a7bca039563
+sheath_gamma = 6.0		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+snb_model = false		# type: bool, doc: Use SNB non-local heat flux model, source: default
+split_operator = false		# type: bool, source: default
+tn_floor = 0.5		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+viscos = -1		# type: BoutReal, source: default
+volume_source = true		# type: bool, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+vwall = 0.0		# type: BoutReal, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+
+[solver]
+atol = 1e-10		# type: BoutReal, doc: Absolute tolerance in SNES solve, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+diagnose = false		# type: bool, doc: Print additional diagnostics, source: default
+diagnose_failures = false		# type: bool, doc: Print more diagnostics when SNES fails, source: default
+dt_min_reset = 1e-06		# type: BoutReal, doc: If dt falls below this, reset to starting dt, source: default
+equation_form = rearranged_backward_euler		# type: 20BoutSnesEquationForm, doc: Form of equation to solve: rearranged_backward_euler (default); pseudo_transient; backward_euler; direct_newton, source: default
+is_nonsplit_model_diffusive = true		# type: bool, doc: If not a split operator, treat RHS as diffusive?, source: default
+ksp_type = default		# type: string, doc: Linear solver type. By default let PETSc decide (gmres), source: default
+kspsetinitialguessnonzero = false		# type: bool, doc: Set the initial guess to be non-zero, source: default
+lag_jacobian = 50		# type: int, doc: Re-use the Jacobian this number of SNES iterations, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+line_search_type = default		# type: string, doc: Line search type: basic, bt, l2, cp, nleqerr, source: default
+lower_its = 10		# type: int, doc: Iterations below which the next timestep is increased, source: default
+matrix_free = false		# type: bool, doc: Use matrix free Jacobian?, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+max_nonlinear_iterations = 20		# type: int, doc: Maximum number of nonlinear iterations per SNES solve, source: default
+max_timestep = 1e+37		# type: BoutReal, doc: Maximum timestep, source: default
+maxl = 20		# type: int, doc: Maximum number of linear iterations, source: default
+mms = false		# type: bool, source: default
+mms_initialise = false		# type: bool, source: default
+monitor_timestep = false		# type: bool, source: default
+nout = 100		# type: int, doc: Number of output steps. Overrides global setting., source: default
+output_step = 1000		# type: BoutReal, doc: Output time step size. Overrides global 'timestep' setting., source: default
+pc_type = default		# type: string, doc: Preconditioner type. By default lets PETSc decide (ilu or bjacobi), source: default
+predictor = true		# type: bool, doc: Use linear predictor?, source: default
+rtol = 1e-05		# type: BoutReal, doc: Relative tolerance in SNES solve, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+save_repeat_run_id = false		# type: bool, doc: Write run_id and run_restart_from at every output timestep, to make it easier to concatenate output data sets in time, source: default
+snes_type = newtonls		# type: string, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+stol = 1e-08		# type: BoutReal, doc: Convergence tolerance in terms of the norm of the change in the solution between steps, source: default
+timestep = 1		# type: BoutReal, doc: Initial backward Euler timestep, source: default
+type = beuler		# type: string, source: /ssd_scratch/cases//a-e3-1-x/BOUT.inp
+upper_its = 16		# type: int, doc: Iterations above which the next timestep is reduced, source: default
+use_coloring = true		# type: bool, doc: Use matrix coloring to calculate Jacobian?, source: default
+use_precon = false		# type: bool, doc: Use user-supplied preconditioner?, source: default
