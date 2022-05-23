@@ -78,13 +78,14 @@ if __name__ == "__main__":
     # Extract arguments and call function
     args = parser.parse_args()
     key = str(args.key)
+    fnmatch_key = "*" + key + "*"
     
     cwd = os.getcwd()
     sep = os.path.sep
     
     to_set = []
     for folder in os.listdir(cwd):
-        if "." not in folder and fnmatch.fnmatch(folder, key) and "BOUT.inp" in os.listdir(cwd+sep+folder):
+        if "." not in folder and fnmatch.fnmatch(folder, fnmatch_key) and "BOUT.inp" in os.listdir(cwd+sep+folder):
             to_set.append(folder)
             
     to_set.sort()
