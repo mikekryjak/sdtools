@@ -16,7 +16,7 @@ def clone(case, new_case, overwrite = False, preserve = False):
     path_new_case = path_root + os.path.sep + new_case
 
     if new_case in os.listdir(path_root):
-        print(f"Case {new_case} already exists!")
+        print(f"Case {new_case} already exists! Use --overwrite to force clone")
 
         if overwrite == True:
             print(f"-> Force enabled, deleting {new_case}")
@@ -30,7 +30,6 @@ def clone(case, new_case, overwrite = False, preserve = False):
     print(f"-> Copied case {case} into {new_case}")
     
     if preserve == False:
-        print("opps")
         clean(new_case)
 
     
@@ -44,14 +43,14 @@ if __name__ == "__main__":
     parser.add_argument("case", type=str, help = "Clone from this case")
     parser.add_argument("new_case", type=str, help = "Clone to this case")
     parser.add_argument("--preserve", action="store_true", help = "Preserve result files?")
-    parser.add_argument("--f", action="store_true", help = "Overwrite new case?")
+    parser.add_argument("--overwrite", action="store_true", help = "Overwrite new case?")
 
     # Extract arguments
     args = parser.parse_args()
     case = args.case
     new_case = args.new_case
     preserve = args.preserve
-    overwrite = args.f
+    overwrite = args.overwrite
 
     clone(case, new_case, overwrite = overwrite, preserve = preserve)
 
