@@ -43,7 +43,7 @@ def make_scan(case, mode, overwrite = False):
         print("Overwrite set to true!\n")
 
     if intend_param != case_param:
-        print(f"Case {case} density mismatch. Found: {case_param:.1E} || Case name implies: {intend_param:.1E}")
+        print(f"Case {case} parameter mismatch. Found: {case_param:.1E} || Case name implies: {intend_param:.1E}")
         print("Correcting param to match case name.")
         
         if mode == "density":
