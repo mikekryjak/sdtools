@@ -26,7 +26,7 @@ def make_scan(case, mode, overwrite = False):
 
     if mode == "density":
         intend_param = float(suffix) * 1e19
-        scan = [1, 3, 5, 7, 10]
+        scan = [1, 2, 3, 5, 7, 10]
         case_param = float(read_opt(path_case, quiet = True)["ne:function"]) * 1e20
         
     elif mode == "double_power":
