@@ -16,19 +16,19 @@ cwd = os.getcwd()
 sep = os.path.sep
 
 casepath = cwd + sep + args.case
-sd1dpath = "/ssd_scratch/SD1D-mk/build"
+sd1dpath = "/ssd_scratch/SD1D-mk/"
 
 os.chdir(sd1dpath)
 print(casepath)
 
 if args.restart and args.append:
-    subprocess.call(["screen", "-dmS", args.case, "./sd1d", "-d", casepath, "restart", "append"])
+    subprocess.call(["screen", "-dmS", args.case, "build/sd1d", "-d", casepath, "restart", "append"])
 elif args.restart and not args.append:
-    subprocess.call(["screen", "-dmS", args.case, "./sd1d", "-d", casepath, "restart"])
+    subprocess.call(["screen", "-dmS", args.case, "build/sd1d", "-d", casepath, "restart"])
 elif args.append and not args.restart:
-    subprocess.call(["screen", "-dmS", args.case, "./sd1d", "-d", casepath, "append"])
+    subprocess.call(["screen", "-dmS", args.case, "build/sd1d", "-d", casepath, "append"])
 else:
-    subprocess.call(["screen", "-dmS", args.case, "./sd1d", "-d", casepath])
+    subprocess.call(["screen", "-dmS", args.case, "build/sd1d", "-d", casepath])
 
 print(f"Restart: {args.restart}, Append: {args.append}")
 print("-> Case {} running".format(args.case))
