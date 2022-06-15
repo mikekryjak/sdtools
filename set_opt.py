@@ -12,7 +12,7 @@ def set_opt(case, opt, new_value, preserve = False):
     Read BOUT.inp and replace a parameter value with a new one.
     Format for param is category:param, e.g. mesh:length_xpt.
     """
-        
+    
     path_file = case + os.path.sep + "BOUT.inp"
     
     settings = read_opt(case, quiet = True)
@@ -39,7 +39,7 @@ def set_opt(case, opt, new_value, preserve = False):
             found = True
             
         # If one of the other options:
-        elif category == opt.split(":")[0] and opt.split(":")[1] in line and old_value in line:
+        elif category == opt.split(":")[0] and opt.split(":")[1]+" " in line and old_value in line:
             found = True
             
         if found == True:
