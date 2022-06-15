@@ -57,10 +57,6 @@ def set_opt(case, opt, new_value, preserve = False):
     with open(path_file, "w") as f:
         f.writelines(lines_new)
         
-    if preserve == False:
-        print("Case written and results deleted")
-    if preserve == True:
-        print("Case written, results preserved")
 
     
 #------------------------------------------------------------
