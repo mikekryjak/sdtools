@@ -81,7 +81,7 @@ if __name__ == "__main__":
     
     to_set = []
     for folder in os.listdir(cwd):
-        if "." not in folder and fnmatch.fnmatch(folder, fnmatch_key) and "BOUT.inp" in os.listdir(cwd+sep+folder):
+        if fnmatch.fnmatch(folder, fnmatch_key) and "BOUT.inp" in os.listdir(cwd+sep+folder):
             to_set.append(folder)
             
     to_set.sort()

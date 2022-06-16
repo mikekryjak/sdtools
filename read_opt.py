@@ -79,7 +79,7 @@ if __name__ == "__main__":
     for folder in os.listdir(cwd):
 
         # For all folders that match key but don't have dots in names (i.e. are files)
-        if any(x in folder for x in [case_key]) and not any(x in folder for x in ["."]):
+        if any(x in folder for x in [case_key]):
 
             # Make sure there is a BOUT input file in the dir, and if so then append it.
             case_dir = cwd + sep + folder
