@@ -74,7 +74,7 @@ if __name__ == "__main__":
     # Extract arguments and call function
     args = parser.parse_args()
     key = str(args.key)
-    fnmatch_key = "*" + key + "*"
+    fnmatch_key = key
     
     cwd = os.getcwd()
     sep = os.path.sep
