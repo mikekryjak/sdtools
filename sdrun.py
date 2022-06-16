@@ -30,5 +30,9 @@ elif args.append and not args.restart:
 else:
     subprocess.call(["screen", "-dmS", args.case, "build/sd1d", "-d", casepath])
 
-print(f"Restart: {args.restart}, Append: {args.append}")
+if args.restart:
+    print("---> RESTARTING")
+if args.append:
+    print("---> APPENDING")
+
 print("-> Case {} running".format(args.case))
