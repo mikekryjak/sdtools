@@ -24,18 +24,20 @@ def is_finished(key):
     """
     if key == None:
         key = "*"
+    #key = "*"+str(key)+"*"
     key = str(key)
     folders = os.listdir(os.getcwd())
     path = os.getcwd()
     statuses = []
     cases = []
     mtimes = []
+    found = False
 
     for folder in folders:
-        
-        # Check it's not a file
-        if fnmatch.fnmatch(folder, key) and "." not in folder:
 
+        # Check it's not a file
+        if fnmatch.fnmatch(folder, key):# and "BOUT.inp" in os.path.join(path,folder):
+            found = True
             path_folder = path + os.path.sep + folder
 
             files = os.listdir(path_folder)
@@ -80,6 +82,9 @@ def is_finished(key):
             mtimes.append(mtime)
             cases.append(folder)
             statuses.append(status)
+            
+    if found == False:
+        print("Could not find any cases matching {}".format(key))
         
     if __name__ == "__main__":
         # Create df to sort by time modified      
