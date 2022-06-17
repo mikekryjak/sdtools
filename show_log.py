@@ -41,7 +41,7 @@ def show_log(key, n):
     for folder in folders:
         
         # Check it's not a file
-        if fnmatch.fnmatch(folder, fnkey) and "." not in folder:
+        if fnmatch.fnmatch(folder, fnkey):
 
             path_folder = path + os.path.sep + folder
 
