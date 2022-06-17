@@ -25,14 +25,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Mass case clone")
     parser.add_argument("key", type=str, help = "Clone from this case")
     parser.add_argument("new", type=str, help = "Replace key with this string")
-    parser.add_argument("--preserve", action="store_true", help = "Preserve result files?")
+    parser.add_argument("--clean", action="store_true", help = "Clean result files?")
     parser.add_argument("--overwrite", action="store_true", help = "Overwrite new case?")
 
     # Extract arguments
     args = parser.parse_args()
     key = str(args.key)
     new = args.new
-    preserve = args.preserve
+    preserve = not args.clean
     overwrite = args.overwrite
     
     # Fnmatch needs * for wildcards.
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     # If not a file, and if fnmatch found it, and if it has an input file... collect
     to_set = []
     for folder in os.listdir(cwd):
-        if "." not in folder and fnmatch.fnmatch(folder, fnsearch) and "BOUT.inp" in os.listdir(cwd+sep+folder):
+        if fnmatch.fnmatch(folder, fnsearch) and "BOUT.inp" in os.listdir(cwd+sep+folder):
             to_set.append(folder)
             
     if to_set == []:
@@ -52,26 +52,30 @@ if __name__ == "__main__":
     else:
         print("-> Clone source -> clone destination")
         
+    new_cases = []
         # Make new case name and clone
-        for case in to_set:
-            left = case.split(key)[0]
-            right = case.split(key)[1]
-            new_case = left + new + right
-            print(f"{case} - > {new_case}")
+        
+    for case in to_set:
+        left = case.split(key)[0]
+        right = case.split(key)[1]
+        new_case = left + new + right
+        new_cases.append(new_case)
+        print(f"{case} - > {new_case}")
                     
-        answer = input("Continue? y/n")
+    answer = input("Continue? y/n")
+       
         
-        if answer == "y":
-            for case in to_set:
-                print("Creating case..", end = "")
-                print(f"{case}...",end = "")
-                clone(case, new_case, overwrite = overwrite, preserve = preserve)
-                print("-> Multiple clone operation completed")
+    if answer == "y":
+        for i, case in enumerate(to_set):
+            print("Creating case..", end = "")
+            print(f"{case}...",end = "")
+            clone(case, new_cases[i], overwrite = overwrite, preserve = preserve)
+            print("-> Multiple clone operation completed")
         
-        else:
-            print("Exiting")
-            quit()
-        
+    else:
+        print("Exiting")
+        quit()
+    
 
     
 
