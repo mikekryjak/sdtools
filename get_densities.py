@@ -11,23 +11,26 @@ def get_densities(casepath):
     """
     Get line averaged plasma and neutral densities from case
     """
-
-    Nnorm = BoutData(casepath)["outputs"]["Nnorm"]
-    Tnorm = BoutData(casepath)["outputs"]["Tnorm"]
+    data = BoutData(casepath)
+    Nnorm = data["outputs"]["Nnorm"]
+    Tnorm = data["outputs"]["Tnorm"]
     
-    Nn = BoutData(casepath)["outputs"]["Nn"][-1, 0, :, 0] * Nnorm
-    Ne = BoutData(casepath)["outputs"]["Ne"][-1, 0, :, 0] * Nnorm
-    dy = BoutData(casepath)["outputs"]["dy"][0, :]
-    J = BoutData(casepath)["outputs"]["J"][0, :]
+    Nn = data["outputs"]["Nn"][-1, 0, :, 0] * Nnorm
+    Ne = data["outputs"]["Ne"][-1, 0, :, 0] * Nnorm
+    dy = data["outputs"]["dy"][0, :]
+    J = data["outputs"]["J"][0, :]
     
     dV = dy * J
 
     Ne_avg = sum(Ne * dV) / sum(dy) 
     Nn_avg = sum(Nn * dV) / sum(dy)
     Ntot_avg = Ne_avg + Nn_avg
+    Nu = Ne[0]
 
-    print(f"\n>>> Lineavg densities for : {casepath}")
-    print(f"Ne: {Ne_avg:.3E} || Nn: {Nn_avg:.3E} || Total: {Ntot_avg:.3E}\n")
+    print(f"\n>>> {casepath}")
+    print(f"Ne: {Ne_avg:.3E} || Nn: {Nn_avg:.3E} || Total: {Ntot_avg:.3E}")
+    print(f"-------------------------------------------------------------")
+    print(f"Nu: {Nu:.3E}\n")
 
 
 #------------------------------------------------------------
