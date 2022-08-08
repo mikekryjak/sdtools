@@ -1,16 +1,20 @@
+#!/usr/bin/env python3
+
 from collections import defaultdict
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-import os
+import os, sys
+import traceback
+import platform
 import colorcet as cc
 from scipy import stats
 from boututils.datafile import DataFile
 from boutdata.collect import collect
 from boutdata.data import BoutData
-import traceback
-import platform
+import xbout
+
 
 class Case:
     """SD1D case"""
@@ -103,8 +107,6 @@ class Case:
 
         if self.verbose:
             print(self.missing_vars)
-
-
 
     def process_variables(self):
 
@@ -218,9 +220,9 @@ class Case:
 
         self.data = dnorm
 
-    def plot_residuals(self, params = ["Ne", "Nn", "P", "Vi","S", "F", "R", "E"], \
-                   list_plot = ["Ne", "Nn", "P", "Vi", "S", "E", "F", "R"], \
-                   skip = 1, smoothing = 20, norm_range = 10, normalise = True):
+    def plot_residuals(self, params = ["Te", "Ne", "NVi", "S", "R"], \
+                   list_plot = ["Te", "Ne", "NVi", "S", "R"], \
+                   skip = 1, smoothing = 1, norm_range = 10, normalise = True):
 
         """
         plot_residuals plots residuals of selected variables
@@ -671,27 +673,43 @@ class Case:
                     "imbalance" : flux_imbalance[-1], "mass_rate_frac" : d["mass_rate_frac"]
                     }
 
+    def animate(self, param):
+        ds = xbout.open_boutdataset(datapath = self.datapath, inputfilepath = self.inputfilepath,
+                                    info = False, keep_yboundaries = True)
+        ds = ds.squeeze(drop = True)
+        xbout.plotting.animate.animate_line(ds[param])
+
 class CaseDeck:
-    def __init__(self, path, key = "", names = ""):
+    def __init__(self, path, key = "", keys = [], verbose = False):
+
         self.casepaths_all = dict()
         self.casepaths = dict()
         self.cases = dict()
-
         for root, dirs, files in os.walk(path):
             for file in files:
                 if ".dmp" in file:
                     case = os.path.split(root)[1]
                     self.casepaths_all[case] = root
 
-                    if key in root:
+                    if key != "":
+                        if key in root:
+                            self.casepaths[case] = root
+
+                    elif keys == []:
                         self.casepaths[case] = root
+
+                    if keys != []:
+                        if any(x in case for x in keys):
+                            self.casepaths[case] = root
 
         self.casenames_all = list(self.casepaths_all.keys())
         self.casenames = list(self.casepaths.keys())
 
-        print("\n>>> All cases in path:", self.casenames_all)
-        print(f"\n>>> All cases matching the key '{key}': {self.casenames}")
-        print(f"\n>>> Loading cases: ", end="")
+        if verbose:
+            print("\n>>> All cases in path:", self.casenames_all)
+            print(f"\n>>> All cases matching the key '{key}': {self.casenames}\n")
+        
+        print(f">>> Loading cases: ", end="")
 
         for case in self.casenames:
             self.cases[case] = Case(self.casepaths[case])
