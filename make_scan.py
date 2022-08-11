@@ -22,12 +22,17 @@ def make_scan(case, mode, overwrite = False):
     
     prefix = case.split("-")[0]
     caseid = case.split("-")[1]
-    suffix = case.split("-")[2]
+    suffix = case.split("-")[-1]
 
     if mode == "density":
         intend_param = float(suffix) * 1e19
         scan = [1, 2, 3, 5, 7, 10]
         case_param = float(read_opt(path_case, quiet = True)["ne:function"]) * 1e20
+
+    elif mode == "density_hermes":
+        intend_param = float(suffix) * 1e19
+        scan = [1, 2, 3, 5, 7, 10]
+        case_param = float(read_opt(path_case, quiet = True)["nd+:function"]) * 1e20
         
     elif mode == "double_power":
         intend_param = float(suffix) * 1e6 * 2
@@ -48,6 +53,9 @@ def make_scan(case, mode, overwrite = False):
         
         if mode == "density":
             set_opt(path_case, "ne:function", intend_param/1e20)
+
+        elif mode == "density_hermes":
+            set_opt(path_case, "nd+:function", intend_param/1e20)
             
         elif mode == "double_power":
             set_opt(path_case, "p:powerflux", "{:.1E}".format(intend_param).replace("E+0", "e"))
@@ -65,6 +73,8 @@ def make_scan(case, mode, overwrite = False):
         
         if mode == "density":
             set_opt(path_new_case, "ne:function", scan[i]/10)
+        if mode == "density_hermes":
+            set_opt(path_new_case, "nd+:function", scan[i]/10)
         if mode == "double_power":
             set_opt(path_new_case, "p:powerflux", "{:.1E}".format(scan[i]*1e6*2).replace("E+0", "e"))
 
