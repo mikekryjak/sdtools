@@ -18,10 +18,12 @@ new: "key" will be replaced with this string.
 
 def time_stats(casepath):
     out = dict()
-    out["wtime"] = sum(BoutData(casepath)["outputs"]["wtime"])/3600
-    out["wtime_all"] = BoutData(casepath)["outputs"]["wtime"]
+    data = BoutData(casepath)
+    out["wtime"] = sum(data["outputs"]["wtime"])/3600
+    out["wtime_all"] = data["outputs"]["wtime"]
     out["wtime_avg"] = np.mean(out["wtime_all"])
     out["wtime_std"] = np.std(out["wtime_all"])
+    out["rhscalls"] = sum(data["outputs"]["wtime_rhs"])
     return out
     
 #------------------------------------------------------------
@@ -49,7 +51,7 @@ if __name__ == "__main__":
         casepath = os.path.join(cwd,folder)
         if fnmatch.fnmatch(folder, fnsearch) and "BOUT.inp" in os.listdir(casepath):
             out = time_stats(casepath)
-            print(f"{folder} -> Wall time: {out['wtime']:.2f}hrs || Standard deviation: {out['wtime_std']:.2f}")
+            print(f"|| {folder} || RHS calls: {out['rhscalls']:.2E} || Wall time: {out['wtime']:.2f}hrs || Wtime stdev: {out['wtime_std']:.2f}")
 
 
     
