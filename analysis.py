@@ -81,24 +81,31 @@ class Case:
         else:
             self.ion_eqn = False
 
-        if self.options["Pn"]["evolve"] == "true":
-            self.evolve_pn = True
+        if "Pn" in self.options.keys():
+            if self.options["Pn"]["evolve"] == "true":
+                self.evolve_pn = True
+            else:
+                self.evolve_pn = False
         else:
             self.evolve_pn = False
 
-        if self.options["NVn"]["evolve"] == "true":
-            self.evolve_nvn = True
+        if "NVn" in self.options.keys():
+            if self.options["NVn"]["evolve"] == "true":
+                self.evolve_nvn = True
+            else:
+                self.evolve_nvn = False
         else:
             self.evolve_nvn = False
 
         #------------Derive variables
         self.dV = self.dy * self.J
-        self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"]
         
         if self.hermes:
             self.norm_data["Nn"] = self.norm_data["Nd"]
             self.norm_data["Vi"] = self.norm_data["Vd+"]
             self.norm_data["NVi"] = self.norm_data["Vd+"] * self.norm_data["Nd+"]
+
+        self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"]
 
         if self.ion_eqn:
             self.norm_data["Te"] = (self.norm_data["Pe"] / self.norm_data["Ne"] ) # Electron temp
@@ -201,13 +208,16 @@ class Case:
         dnorm["Cs"] = self.Cs0 * np.sqrt(2 * dnorm["Te"]/self.Tnorm) # Sound speed
         dnorm["M"] = dnorm["Vi"] / dnorm["Cs"]
         dnorm["dynamic_p"] = norm["NVi"]**2 / norm["Ne"] * self.Pnorm
-        dnorm["ESource"] = dnorm["PeSource"] * 3/2 # Is this right?
+        
         dnorm["Ne_avg"] = sum(dnorm["Ne"] * self.dV)/sum(self.dy)
         dnorm["Nn_avg"] = sum(dnorm["Nn"] * self.dV)/sum(self.dy)
         dnorm["Ntot_avg"] = dnorm["Ne_avg"] + dnorm["Nn_avg"]
 
         if self.hermes:
             dnorm["SEd+"] = dnorm["SPd+"] * 3/2
+
+        else:
+            dnorm["ESource"] = dnorm["PeSource"] * 3/2 # Is this right?
 
         if self.evolve_nvn:
             dnorm["dynamic_n"] = norm["NVn"]**2 / norm["Nn"] * self.Pnorm
