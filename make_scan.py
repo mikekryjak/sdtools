@@ -38,6 +38,10 @@ def make_scan(case, mode, overwrite = False):
         intend_param = float(suffix) * 1e6 * 2
         scan = [1, 2, 3, 4, 5, 6]
         case_param = float(read_opt(path_case, quiet = True)["p:powerflux"]) * 1e6 * 2
+
+    else:
+        print(f"{scan} is not a valid mode")
+        exit()
         
     if float(suffix) in scan:
         scan.remove(float(suffix))

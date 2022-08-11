@@ -16,7 +16,7 @@ cwd = os.getcwd()
 sep = os.path.sep
 
 casepath = cwd + sep + args.case
-hermespath = "/home/mike/hermes-3/build/"
+hermespath = "/ssd_scratch/hermes3/build/"
 
 
 os.chdir(hermespath)
