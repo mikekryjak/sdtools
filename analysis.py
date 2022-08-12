@@ -724,7 +724,23 @@ class CaseDeck:
         for case in self.casenames:
             self.cases[case] = Case(self.casepaths[case])
             print(f"{case} ", end="")
+
+        self.get_stats()
+        
         print("...Done")
+
+
+    def get_stats(self):
+        self.stats = pd.DataFrame()
+
+        for casename in self.casenames:
+            case = self.cases[casename]
+            if case.hermes:
+                Nnorm = case.options["hermes"]["Nnorm"]
+                self.stats.loc[casename, "initial_dens"] = case.options["Nd+"]["function"] * Nnorm
+                self.stats.loc[casename, "line_dens"] = case.options["Nd+"]["function"] * Nnorm
+                self.stats.loc[casename, "target_flux"] = case.data["NVi"][-1]
+                self.stats.loc[casename, "target_temp"] = case.data["Te"][-1]
 
 
     def plot(self, vars = [["Te", "Ne", "Nn"], ["S", "R", "P"], ["NVi", "M", "F"]]):
