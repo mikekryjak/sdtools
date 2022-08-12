@@ -728,8 +728,6 @@ class CaseDeck:
             self.cases[case] = Case(self.casepaths[case])
             print(f"{case} ", end="")
 
-        self.get_stats()
-
         print("...Done")
 
 
