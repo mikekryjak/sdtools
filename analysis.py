@@ -104,6 +104,9 @@ class Case:
             self.norm_data["Nn"] = self.norm_data["Nd"]
             self.norm_data["Vi"] = self.norm_data["Vd+"]
             self.norm_data["NVi"] = self.norm_data["Vd+"] * self.norm_data["Nd+"]
+            self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
+            self.norm_data["S"] = self.norm_data["SNd+"]
+            self.norm_data["Ti"] = self.norm_data["Td+"]
 
         self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"]
 
@@ -144,7 +147,7 @@ class Case:
         
         list_tnorm = ["Te", "Td+"] # [eV]
         list_nnorm = ["Ne", "Nn", "Nd+", "Nd"] # [m-3]
-        list_pnorm = ["P", "Pn", "dynamic_p", "dynamic_n", "Pe", "SPd+"] # [Pa]
+        list_pnorm = ["P", "Pn", "dynamic_p", "dynamic_n", "Pe", "SPd+", "Pd+"] # [Pa]
         list_snorm = ["S", "Srec", "Siz", "NeSource", "SNd+"] # [m-3s-1]
         list_fnorm = ["F", "Frec", "Fiz", "Fcx", "Fel"] # [kgm-2s-2 or Nm-3]
         list_enorm = ["E", "R", "Rrec", "Riz", "Rzrad", "Rex", "Erec", "Eiz", "Ecx", "Eel", "Ert", "PeSource"] # Wm-3
@@ -726,12 +729,13 @@ class CaseDeck:
             print(f"{case} ", end="")
 
         self.get_stats()
-        
+
         print("...Done")
 
 
     def get_stats(self):
         self.stats = pd.DataFrame()
+        self.stats.index.rename("case", inplace = True)
 
         for casename in self.casenames:
             case = self.cases[casename]
@@ -741,6 +745,8 @@ class CaseDeck:
                 self.stats.loc[casename, "line_dens"] = case.options["Nd+"]["function"] * Nnorm
                 self.stats.loc[casename, "target_flux"] = case.data["NVi"][-1]
                 self.stats.loc[casename, "target_temp"] = case.data["Te"][-1]
+
+        self.stats.sort_values(by="initial_dens", inplace=True)
 
 
     def plot(self, vars = [["Te", "Ne", "Nn"], ["S", "R", "P"], ["NVi", "M", "F"]]):
