@@ -32,9 +32,11 @@ class Case:
             self.process_variables()
 
     def load_data(self):
-        boutdata = BoutData(self.casepath, yguards=True, strict = True)
-        self.raw_data = boutdata["outputs"]
-        self.options = boutdata["options"]
+        self.boutdata = BoutData(self.casepath, yguards=True, strict = True)
+        self.raw_data = self.boutdata["outputs"]
+        self.options = self.boutdata["options"]
+
+        self.get_timestats()
 
     def extract_variables(self, tind = -1):
         self.missing_vars = []
@@ -692,6 +694,16 @@ class Case:
         ds = ds.squeeze(drop = True)
         xbout.plotting.animate.animate_line(ds[param])
 
+    def get_timestats(self):
+
+            self.wtime = self.raw_data["wtime"]
+            self.wtime_sum = sum(self.raw_data["wtime"])/3600
+            self.wtime_avg = np.mean(self.wtime)
+            self.wtime_std = np.std(self.wtime)
+            self.rhscalls = self.raw_data["wtime_rhs"]
+            self.rhscalls_sum = sum(self.raw_data["wtime_rhs"])
+            
+
 class CaseDeck:
     def __init__(self, path, key = "", keys = [], verbose = False):
 
@@ -777,7 +789,6 @@ class CaseDeck:
                 if param in ["NVi", "P", "M", "Ne", "Nn",  "Fcx", "Frec", "E", "F", "R", "Rex", "Rrec", "Riz", "Siz", "S", "Eiz", "Vi"]:
                     ax.set_xlim(9,10.2)
                 ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
-
 
 def replace_guards(var):
     """
