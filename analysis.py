@@ -107,7 +107,7 @@ class Case:
             self.norm_data["Vi"] = self.norm_data["Vd+"]
             self.norm_data["NVi"] = self.norm_data["Vd+"] * self.norm_data["Nd+"]
             self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
-            self.norm_data["S"] = self.norm_data["SNd+"]
+            self.norm_data["S"] = self.norm_data["SNd+"] * -1
             self.norm_data["Ti"] = self.norm_data["Td+"]
 
         self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"]
