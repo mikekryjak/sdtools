@@ -42,12 +42,12 @@ class Case:
         self.missing_vars = []
         self.norm_data = dict()
 
-        var_collect = ["P", "Ne", "Nn", "NVi", "NVn", "kappa_epar", "Pn", "Dn",
+        var_collect = ["P", "Ne", "Nn", "NVi", "NVn", "NVd", "kappa_epar", "Pn", "Dn",
                         "S", "Srec", "Siz", # Plasma particles and sinks
                         "F", "Frec", "Fiz", "Fcx", "Fel", # Momentum source/sinks to neutrals
                         "R", "Rrec", "Riz", "Rzrad", "Rex", # Radiation, energy loss from system
                         "E", "Erec", "Eiz", "Ecx", "Eel", # Energy transfer between neutrals and plasma
-                        "Pe", "Pd+", "Ve", "Vd+", "Nd", "Nd+", "Td+", "SPd+", "SNd+", "Ert",
+                        "Pe", "Pd", "Pd+", "Ve", "Vd+", "Nd", "Nd+", "Td+", "SPd+", "SNd+", "Ert",
                         "PeSource", "NeSource"]
 
         #------------Unpack data
@@ -83,21 +83,20 @@ class Case:
         else:
             self.ion_eqn = False
 
-        if "Pn" in self.options.keys():
-            if self.options["Pn"]["evolve"] == "true":
-                self.evolve_pn = True
-            else:
-                self.evolve_pn = False
+        if "Pe" not in self.missing_vars or "Pd" not in self.missing_vars:
+            self.ion_eqn = True
         else:
-            self.evolve_pn = False
+            self.ion_eqn = False
 
-        if "NVn" in self.options.keys():
-            if self.options["NVn"]["evolve"] == "true":
-                self.evolve_nvn = True
-            else:
-                self.evolve_nvn = False
+        if "NVn" not in self.missing_vars or "NVd" not in self.missing_vars:
+            self.evolve_nvn = True
         else:
             self.evolve_nvn = False
+
+        if "Pn" not in self.missing_vars or "Pd" not in self.missing_vars:
+            self.evolve_pn = True
+        else:
+            self.evolve_pn = False
 
         #------------Derive variables
         self.dV = self.dy * self.J
@@ -109,6 +108,17 @@ class Case:
             self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
             self.norm_data["S"] = self.norm_data["SNd+"] * -1
             self.norm_data["Ti"] = self.norm_data["Td+"]
+            
+            if self.evolve_nvn:
+                self.norm_data["NVn"] = self.norm_data["NVd"]
+                self.norm_data["Vn"] = self.norm_data["NVd"] / self.norm_data["Nn"]
+
+            if self.evolve_pn:
+                if self.hermes:
+                    self.norm_data["Tn"] = self.norm_data["Pd"] / self.norm_data["Nd"] 
+                    self.norm_data["Pn"] = self.norm_data["Pd"]
+                else:
+                    self.norm_data["Tn"] = self.norm_data["Pn"] / self.norm_data["Nn"]
 
         self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"]
 
@@ -147,15 +157,15 @@ class Case:
         self.Enorm = constants("q_e") * self.Nnorm * self.Tnorm * self.Omega_ci # Plasma energy sink normalisation
         self.Dnorm = self.rho_s0 * self.rho_s0 * self.Omega_ci # [m][m][s-1]=[m^2/s] diffusion coefficient
         
-        list_tnorm = ["Te", "Td+"] # [eV]
+        list_tnorm = ["Te", "Td+", "Ti", "Td", "Tn"] # [eV]
         list_nnorm = ["Ne", "Nn", "Nd+", "Nd"] # [m-3]
-        list_pnorm = ["P", "Pn", "dynamic_p", "dynamic_n", "Pe", "SPd+", "Pd+"] # [Pa]
+        list_pnorm = ["P", "Pn", "dynamic_p", "dynamic_n", "Pe", "SPd+", "Pd+", "Pd"] # [Pa]
         list_snorm = ["S", "Srec", "Siz", "NeSource", "SNd+"] # [m-3s-1]
         list_fnorm = ["F", "Frec", "Fiz", "Fcx", "Fel"] # [kgm-2s-2 or Nm-3]
         list_enorm = ["E", "R", "Rrec", "Riz", "Rzrad", "Rex", "Erec", "Eiz", "Ecx", "Eel", "Ert", "PeSource"] # Wm-3
         list_dnorm = ["Dn"]
         list_vnorm = ["Vi", "Ve", "Vd+"]
-        list_fluxnorm = ["NVi", "NVn"]
+        list_fluxnorm = ["NVi", "NVn", "NVd"]
 
         for var in norm:
             if var in list_tnorm:
@@ -736,9 +746,14 @@ class CaseDeck:
         
         print(f">>> Loading cases: ", end="")
 
+        self.suffix = dict()
         for case in self.casenames:
             self.cases[case] = Case(self.casepaths[case])
             print(f"{case}... ", end="")
+
+            suffix = case.split("-")[-1]
+            self.suffix[suffix] = self.cases[case]
+
 
         self.get_stats()
         
@@ -751,12 +766,15 @@ class CaseDeck:
 
         for casename in self.casenames:
             case = self.cases[casename]
+            self.stats.loc[casename, "target_flux"] = case.data["NVi"][-1]
+            self.stats.loc[casename, "target_temp"] = case.data["Te"][-1]
+
             if case.hermes:
-                Nnorm = case.options["hermes"]["Nnorm"]
-                self.stats.loc[casename, "initial_dens"] = case.options["Nd+"]["function"] * Nnorm
-                self.stats.loc[casename, "line_dens"] = case.options["Nd+"]["function"] * Nnorm
-                self.stats.loc[casename, "target_flux"] = case.data["NVi"][-1]
-                self.stats.loc[casename, "target_temp"] = case.data["Te"][-1]
+                self.stats.loc[casename, "initial_dens"] = case.options["Nd+"]["function"] * case.Nnorm
+                self.stats.loc[casename, "line_dens"] = case.options["Nd+"]["function"] * case.Nnorm
+            else:
+                self.stats.loc[casename, "initial_dens"] = case.options["Ne"]["function"] * case.Nnorm
+                self.stats.loc[casename, "line_dens"] = case.options["Ne"]["function"] * case.Nnorm
 
         self.stats.sort_values(by="initial_dens", inplace=True)
 
@@ -847,8 +865,18 @@ def library():
     lib["P"]["unit"] = "Pa"
     lib["Te"]["name"] = "Plasma temperature"
     lib["Te"]["unit"] = "eV"
+    lib["Ti"]["name"] = "Ion temperature"
+    lib["Ti"]["unit"] = "eV"
+    lib["Td+"]["name"] = "Ion temperature"
+    lib["Td+"]["unit"] = "eV"
+    lib["Td"]["name"] = "Deuterium temperature"
+    lib["Td"]["unit"] = "eV"
+    lib["Tn"]["name"] = "Neutral temperature"
+    lib["Tn"]["unit"] = "eV"
     lib["Pn"]["name"] = "Neutral pressure"
     lib["Pn"]["unit"] = "Pa"
+    lib["Pd"]["name"] = "Deuterium pressure"
+    lib["Pd"]["unit"] = "Pa"
     lib["dynamic_p"]["name"] = "Plasma dynamic pressure"
     lib["dynamic_p"]["unit"] = "Pa"
     lib["dynamic_n"]["name"] = "Neutral dynamic pressure"

@@ -14,7 +14,7 @@ from boututils.datafile import DataFile
 from boutdata.collect import collect
 from boutdata.data import BoutData
 import xbout
-from sk_plotting_functions import *
+from sk_plotting_functions_new import *
 
 
 class SKDeck:
@@ -39,6 +39,7 @@ class SKDeck:
             self.load_cases()
             self.get_stats()
             
+            
             for i, casename in enumerate(self.casenames):
                 self.cases[casename].sk = self.read_sk(self.casepaths[i], self.timesteps[i])
 
@@ -50,6 +51,7 @@ class SKDeck:
             case = self.cases[casename]
             case.load_all()
             case.load_grids()
+            case.calc_pressure()
             
             case.load_avg_density()
             case.target_flux, case.target_temp = case.get_target_conditions()
@@ -155,6 +157,8 @@ class SKDeck:
         params = defaultdict(dict)
         params["Ti"]["name"] = "ION_TEMPERATURE"
         params["Ti"]["norm"] = T_norm
+        params["Tn"] =  {"name": "NEUTRAL_TEMPERATURE", "norm" : T_norm}
+
         params["Ni"]["name"] = "ION_DENS"
         params["Ni"]["norm"] = n_norm
         params["S_REC"]["name"] = "S_REC"
@@ -165,6 +169,8 @@ class SKDeck:
         params["q_cx"]["norm"] = n_norm * el_charge * T_norm / t_norm
         params["Ve"]["name"] = "FLOW_VEL_X"
         params["Ve"]["norm"] = v_t
+        params["Vn"] = {"name": "NEUTRAL_VEL", "norm" : v_t}
+        params["Vn_perp"] =  {"name": "NEUTRAL_VEL_PERP", "norm" : v_t}
         
         # params["Riz"]["name"] = "ION_E_RATE"
         # params["Riz"]["norm"] = n_norm * el_charge * T_norm / t_norm
@@ -359,7 +365,10 @@ class SKDeck:
             # sk["Nn"], len(sk["Nn"]), 0)
             
 
-        # Derived variables
+        """"""""
+        # DERIVED VARIABLES
+        """"""""
+
         sk["NVi"] = sk["Ne"] * sk["Vi"] # derived variable: plasma flux.
         sk["Ntot"] = sk["Ne"] + sk["Nn"]
         
@@ -367,7 +376,19 @@ class SKDeck:
         # Density weighted average temperature (but density is the same cause of quasineutrality)
             sk["T_mean"] = [np.mean([sk["Te"][x], sk["Ti"][x]]) for x in range(len(sk["Te"]))]
             
-        sk["P"] = sk["Ne"] * sk["Te"] * el_charge # [m-3] [eV] [J/eV]
+        if "Ti" not in list_missing:
+            sk["Pe"] = sk["Ne"] * sk["Te"] * el_charge # [m-3] [eV] [J/eV]
+            sk["Pi"] = sk["Ni"] * sk["Ti"] * el_charge # [m-3] [eV] [J/eV]
+            sk["P"] = sk["Pe"] + sk["Pi"]
+        else:
+            sk["P"] = sk["Ne"] * sk["Te"] * el_charge # [m-3] [eV] [J/eV]
+
+        if "Vn" not in list_missing:
+            sk["NVn"] = sk["Nn"] * sk["Vn"]
+
+        if "Tn" not in list_missing:
+            sk["Pn"] = sk["Tn"] * sk["Nn"] * el_charge
+
             
         for param in list_missing:
             sk[param] = np.insert(sk[param], -1, 0)
