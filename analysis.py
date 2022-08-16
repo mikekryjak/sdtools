@@ -48,7 +48,8 @@ class Case:
                         "R", "Rrec", "Riz", "Rzrad", "Rex", # Radiation, energy loss from system
                         "E", "Erec", "Eiz", "Ecx", "Eel", # Energy transfer between neutrals and plasma
                         "Pe", "Pd", "Pd+", "Ve", "Vd+", "Nd", "Nd+", "Td+", "SPd+", "SNd+", "Ert",
-                        "PeSource", "NeSource"]
+                        "PeSource", "NeSource",
+                        "DIV_Q_SH", "DIV_Q_SNB"]
 
         #------------Unpack data
         for var in var_collect:
@@ -97,6 +98,11 @@ class Case:
             self.evolve_pn = True
         else:
             self.evolve_pn = False
+
+        if "DIV_Q_SNB" not in self.missing_vars:
+            self.snb = True
+        else:
+            self.snb = False
 
         #------------Derive variables
         self.dV = self.dy * self.J
@@ -223,7 +229,6 @@ class Case:
         dnorm["Cs"] = self.Cs0 * np.sqrt(2 * dnorm["Te"]/self.Tnorm) # Sound speed
         dnorm["M"] = dnorm["Vi"] / dnorm["Cs"]
         dnorm["dynamic_p"] = norm["NVi"]**2 / norm["Ne"] * self.Pnorm
-        
         dnorm["Ne_avg"] = sum(dnorm["Ne"] * self.dV)/sum(self.dy)
         dnorm["Nn_avg"] = sum(dnorm["Nn"] * self.dV)/sum(self.dy)
         dnorm["Ntot_avg"] = dnorm["Ne_avg"] + dnorm["Nn_avg"]
@@ -243,7 +248,7 @@ class Case:
         dnorm["J"] = self.J
         dnorm["dV"] = self.dV
 
-        self.data = dnorm
+        self.data = dnorm        
 
     def plot_residuals(self, params = ["Te", "Ne", "NVi", "S", "R"], \
                    list_plot = ["Te", "Ne", "NVi", "S", "R"], \
@@ -349,8 +354,55 @@ class Case:
         ax.tick_params(axis = "both", which = "major", labelsize = 12)
         ax.tick_params(axis = "both", which = "minor", labelsize = 12)
 
+    def get_htransfer(self):
+        
+        self.data["pos_boundary"], self.data["convect_ke"] = ke_convection(self.pos, self.data["Ne"], self.data["Vi"])
+        _, self.data["convect_therm"] = ke_convection(self.pos, self.data["P"], self.data["Vi"])
+
+        if self.snb:
+            self.data["conduction"] = self.data["DIV_Q_SNB"]
+            self.data["conduction_SH"] = self.data["DIV_Q_SH"]
+        else:
+            _, self.data["conduction"] = heat_conduction(self.pos, self.data["Te"])
+            self.data["conduction_SH"] = self.data["conduction"]
+        
+    def heat_balance(self, verbose = False):
+        if self.hermes:
+            print("Hermes heat balance not implemented")
+        else:
+
+            self.sheath_gamma = self.options["sd1d"]["sheath_gamma"]
+            self.flux_sheath = self.data["NVi"][-1]
+            self.Tt = self.data["Te"][-1]
+            
+            self.hflux_source = np.nansum(self.data["ESource"] * self.dV) * 1e-6
+            self.hflux_sheath = self.Tt * constants("q_e") * self.flux_sheath * self.sheath_gamma * 1e-6
+
+            self.hflux_E = np.trapz((self.data["E"] * self.dV)[1:-1]) * 1e-6
+            self.hflux_R = np.trapz((self.data["R"] * self.dV)[1:-1]) * 1e-6
+            self.hflux_F = np.trapz((self.data["F"][1:-1] * self.data["Vi"][1:-1] * self.dV[1:-1])) * 1e-6
+
+            # self.hflux_E = np.trapz((np.nan_to_num(self.data["E"]) * self.dV)) * 1e-6
+            # self.hflux_R = np.trapz((np.nan_to_num(self.data["R"]) * self.dV)) * 1e-6
+            # self.hflux_F = np.trapz((np.nan_to_num(self.data["F"]) * self.data["Vi"] * self.dV)) * 1e-6
+
+
+            self.hflux_out = self.hflux_sheath + self.hflux_E + self.hflux_R + self.hflux_F
+            self.hflux_imbalance = (self.hflux_out - self.hflux_source) / self.hflux_source
+
+            if verbose:
+                print(">> Fluxes (MW):")
+                print(f"- Losses to neutrals:- {self.hflux_E:.3f}[MW]")
+                print(f"- Radiation:---------- {self.hflux_R:.3f}[MW]")
+                print(f"- Friction losses:---- {self.hflux_F:.3f}[MW]")
+                print(f"- Sheath:------------- {self.hflux_sheath:.3f}[MW]")
+                print(f"ooooooooooooooooooooooooooooooooo")
+                print(f"- Total out:---------- {self.hflux_out:.3f}[MW]")
+                print(f"- Total in:----------- {self.hflux_source:.3f}[MW]")
+                print(f"- Imbalance:---------- {self.hflux_imbalance:.1%}")
+
     def mass_balance(self,          
-        verbosity = True, 
+        verbosity = False, 
         plot = False, 
         output = False, 
         nloss_guardcells = True, 
@@ -395,6 +447,8 @@ class Case:
 
         if flux_input == True:
             flux_intended = BoutData(path_case)["options"]["Ne"]["flux"]
+        else:
+            flux_intended = 0
 
 
         # We don't always have atomics enabled, but if we do, collect plasma density sink
@@ -553,6 +607,19 @@ class Case:
         else:
             Nu_error = np.zeros(len(d["Nu_dn"]))
 
+
+        #>>>>>>> Save data to class
+        self.flux_sheath = flux_sheath[-1]
+        self.flux_sink = flux_sink[-1]
+        self.flux_source = flux_source[-1]
+        self.flux_nloss = flux_nloss[-1]
+        self.flux_in = flux_in[-1]
+        self.flux_intended = flux_intended
+        self.evolving_source = evolving_source
+        self.frecycle = frecycle[-1]
+        self.frecycle_intended = frecycle_intended
+        self.frecycle_error = frecycle_error[-1]
+        self.flux_imbalance = flux_imbalance[-1]
 
         if verbosity == True:
             print("\n>>Mass balance V5")
@@ -713,7 +780,6 @@ class Case:
             self.rhscalls = self.raw_data["wtime_rhs"]
             self.rhscalls_sum = sum(self.raw_data["wtime_rhs"])
             
-
 class CaseDeck:
     def __init__(self, path, key = "", keys = [], verbose = False):
 
@@ -753,12 +819,13 @@ class CaseDeck:
 
             suffix = case.split("-")[-1]
             self.suffix[suffix] = self.cases[case]
+            
+            self.cases[case].get_htransfer()
 
 
         self.get_stats()
         
         print("...Done")
-
 
     def get_stats(self):
         self.stats = pd.DataFrame()
@@ -778,6 +845,22 @@ class CaseDeck:
 
         self.stats.sort_values(by="initial_dens", inplace=True)
 
+    def get_heat_balance(self):
+        self.heat_balance = pd.DataFrame()
+        
+        for casename in self.casenames:
+            case = self.cases[casename]
+            case.heat_balance()
+            self.heat_balance.loc[casename, "hflux_E"] = case.hflux_E
+            self.heat_balance.loc[casename, "hflux_R"] = case.hflux_R
+            self.heat_balance.loc[casename, "hflux_F"] = case.hflux_F
+            self.heat_balance.loc[casename, "hflux_sheath"] = case.hflux_sheath
+            self.heat_balance.loc[casename, "All out"] = case.hflux_out
+            self.heat_balance.loc[casename, "hflux_source"] = case.hflux_source
+            self.heat_balance.loc[casename, "hflux_imbalance"] = case.hflux_imbalance
+
+        print("Heat flows in MW:")
+        display(self.heat_balance)
 
     def plot(self, vars = [["Te", "Ne", "Nn"], ["S", "R", "P"], ["NVi", "M", "F"]]):
         lib = library()
@@ -1220,5 +1303,131 @@ def read_case(path_case, merge_output = False):
         case = {**case["result"], **case["const"]}
         
     return case
+
+
+def heat_conduction(
+    pos, Te, kappa0=2293.8117):
+    """
+    Calculate heat conduction in W/m^2 
+    given input 1-D profiles
+    
+    pos[y] position in meters
+    Te[y]  Electron temperature [eV]
+
+    kappa0 Coefficient of heat conduction, so kappa = kappa0 * Te^5/2    
+
+    Note: The value of kappa0 is what is used in SD1D
+    """
+    grad_Te = (Te[1:] - Te[:-1]) / (pos[1:] - pos[:-1]) # One-sided differencing
+
+    Te_p = 0.5*(Te[1:] + Te[:-1])
+    
+    # Position of the result
+    result_pos = 0.5*(pos[1:] + pos[:-1])
+    
+    return result_pos, -2293.8117*Te_p**(5./2)*grad_Te
+
+def ke_convection(pos, n, vi, AA=2):
+    """
+    Calculate kinetic energy convection in W/m^2 
+    given input 1-D profiles
+    
+    pos[y] position in meters
+    n[y]   Density in m^-3
+    vi[y]  Parallel flow velocity in m/s
+    
+    AA  Atomic mass number
+    """
+
+    # Interpolate onto cell boundaries
+    vi_p = 0.5*(vi[1:] + vi[:-1])
+    n_p = 0.5*(n[1:] + n[:-1])
+
+    # Position of the result
+    result_pos = 0.5*(pos[1:] + pos[:-1])
+
+    return result_pos, 0.5*n_p*vi_p**3 * AA * 1.67e-27
+
+def thermal_convection(
+    pos, p, vi):
+    """
+    Calculate thermal energy convection in W/m^2 
+    given input 1-D profiles
+    
+    pos[y] position in meters
+    n[y]   Density in m^-3
+    vi[y]  Parallel flow velocity in m/s
+    """
+
+    # Interpolate onto cell boundaries
+    vi_p = 0.5*(vi[1:] + vi[:-1])
+    p_p = 0.5*(p[1:] + p[:-1])
+
+    # Position of the result
+    result_pos = 0.5*(pos[1:] + pos[:-1])
+
+    return result_pos, (5./2)*p_p*vi_p
+
+def energy_flux(path, tind=-1):
+    """
+    Calculates the energy flux due to conduction and convection
+    
+    path  Path to the data files
+    tind  Time index. By default the final time
+    """
+    verbosity = False
+    
+    # Evolving variables, remove extra guard cells so just one each side
+    P = collect("P", path=path, tind=tind, yguards=True, info = verbosity)[-1,0,1:-1,0]
+    Ne = collect("Ne", path=path, tind=tind, yguards=True, info = verbosity)[-1,0,1:-1,0]
+    NVi = collect("NVi", path=path, tind=tind, yguards=True, info = verbosity)[-1,0,1:-1,0]
+
+    # Normalisations
+    nnorm = collect("Nnorm", path=path, tind=tind, info = verbosity)
+    tnorm = collect("Tnorm", path=path, tind=tind, info = verbosity)
+    pnorm = nnorm*tnorm*1.602e-19 # Converts p to Pascals
+    cs0 = collect("Cs0", path=path)
+
+    try:
+        kappa_epar = collect("kappa_epar", path=path, tind=tind, info = verbosity)
+    except:
+        kappa_epar = None
+    
+    # electron temperature
+    Te = (0.5*P/Ne) * tnorm
+
+    # ion parallel velocity
+    Vi = (NVi/Ne) * cs0
+
+    NVi *= nnorm * cs0
+    Ne *= nnorm
+    P *= pnorm
+    
+    # Source
+    pesource = collect("PeSource", path=path, yguards=True, info = verbosity)
+    
+    dy = collect("dy", path=path, yguards=True, info = verbosity)[0,1:-1]
+    n = len(dy)
+    pos = zeros(n)
+
+    # position at the centre of the grid cell
+    pos[0] = -0.5*dy[1]
+    pos[1] = 0.5*dy[1]
+    for i in range(2,n):
+        pos[i] = pos[i-1] + 0.5*dy[i-1] + 0.5*dy[i]
+    
+    # Calculate energy transport
+    flux_pos, conduction = heat_conduction(pos, Te)
+    _, convect_ke = ke_convection(pos, Ne, Vi)
+    _, convect_therm = thermal_convection(pos, P, Vi)
+
+    if kappa_epar is None:
+        conduction = zeros(len(flux_pos))
+    
+    # Return results as a dictionary
+    return {"position":flux_pos,
+            "conduction":conduction,
+            "convection_ke":convect_ke,
+            "convection_thermal":convect_therm}
 
 
