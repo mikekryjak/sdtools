@@ -49,7 +49,7 @@ class Case:
                         "E", "Erec", "Eiz", "Ecx", "Eel", # Energy transfer between neutrals and plasma
                         "Pe", "Pd", "Pd+", "Ve", "Vd+", "Nd", "Nd+", "Td+", "SPd+", "SNd+", "Ert",
                         "PeSource", "NeSource",
-                        "DIV_Q_SH", "DIV_Q_SNB"]
+                        "Div_Q_SH", "Div_Q_SNB"]
 
         #------------Unpack data
         for var in var_collect:
@@ -99,7 +99,7 @@ class Case:
         else:
             self.evolve_pn = False
 
-        if "DIV_Q_SNB" not in self.missing_vars:
+        if "Div_Q_SNB" not in self.missing_vars:
             self.snb = True
         else:
             self.snb = False
@@ -150,7 +150,8 @@ class Case:
         Snorm : Density flux : [m-3s-1]
         Fnorm : Momentum : [kgm-2s-2, or Nm-3]
         Enorm : Power : [Wm-3]
-        Dnorm : Diffusion [m2s-1]
+        Xnorm : Flux [m2s-1]
+        Qnorm : Heat flux [Wm-2]
         Cs0 : Speed : [ms-1]
         Omega_ci : Time : [s-1]
         rho_s0 : Length : [m]
@@ -160,18 +161,21 @@ class Case:
         self.Pnorm = self.Nnorm * self.Tnorm * constants("q_e") # Converts P to Pascals. 1.602e-19 is proton charge in C
         self.Snorm = self.Nnorm * self.Omega_ci # Normalisation for S: plasma density sink (m-3s-1)
         self.Fnorm = (constants("mass_p") * 2) * self.Nnorm * self.Cs0 * self.Omega_ci # Plasma momentum sink normalisation (kgm-2s-1)
-        self.Enorm = constants("q_e") * self.Nnorm * self.Tnorm * self.Omega_ci # Plasma energy sink normalisation
-        self.Dnorm = self.rho_s0 * self.rho_s0 * self.Omega_ci # [m][m][s-1]=[m^2/s] diffusion coefficient
+        self.Enorm = constants("q_e") * self.Nnorm * self.Tnorm * self.Omega_ci # [Wm-3]Plasma energy sink normalisation
+        self.Xnorm = self.Nnorm * self.Cs0 # [m2/s] Flux
+        self.Qnorm = self.Enorm * self.rho_s0 # [Wm-2] Heat flux
         
         list_tnorm = ["Te", "Td+", "Ti", "Td", "Tn"] # [eV]
         list_nnorm = ["Ne", "Nn", "Nd+", "Nd"] # [m-3]
         list_pnorm = ["P", "Pn", "dynamic_p", "dynamic_n", "Pe", "SPd+", "Pd+", "Pd"] # [Pa]
         list_snorm = ["S", "Srec", "Siz", "NeSource", "SNd+"] # [m-3s-1]
         list_fnorm = ["F", "Frec", "Fiz", "Fcx", "Fel"] # [kgm-2s-2 or Nm-3]
-        list_enorm = ["E", "R", "Rrec", "Riz", "Rzrad", "Rex", "Erec", "Eiz", "Ecx", "Eel", "Ert", "PeSource"] # Wm-3
-        list_dnorm = ["Dn"]
-        list_vnorm = ["Vi", "Ve", "Vd+"]
-        list_fluxnorm = ["NVi", "NVn", "NVd"]
+        list_enorm = ["E", "R", "Rrec", "Riz", "Rzrad", "Rex", "Erec", 
+                    "Eiz", "Ecx", "Eel", "Ert", "PeSource",
+                    "Div_Q_SH", "Div_Q_SNB"] # [Wm-3]
+        list_vnorm = ["Vi", "Ve", "Vd+"] 
+        list_xnorm = ["Dn", "NVi", "NVn", "NVd"] # m2s-1
+        list_qnorm = [] # [Wm-2]
 
         for var in norm:
             if var in list_tnorm:
@@ -186,12 +190,12 @@ class Case:
                 dnorm[var] = norm[var] * self.Fnorm
             elif var in list_enorm:
                 dnorm[var] = norm[var] * self.Enorm
-            elif var in list_dnorm:
-                dnorm[var] = norm[var] * self.Dnorm
             elif var in list_vnorm:
                 dnorm[var] = norm[var] * self.Cs0
-            elif var in list_fluxnorm:
-                dnorm[var] = norm[var] * self.Nnorm * self.Cs0
+            elif var in list_xnorm:
+                dnorm[var] = norm[var] * self.Xnorm
+            elif var in list_qnorm:
+                dnorm[var] = norm[var] * self.Qnorm
 
         # Sheath stats
         self.flux_out = (norm["NVi"][-1] * self.J / np.sqrt(self.g_22) * self.Omega_ci * self.Nnorm)[0] # Sheath flux in [s-1]. J/g_22 is cross-sectional area (J*dy)/(sqrt(g_22)*dy) = Volume/length
@@ -359,12 +363,15 @@ class Case:
         self.data["pos_boundary"], self.data["convect_ke"] = ke_convection(self.pos, self.data["Ne"], self.data["Vi"])
         _, self.data["convect_therm"] = ke_convection(self.pos, self.data["P"], self.data["Vi"])
 
-        if self.snb:
-            self.data["conduction"] = self.data["DIV_Q_SNB"]
-            self.data["conduction_SH"] = self.data["DIV_Q_SH"]
-        else:
-            _, self.data["conduction"] = heat_conduction(self.pos, self.data["Te"])
-            self.data["conduction_SH"] = self.data["conduction"]
+        # if self.snb:
+        #     self.data["conduction"] = self.data["Div_Q_SNB"]
+        #     self.data["conduction_SH"] = self.data["Div_Q_SH"]
+            
+        # else:
+        #     _, self.data["conduction"] = heat_conduction(self.pos, self.data["Te"])
+        #     self.data["conduction_SH"] = self.data["conduction"]
+
+        _, self.data["conduction_SH_script"] = heat_conduction(self.pos, self.data["Te"])
         
     def heat_balance(self, verbose = False):
         if self.hermes:
@@ -382,13 +389,25 @@ class Case:
             self.hflux_R = np.trapz((self.data["R"] * self.dV)[1:-1]) * 1e-6
             self.hflux_F = np.trapz((self.data["F"][1:-1] * self.data["Vi"][1:-1] * self.dV[1:-1])) * 1e-6
 
-            # self.hflux_E = np.trapz((np.nan_to_num(self.data["E"]) * self.dV)) * 1e-6
-            # self.hflux_R = np.trapz((np.nan_to_num(self.data["R"]) * self.dV)) * 1e-6
-            # self.hflux_F = np.trapz((np.nan_to_num(self.data["F"]) * self.data["Vi"] * self.dV)) * 1e-6
-
-
             self.hflux_out = self.hflux_sheath + self.hflux_E + self.hflux_R + self.hflux_F
-            self.hflux_imbalance = (self.hflux_out - self.hflux_source) / self.hflux_source
+            self.hflux_imbalance = self.hflux_out - self.hflux_source
+            self.hflux_imbalance_ratio = self.hflux_imbalance / self.hflux_source
+
+            if self.snb:
+                q_snb = self.raw_data["Div_Q_SNB"].squeeze()[-1,:]
+                q_snb_dn = q_snb * self.Qnorm
+                q_sh = self.raw_data["Div_Q_SH"].squeeze()[-1,:]
+                q_sh_dn = q_sh * self.Qnorm
+
+
+                hflux_last_snb = q_snb_dn[-3] * 2 * 1e-6
+                hflux_last_snb_gr = np.mean([q_snb_dn[-3], q_snb_dn[-2]]) * 2 * 1e-6
+
+                hflux_last_sh = q_sh_dn[-3] * 2 * 1e-6
+                hflux_last_sh_gr = np.mean([q_sh_dn[-3], q_sh_dn[-2]]) * 2 * 1e-6
+
+                self.hflux_lastcell_snb = hflux_last_snb
+                self.hflux_lastcell_sh = hflux_last_sh
 
             if verbose:
                 print(">> Fluxes (MW):")
@@ -399,7 +418,8 @@ class Case:
                 print(f"ooooooooooooooooooooooooooooooooo")
                 print(f"- Total out:---------- {self.hflux_out:.3f}[MW]")
                 print(f"- Total in:----------- {self.hflux_source:.3f}[MW]")
-                print(f"- Imbalance:---------- {self.hflux_imbalance:.1%}")
+                print(f"- Difference:--------- {self.hflux_imbalance:.3f}[MW]")
+                print(f"- Imbalance:---------- {self.hflux_imbalance_ratio:.1%}")
 
     def mass_balance(self,          
         verbosity = False, 
@@ -859,6 +879,10 @@ class CaseDeck:
             self.heat_balance.loc[casename, "hflux_source"] = case.hflux_source
             self.heat_balance.loc[casename, "hflux_imbalance"] = case.hflux_imbalance
 
+            if case.snb:
+                self.heat_balance.loc[casename, "sheath SNB"] = case.hflux_lastcell_snb
+                self.heat_balance.loc[casename, "sheath SH"] = case.hflux_lastcell_sh
+
         print("Heat flows in MW:")
         display(self.heat_balance)
 
@@ -1288,7 +1312,6 @@ def read_case(path_case, merge_output = False):
     result_dn["Ntot_avg"] = result_dn["Ne_avg"] + result_dn["Nn_avg"]
     
     # Power integrals
-    
 
     """
     COLLECTION
