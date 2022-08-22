@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from distutils.command.build_clib import build_clib
 import subprocess, shlex
 import os
 import argparse
@@ -15,8 +16,9 @@ parser = argparse.ArgumentParser(description = "Run case")
 parser.add_argument("case", type=str, help = "Case to run")
 parser.add_argument("--restart", action="store_true", help = "Restart?")
 parser.add_argument("--append", action="store_true", help = "Append?")
-parser.add_argument("--b2", action="store_true", help = "Use 2nd build?")
+parser.add_argument("--build", type = str, nargs = 1, help = "Build folder to use")
 parser.add_argument("--np", type = int, nargs = "?", help = "Number of cores to use")
+parser.add_argument("--check", action = "store_true", help = "Show log after deploying?")
 
 args = parser.parse_args()
 
@@ -27,13 +29,12 @@ casepath = cwd + sep + args.case
 sd1dpath = "/ssd_scratch/SD1D-mk/"
 runscriptpath = os.path.join(casepath,"run.sh")
 
-
-if args.b2 == True:
-    build_folder = "build2"
+if args.build != None:
+    build_folder = args.build[0]
 else:
     build_folder = "build"
 
-print(casepath)
+print(f"Running case {args.case} in {build_folder}")
 
 if args.restart:
     restartappend = "restart"
@@ -44,7 +45,7 @@ if args.restart and args.append:
 if args.restart == False and args.append == False:
     restartappend = ""
 
-if args.np != np.nan:
+if args.np != None:
     mpicommand = f"mpirun -np {args.np}"
     parallel = True
 else:
@@ -57,6 +58,7 @@ with open(runscriptpath, "w") as f:
 
 command = shlex.split(f"screen -dmS {args.case} sh {runscriptpath}")
 
+print(f"Running command: {runcommand}")
 run(command)
 
 if args.restart:
@@ -66,8 +68,8 @@ if args.append:
 if parallel:
     print(f"---> PARALLEL ON {args.np} CORES")
 
-print("-> Case {} deployed. Here is what it's doing:".format(args.case))
-
-time.sleep(10)
-show_log(args.case, 10)
+if args.check:
+    print("---> Case {} deployed. Here is what it's doing:".format(args.case))
+    time.sleep(5)
+    show_log(args.case, 10)
 
