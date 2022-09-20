@@ -800,8 +800,10 @@ class Case:
             self.rhscalls = self.raw_data["wtime_rhs"]
             self.rhscalls_sum = sum(self.raw_data["wtime_rhs"])
             
+    # def check_atomics(self):
+
 class CaseDeck:
-    def __init__(self, path, key = "", keys = [], verbose = False):
+    def __init__(self, path, key = "", keys = [], skip = [], explicit = [], verbose = False):
 
         self.casepaths_all = dict()
         self.casepaths = dict()
@@ -812,16 +814,22 @@ class CaseDeck:
                     case = os.path.split(root)[1]
                     self.casepaths_all[case] = root
 
-                    if key != "":
+                    if explicit != []:
                         if key in root:
                             self.casepaths[case] = root
 
-                    elif keys == []:
-                        self.casepaths[case] = root
+                    else:
 
-                    if keys != []:
-                        if any(x in case for x in keys):
+                        if key != "" and any(x not in case for x in skip) == False:
+                            if key in root:
+                                self.casepaths[case] = root
+
+                        elif keys == [] and any(x not in case for x in skip) == False:
                             self.casepaths[case] = root
+
+                        if keys != []:
+                            if any(x in case for x in keys) and any(x in case for x in skip) == False:
+                                self.casepaths[case] = root
 
         self.casenames_all = list(self.casepaths_all.keys())
         self.casenames = list(self.casepaths.keys())
@@ -878,6 +886,7 @@ class CaseDeck:
             self.heat_balance.loc[casename, "All out"] = case.hflux_out
             self.heat_balance.loc[casename, "hflux_source"] = case.hflux_source
             self.heat_balance.loc[casename, "hflux_imbalance"] = case.hflux_imbalance
+            self.heat_balance.loc[casename, "hflux_imbalance_ratio"] = case.hflux_imbalance / case.hflux_source
 
             if case.snb:
                 self.heat_balance.loc[casename, "sheath SNB"] = case.hflux_lastcell_snb
