@@ -924,6 +924,327 @@ class CaseDeck:
                     ax.set_xlim(9,10.2)
                 ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
 
+class Atomics():
+    def __init__(self):
+        pass
+
+    def iz_willett(Te, coeffs = [-3.271397E1, 1.353656E1, -5.739329, 1.563155, -2.877056E-1, 3.482560e-2, -2.631976E-3, 1.119544E-4, -2.039150E-6]):
+        """ SD1D ionisation rate code"""
+        
+        TT = Te
+        lograte = 0.0
+        
+        for i, coeff in enumerate(coeffs):
+            lograte = lograte +  coeff * np.log(TT)**(i)
+        fION = np.exp(lograte)*1e-6
+
+        return fION
+
+    def ex_willett(Te):
+        """ SD1D excitation energy rate code"""
+
+        TT = Te
+        Y = 10.2 / TT
+        fEXC = 49.0E-14/(0.28+Y)*np.exp(-Y)*np.sqrt(Y*(1.0+Y))
+    
+        return fEXC
+
+    def cx_willett(Te, E = 10):
+        """ SD1D charge exchange rate code"""
+
+        cxcoeffs = [
+        [
+            -1.829079582E1, 1.640252721E-1, 3.364564509E-2, 9.530225559E-3,
+            -8.519413900E-4, -1.247583861E-3, 3.014307546E-4, -2.499323170E-5,
+            6.932627238E-7,
+        ],
+        [
+            2.169137616E-1, -1.106722014E-1, -1.382158680E-3, 7.348786287E-3,
+            -6.343059502E-4, -1.919569450E-4, 4.075019352E-5, -2.850044983E-6,
+            6.966822400E-8,
+        ],
+        [
+            4.307131244E-2, 8.948693625E-3, -1.209480567E-2, -3.675019470E-4,
+            1.039643391E-3, -1.553840718E-4, 2.670827249E-6, 7.695300598E-7,
+            -3.783302282E-8,
+        ],
+        [
+            -5.754895093E-4, 6.062141761E-3, 1.075907882E-3, -8.119301728E-4,
+            8.911036876E-6, 3.175388950E-5, -4.515123642E-6, 2.187439284E-7,
+            -2.911233952E-9,
+        ],
+        [
+            -1.552077120E-3, -1.210431588E-3, 8.297212634E-4, 1.361661817E-4,
+            -1.008928628E-4, 1.080693990E-5, 5.106059414E-7, -1.299275586E-7,
+            5.117133050E-9,
+        ],
+        [
+            -1.876800283E-4, -4.052878752E-5, -1.907025663E-4, 1.141663042E-5,
+            1.775681984E-5, -3.149286924E-6, 3.105491555E-8, 2.274394089E-8,
+            -1.130988251E-9,
+        ],
+        [
+            1.125490271E-4, 2.875900436E-5, 1.338839629E-5, -4.340802793E-6,
+            -7.003521917E-7, 2.318308730E-7, -6.030983538E-9, -1.755944926E-9,
+            1.005189187E-10,
+        ],
+        [
+            -1.238982763E-5, -2.616998140E-6, -1.171762874E-7, 3.517971869E-7,
+            -4.928692833E-8, 1.756388999E-10, -1.446756796E-10, 7.143183138E-11,
+            -3.989884106E-12,
+        ],
+        [
+            4.163596197E-7, 7.558092849E-8, -1.328404104E-8, -9.170850254E-9,
+            3.208853884E-9, -3.952740759E-10, 2.739558476E-11, -1.693040209E-12,
+            6.388219930E-14,
+        ],
+    ]
+
+        lograte = 0.0;
+        for i in range(9):
+            for j in range(9):
+                lograte = lograte + cxcoeffs[i][j] * np.log(Te)**i * np.log(E)**j
+        
+
+
+        return 1.0E-6 * np.exp(lograte)
+
+    def dn_sd1d(Te, Ne, Nn):
+        
+        """SD1D neutral diffusion rate Dn"""
+   
+        mass_p = 1.6726219e-27
+        mass_i = mass_p * 2
+        q_e = 1.60217662E-19
+
+        # Thermal velocity
+        vth_n = np.sqrt(Te*q_e/mass_i) 
+
+        # CX rate
+        sigma_cx = Ne * fCX(Te)
+
+        # IZ rate
+        sigma_iz = Ne * fION(Te)
+
+        # NN mfp - neutral-neutral elastic collisioms
+        a0 = np.pi * 5.29e-11**2
+        lambda_nn = 1/(Nn*a0)
+        if lambda_nn > 0.1:
+            lambda_nn = 0.1
+
+        # NN rate
+        sigma_nn = vth_n / lambda_nn
+
+        # Neutral diffusion
+        dn = vth_n**2 / (sigma_cx + sigma_iz + sigma_nn)
+            
+        return dn
+
+    def pop_ex(Te, Ne):
+        """
+        Population method excitation
+        Use H12 excited state population rates from AMJUEL
+        And Einstein coefficients & bandgaps
+        Originally written by Yulin Zhou
+        """
+
+        E = dict(); A = dict()
+        E["21"] = 10.2;       E["31"] = 12.1;       E["41"] = 12.8;       E["51"] = 13.05;      E["61"] = 13.22
+        A["21"] = 4.6986e8;   A["31"] = 5.5751e7;   A["41"] = 1.2785e7;   A["51"] = 4.1250e6;   A["61"] = 1.6440e6
+
+        rates = ["H.12 2.1.5b", "H.12 2.1.5a", "H.12 2.1.5c", "H.12 2.1.5d", "H.12 2.1.5e"]
+        einsteins = [A["21"], A["31"], A["41"], A["51"], A["61"]]
+        bandgaps = [E["21"], E["31"], E["41"], E["51"], E["61"]]
+        
+        A21_check = 6.265e8
+        A21_literature = 4.6986e8
+        A21_code = 1.6986e9
+        
+        Rex = 0; R = dict()
+        for i, n in enumerate(range(2,7)):
+            R[n] = amjuel_2d([Te], Ne, amjuel_data[rates[i]], pop_ratio=True) * einsteins[i] * bandgaps[i]
+            R[n] = R[n] / Ne  # eV/m3s to W/m3
+            Rex += R[n]
+            
+        # Rex += amjuel_2d([Te], Ne, amjuel_data["H.4 2.1.5"]) * 13.6
+            
+        return Rex
+
+class AMJUEL():
+    """
+    Toolkit for reading/writing AMJUEL and HYDHEL rates
+    Also contains lots of rates itself.
+    Use get_rate wrapper.
+    """
+    def __init__(self):
+        self.get_amjuel_data()
+
+    def read_amjuel_2d(self, path):
+        """
+        # Reads AMJUEL coefficient table
+        # You must copypaste it from AMJUEL pdf into Excel and do data to columns
+        # Align it with the top left cell and save as csv. 
+        # rows = T index, cols = E/n/other index.
+        # Don't worry if you display the dataframe and see zeros, this is
+        # because it's not scientific notation by default.
+        # Needs Pandas
+        """
+        rate = pd.read_csv(path, header = None)
+        rate = pd.concat([rate.loc[2:10,:3].reset_index(), rate.loc[13:21,:3].reset_index(), rate.loc[24:32,:3].reset_index()], axis = 1, ignore_index = True)
+        rate = rate.drop(columns = [0,1,5,6,10,11])
+        rate.columns = range(9)
+        
+        for col in rate.columns:
+            for row in rate.index:
+                if type(rate.loc[row,col]) != np.float64:
+                    # Some rates have e and get picked up. Others have D and
+                    # get picked up as strings.
+                    rate.loc[row,col] = rate.loc[row,col].replace("D", "e")
+                    rate.loc[row,col] = float(rate.loc[row,col])
+            
+        return rate
+
+    def read_amjuel_1d(self, path):
+    # for 1D 9 coeff rates
+        data = pd.read_csv(path, header = None)
+        data = data[[1,3,5]]
+        rate = pd.concat([data.loc[0,:], data.loc[1,:], data.loc[2,:]])
+        rate.index = range(len(rate))
+        return np.array(rate)
+
+    def amjuel_2d(
+        self, name, Te, E, mode = "default", second_param = "Ne", pop_ratio = False):
+        """
+        Read 2D AMJUEL coefficients and calculate rate
+        - Inputs: Array of Te (eV), single value of E 
+            (E=density in m-3, or beam energy in eV depending on process used)
+        - Outputs: Array of rates in m-3 corresponding to array of temperatures and single E provided
+        - Modes: "default" is full 2D fit, "coronal" takes only lowest density fit (E=0)
+
+        When the second parameter is density, we use a 1E-14 scaling factor.
+        This is because AMJUEL uses scaled density n_hat = n * 1e-8 and
+        uses cm-3. So to scale and convert to m-3 it's 1e-14.
+        H.4 2.1.5 and H.10 2.1.5 ionisation and excitation energy rates use density.
+        """
+
+        data = self.amjuel_data[name]
+
+        if second_param == "Ne":
+            E = E * 1e-14 
+            
+        rate = np.zeros(len(Te))
+
+        if mode == "default":
+            for E_index in data.columns:
+                for T_index in data.index:
+                    rate = rate + \
+                    data.loc[T_index,E_index] * \
+                    (np.log(E)**E_index) * (np.log(Te)**T_index)
+                    
+        if mode == "coronal":
+            E_index = 0
+            for T_index in data.index:
+                rate = rate + \
+                data.loc[T_index,E_index] * \
+                (np.log(E)**E_index) * (np.log(Te)**T_index)
+                
+        if pop_ratio:
+            rate = np.exp(rate)
+        else:
+            rate = np.exp(rate)*1e-6 # cm-3 to m-3
+    
+        return rate
+
+    def amjuel_1d(self, Te, data):
+        """ 
+        Read 1D AMJUEL coeff table and calc rate.
+        No support for asymptotic parameters (al0, ar0 etc)
+        """
+
+        rate = np.zeros(len(Te))
+        for i in range(9):
+            rate = rate + data[i] * np.log(Te)**i
+            
+        rate = np.exp(rate)*1e-6 # cm-3 to m-3
+        
+        return rate
+
+    def print_rate(self, data, mode):
+        """
+        Prints AMJUEL rate as numpy array or C++ array
+        for copy pasting
+        Input is a read-in AMJUEL rate.
+        Mode is Python or C++
+        """
+
+        if mode == "Python":
+
+            print(r"np.array(")
+
+            for i, col in enumerate(data.columns):
+                if i == 0:
+                    print("[", end = "")
+
+                print("[")
+                k = 0
+                for i in range(3):
+                    print("{:.12E}, {:.12E}, {:.12E},".format(data.loc[k,col], data.loc[k+1,col], data.loc[k+2,col]))
+                    k += 3
+                print("],", end = "")
+
+
+            print("])")
+
+        elif mode == "C++":
+            for col in data.columns:
+                print("      {")
+                k = 0
+                for i in range(3):
+                    print("          {:.12E}, {:.12E}, {:.12E},".format(data.loc[k,col], data.loc[k+1,col], data.loc[k+2,col]))
+                    k += 3
+                print("      },")
+
+    def get_amjuel_data(self):
+
+        self.amjuel_data = dict()
+        onedrive = r"C:\Users\mikek\OneDrive"
+
+        # ALL FROM AMJUEL UNLESS OTHERWISE SPECIFIED
+        # Ionisation particle source rate
+        self.amjuel_data["H.4 2.1.5JH"] = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.4 2.1.5JH.csv")) # Ionisation, L.C.Johnson
+        self.amjuel_data["H.4 2.1.5"] = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.4 2.1.5.csv")) # Ionisation, Sawada
+        self.amjuel_data["H.4 2.1.5o"] = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.4 2.1.5o.csv")) # Ionisation, L.C.Johnson, Ly-opaque
+
+        # Excitation energy weighted rate
+        self.amjuel_data["H.10 2.1.5JH"] = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.10 2.1.5JH.csv")) # Excitation, L.C.Johnson
+        self.amjuel_data["H.10 2.1.5"] = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.10 2.1.5.csv")) # Excitation, Sawada
+        self.amjuel_data["H.10 2.1.5o"] = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.10 2.1.5o.csv")) # Excitation, L.C.Johnson, Ly-opaque
+
+        # Recombination particle source rate
+        self.amjuel_data["H.4 2.1.8"]   = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.4 2.1.8.csv")) # Sawada, radiative + 3 body
+        self.amjuel_data["H.4 2.1.8a"]  = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.4 2.1.8a.csv")) # Johnson, radiative only
+        self.amjuel_data["H.4 2.1.8b"]  = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.4 2.1.8b.csv")) # Johnson, three body only
+        self.amjuel_data["H.4 2.1.8JH"] = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.4 2.1.8JH.csv")) # Johnson, raditive + 3 body
+        self.amjuel_data["H.4 2.1.8o"]  = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.4 2.1.8o.csv")) # Johnson, Ly-opaque
+
+        # Charge exchange
+        self.amjuel_data["HYDHEL H.3 3.1.8"]  = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\HYDHEL H.3 3.1.8.csv")) # Hydhel improved fit
+        self.amjuel_data["H.3 3.1.8"]  = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.3 3.1.8.csv")) # Same as hydhel equivalent
+        self.amjuel_data["H.3 3.1.8org"]  = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.3 3.1.8org.csv")) # Original fit before improvement
+        self.amjuel_data["H.2 3.1.8"] = self.read_amjuel_1d(os.path.join(onedrive, r"Project\Atomicrates\1D H.2 3.1.8.csv")) # Low beam energy limit of 3.1.8. E=0
+        self.amjuel_data["H.2 3.1.8FJ"] = self.read_amjuel_1d(os.path.join(onedrive, r"Project\Atomicrates\1D H.2 3.1.8FJ.csv")) # Variant of unknown origin, used in EDGE2D
+        self.amjuel_data["H.2 0.1T"] = self.read_amjuel_1d(os.path.join(onedrive, r"Project\Atomicrates\1D H.2 0.1T.csv")) # Actually an elastic collision reaction - wrong.
+
+        # Population of excited states of H
+        self.amjuel_data["H.12 2.1.5"]   = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.12 2.1.5.csv")) # H+/H ratio, Reiter/Sawada/Fujimoto
+        self.amjuel_data["H.12 2.1.5b"]  = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.12 2.1.5b.csv")) # H(2)/H ratio, Reiter/Sawada/Fujimoto NOTE NUMBERING OUT OF ORDER
+        self.amjuel_data["H.12 2.1.5a"]  = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.12 2.1.5a.csv")) # H(3)/H ratio, Reiter/Sawada/Fujimoto NOTE NUMBERING OUT OF ORDER
+        self.amjuel_data["H.12 2.1.5c"]  = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.12 2.1.5c.csv")) # H(4)/H ratio, Reiter/Sawada/Fujimoto
+        self.amjuel_data["H.12 2.1.5d"]  = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.12 2.1.5d.csv")) # H(5)/H ratio, Reiter/Sawada/Fujimoto
+        self.amjuel_data["H.12 2.1.5e"]  = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.12 2.1.5e.csv")) # H(6)/H ratio, Reiter/Sawada/Fujimoto
+
+
+
 def replace_guards(var):
     """
     This in-place replaces the points in the guard cells with the points on the boundary
@@ -1335,7 +1656,6 @@ def read_case(path_case, merge_output = False):
         case = {**case["result"], **case["const"]}
         
     return case
-
 
 def heat_conduction(
     pos, Te, kappa0=2293.8117):
