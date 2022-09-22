@@ -841,12 +841,10 @@ class Case:
         Ti = self.data["Ti"]
         Tn = self.data["Tn"]
         Ne = self.data["Ne"]
-        Ni = self.data["Ni"]
         Nn = self.data["Nd"]
         Vi = self.data["Vd+"]
         Vn = self.data["Vd"]
         mass_i = constants("mass_p") * 2
-
         Fcx = self.data["Fdd+_cx"]
         Ecx = self.data["Edd+_cx"]
 
@@ -855,7 +853,7 @@ class Case:
         for i, _ in enumerate(pos):
             sigmav_amj[i] = rtools.amjuel_1d("H.2 3.1.8", Te[i])
 
-        rate_amj = sigmav_amj * Ni * Nn
+        rate_amj = sigmav_amj * Ne * Nn
 
         ion_mom = rate_amj * Vi * mass_i
         atom_mom = rate_amj * Vn * mass_i
