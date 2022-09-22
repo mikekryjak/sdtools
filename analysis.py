@@ -52,7 +52,7 @@ class Case:
                         "Div_Q_SH", "Div_Q_SNB",
                         # Hermes only variables
                         "Dd_Dpar",
-                        "Sd_Dpar",
+                        "Sd_Dpar", 
                         "Ed_Dpar", "Edd+_cx",
                         "Fd_Dpar", "Fdd+_cx",
                         ]
@@ -116,14 +116,16 @@ class Case:
         if self.hermes:
             self.norm_data["Nn"] = self.norm_data["Nd"]
             self.norm_data["Vi"] = self.norm_data["Vd+"]
-            self.norm_data["NVi"] = self.norm_data["Vd+"] * self.norm_data["Nd+"]
+            self.norm_data["NVi"] = self.norm_data["Vd+"] * self.norm_data["Nd+"] * 2 # AA
             self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
             self.norm_data["S"] = self.norm_data["SNd+"]
             self.norm_data["Ti"] = self.norm_data["Td+"]
             
             if self.evolve_nvn:
                 self.norm_data["NVn"] = self.norm_data["NVd"]
-                self.norm_data["Vn"] = self.norm_data["NVd"] / self.norm_data["Nn"]
+                self.norm_data["Vd"] = self.norm_data["NVd"] / (2 * self.norm_data["Nd"]) # AA
+                self.norm_data["Vn"] = self.norm_data["Vd"]
+
 
             if self.evolve_pn:
                 if self.hermes:
@@ -132,10 +134,11 @@ class Case:
                 else:
                     self.norm_data["Tn"] = self.norm_data["Pn"] / self.norm_data["Nn"]
 
-        self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"]
+        self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"] # Here AA is in normalisation
 
         if self.ion_eqn:
             self.norm_data["Te"] = (self.norm_data["Pe"] / self.norm_data["Ne"] ) # Electron temp
+            self.norm_data["Ni"] = self.norm_data["Nd+"]
         else:
             self.norm_data["Te"] = (0.5 * self.norm_data["P"] / self.norm_data["Ne"] ) # Electron temp
 
@@ -172,7 +175,7 @@ class Case:
         self.Qnorm = self.Enorm * self.rho_s0 # [Wm-2] Heat flux
         
         list_tnorm = ["Te", "Td+", "Ti", "Td", "Tn"] # [eV]
-        list_nnorm = ["Ne", "Nn", "Nd+", "Nd"] # [m-3]
+        list_nnorm = ["Ne", "Nn", "Nd+", "Nd", "Ni"] # [m-3]
         list_pnorm = ["P", "Pn", "dynamic_p", "dynamic_n", "Pe", "SPd+", "Pd+", "Pd"] # [Pa]
         list_snorm = ["S", "Srec", "Siz", "NeSource", "SNd+", "Sd_Dpar"] # [m-3s-1]
         list_fnorm = ["F", "Frec", "Fiz", "Fcx", "Fel", "Fd_Dpar", "Fdd+_cx"] # [kgm-2s-2 or Nm-3]
@@ -180,7 +183,7 @@ class Case:
                     "Eiz", "Ecx", "Eel", "Ert", "PeSource",
                     "Div_Q_SH", "Div_Q_SNB",
                     "Ed_Dpar", "Edd+_cx",] # [Wm-3]
-        list_vnorm = ["Vi", "Ve", "Vd+"] 
+        list_vnorm = ["Vi", "Ve", "Vd+", "Vd", "Vn"] 
         list_xnorm = ["Dn", "NVi", "NVn", "NVd", "Dd_Dpar"] # m2s-1
         list_qnorm = [] # [Wm-2]
 
@@ -807,28 +810,78 @@ class Case:
             self.rhscalls = self.raw_data["wtime_rhs"]
             self.rhscalls_sum = sum(self.raw_data["wtime_rhs"])
             
-    def check_atomics(self):
+    def check_iz(self):
         rtools = AMJUEL()
         pos = self.data["pos"]
         Te = self.data["Te"]
         Ne = self.data["Ne"]
         Nn = self.data["Nn"]
+
+        # ----- Ionisation
         Siz = self.data["S"] # TODO this is wrong
         Siz_amj = np.zeros_like(Te)
 
         for i, _ in enumerate(pos):
             Siz_amj[i] = rtools.amjuel_2d("H.4 2.1.5", Te[i], Ne[i]) * Ne[i] * Nn[i]
 
-        fig, axes = plt.subplots(1,2, figsize = (8,4))
-        ax = axes[0]
+        fig, ax = plt.subplots(figsize = (5,5))
         ax.plot(pos, Siz, label = "Case", c = "k")
         ax.plot(pos, Siz_amj, label = "AMJ H.4 2.1.5", ls = ":", c = "r")
         ax.set_xlim(np.max(pos) * 0.9, np.max(pos) * 1.01)
         ax.set_title("Ionisation freq")
         ax.set_ylabel("freq [s-1]")
-        [ax.set_xlabel("pos [m]") for ax in axes]
+        ax.set_xlabel("pos [m]")
+        ax.legend()
+
+    def check_cx(self):
+        # ----- Charge exchange
+        rtools = AMJUEL()
+        pos = self.data["pos"]
+        Te = self.data["Te"]
+        Ti = self.data["Ti"]
+        Tn = self.data["Tn"]
+        Ne = self.data["Ne"]
+        Ni = self.data["Ni"]
+        Nn = self.data["Nd"]
+        Vi = self.data["Vd+"]
+        Vn = self.data["Vd"]
+        mass_i = constants("mass_p") * 2
+
+        Fcx = self.data["Fdd+_cx"]
+        Ecx = self.data["Edd+_cx"]
+
+        sigmav_amj = np.zeros_like(Te) # CX frequency
+
+        for i, _ in enumerate(pos):
+            sigmav_amj[i] = rtools.amjuel_1d("H.2 3.1.8", Te[i])
+
+        rate_amj = sigmav_amj * Ni * Nn
+
+        ion_mom = rate_amj * Vi * mass_i
+        atom_mom = rate_amj * Vn * mass_i
+        Fcx_amj = ion_mom - atom_mom
+
+        ion_energy = (3/2) * rate_amj * Ti * constants("q_e")
+        atom_energy = (3/2) * rate_amj * Tn * constants("q_e")
+        Ecx_amj = ion_energy - atom_energy
+
+        # ----- Plot
+        fig, axes = plt.subplots(1,2, figsize = (10,5))
+        fig.subplots_adjust(wspace=0.3)
+
+        ax = axes[0]
+        ax.plot(pos, Fcx, label = "Fcx (case)", c = "k")
+        ax.plot(pos, Fcx_amj, label = "Fcx (amjuel)", ls = ":", c = "r")
+        ax.set_title("Ion momentum sink")
+
+        ax = axes[1]
+        ax.plot(pos, Ecx, label = "Ecx (case)", c = "k")
+        ax.plot(pos, Ecx_amj, label = "Ecx (amjuel)", ls = ":", c = "r")
+        ax.set_title("Ion energy sink")
+
+        [ax.set_xlim(np.max(pos) * 0.99, np.max(pos) * 1.002) for ax in axes]
         [ax.legend() for ax in axes]
-        # ax.set_yscale("log")
+
 
 class CaseDeck:
     def __init__(self, path, key = "", keys = [], skip = [], explicit = [], verbose = False):
@@ -1182,14 +1235,16 @@ class AMJUEL():
     
         return rate
 
-    def amjuel_1d(self, Te, data):
+    def amjuel_1d(self, name, Te):
         """ 
         Read 1D AMJUEL coeff table and calc rate.
         No support for asymptotic parameters (al0, ar0 etc)
+        TODO Potentially missing density correction of 1e14?
         """
+        data = self.amjuel_data[name]
 
-        rate = np.zeros(len(Te))
-        for i in range(9):
+        rate = 0
+        for i in range(len(data)):
             rate = rate + data[i] * np.log(Te)**i
             
         rate = np.exp(rate)*1e-6 # cm-3 to m-3
