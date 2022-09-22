@@ -43,13 +43,19 @@ class Case:
         self.norm_data = dict()
 
         var_collect = ["P", "Ne", "Nn", "NVi", "NVn", "NVd", "kappa_epar", "Pn", "Dn",
-                        "S", "Srec", "Siz", # Plasma particles and sinks
+                        "S", "Srec", "Siz", 
                         "F", "Frec", "Fiz", "Fcx", "Fel", # Momentum source/sinks to neutrals
                         "R", "Rrec", "Riz", "Rzrad", "Rex", # Radiation, energy loss from system
                         "E", "Erec", "Eiz", "Ecx", "Eel", # Energy transfer between neutrals and plasma
                         "Pe", "Pd", "Pd+", "Ve", "Vd+", "Nd", "Nd+", "Td+", "SPd+", "SNd+", "Ert",
                         "PeSource", "NeSource",
-                        "Div_Q_SH", "Div_Q_SNB"]
+                        "Div_Q_SH", "Div_Q_SNB",
+                        # Hermes only variables
+                        "Dd_Dpar",
+                        "Sd_Dpar",
+                        "Ed_Dpar", "Edd+_cx",
+                        "Fd_Dpar", "Fdd+_cx",
+                        ]
 
         #------------Unpack data
         for var in var_collect:
@@ -112,7 +118,7 @@ class Case:
             self.norm_data["Vi"] = self.norm_data["Vd+"]
             self.norm_data["NVi"] = self.norm_data["Vd+"] * self.norm_data["Nd+"]
             self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
-            self.norm_data["S"] = self.norm_data["SNd+"] * -1
+            self.norm_data["S"] = self.norm_data["SNd+"]
             self.norm_data["Ti"] = self.norm_data["Td+"]
             
             if self.evolve_nvn:
@@ -168,13 +174,14 @@ class Case:
         list_tnorm = ["Te", "Td+", "Ti", "Td", "Tn"] # [eV]
         list_nnorm = ["Ne", "Nn", "Nd+", "Nd"] # [m-3]
         list_pnorm = ["P", "Pn", "dynamic_p", "dynamic_n", "Pe", "SPd+", "Pd+", "Pd"] # [Pa]
-        list_snorm = ["S", "Srec", "Siz", "NeSource", "SNd+"] # [m-3s-1]
-        list_fnorm = ["F", "Frec", "Fiz", "Fcx", "Fel"] # [kgm-2s-2 or Nm-3]
+        list_snorm = ["S", "Srec", "Siz", "NeSource", "SNd+", "Sd_Dpar"] # [m-3s-1]
+        list_fnorm = ["F", "Frec", "Fiz", "Fcx", "Fel", "Fd_Dpar", "Fdd+_cx"] # [kgm-2s-2 or Nm-3]
         list_enorm = ["E", "R", "Rrec", "Riz", "Rzrad", "Rex", "Erec", 
                     "Eiz", "Ecx", "Eel", "Ert", "PeSource",
-                    "Div_Q_SH", "Div_Q_SNB"] # [Wm-3]
+                    "Div_Q_SH", "Div_Q_SNB",
+                    "Ed_Dpar", "Edd+_cx",] # [Wm-3]
         list_vnorm = ["Vi", "Ve", "Vd+"] 
-        list_xnorm = ["Dn", "NVi", "NVn", "NVd"] # m2s-1
+        list_xnorm = ["Dn", "NVi", "NVn", "NVd", "Dd_Dpar"] # m2s-1
         list_qnorm = [] # [Wm-2]
 
         for var in norm:
@@ -800,7 +807,28 @@ class Case:
             self.rhscalls = self.raw_data["wtime_rhs"]
             self.rhscalls_sum = sum(self.raw_data["wtime_rhs"])
             
-    # def check_atomics(self):
+    def check_atomics(self):
+        rtools = AMJUEL()
+        pos = self.data["pos"]
+        Te = self.data["Te"]
+        Ne = self.data["Ne"]
+        Nn = self.data["Nn"]
+        Siz = self.data["S"] # TODO this is wrong
+        Siz_amj = np.zeros_like(Te)
+
+        for i, _ in enumerate(pos):
+            Siz_amj[i] = rtools.amjuel_2d("H.4 2.1.5", Te[i], Ne[i]) * Ne[i] * Nn[i]
+
+        fig, axes = plt.subplots(1,2, figsize = (8,4))
+        ax = axes[0]
+        ax.plot(pos, Siz, label = "Case", c = "k")
+        ax.plot(pos, Siz_amj, label = "AMJ H.4 2.1.5", ls = ":", c = "r")
+        ax.set_xlim(np.max(pos) * 0.9, np.max(pos) * 1.01)
+        ax.set_title("Ionisation freq")
+        ax.set_ylabel("freq [s-1]")
+        [ax.set_xlabel("pos [m]") for ax in axes]
+        [ax.legend() for ax in axes]
+        # ax.set_yscale("log")
 
 class CaseDeck:
     def __init__(self, path, key = "", keys = [], skip = [], explicit = [], verbose = False):
@@ -1074,7 +1102,6 @@ class AMJUEL():
     """
     Toolkit for reading/writing AMJUEL and HYDHEL rates
     Also contains lots of rates itself.
-    Use get_rate wrapper.
     """
     def __init__(self):
         self.get_amjuel_data()
@@ -1116,7 +1143,7 @@ class AMJUEL():
         self, name, Te, E, mode = "default", second_param = "Ne", pop_ratio = False):
         """
         Read 2D AMJUEL coefficients and calculate rate
-        - Inputs: Array of Te (eV), single value of E 
+        - Inputs: reaction name, single value of T and E
             (E=density in m-3, or beam energy in eV depending on process used)
         - Outputs: Array of rates in m-3 corresponding to array of temperatures and single E provided
         - Modes: "default" is full 2D fit, "coronal" takes only lowest density fit (E=0)
@@ -1132,7 +1159,7 @@ class AMJUEL():
         if second_param == "Ne":
             E = E * 1e-14 
             
-        rate = np.zeros(len(Te))
+        rate = 0
 
         if mode == "default":
             for E_index in data.columns:
