@@ -120,6 +120,9 @@ class Case:
             self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
             self.norm_data["S"] = self.norm_data["SNd+"]
             self.norm_data["Ti"] = self.norm_data["Td+"]
+            self.norm_data["Dn"] = self.norm_data["Dd_Dpar"]
+            self.norm_data["Fcx"] = self.norm_data["Fdd+_cx"]
+            self.norm_data["Ecx"] = self.norm_data["Edd+_cx"]
             
             if self.evolve_nvn:
                 self.norm_data["NVn"] = self.norm_data["NVd"]
@@ -841,22 +844,28 @@ class Case:
     def check_cx(self):
         # ----- Charge exchange
         rtools = AMJUEL()
+        atools = Atomics()
         pos = self.data["pos"]
         Te = self.data["Te"]
-        Ti = self.data["Ti"]
-        Tn = self.data["Tn"]
         Ne = self.data["Ne"]
-        Nn = self.data["Nd"]
-        Vi = self.data["Vd+"]
-        Vn = self.data["Vd"]
+        Nn = self.data["Nn"]
+        Vi = self.data["Vi"]
         mass_i = constants("mass_p") * 2
-        Fcx = self.data["Fdd+_cx"]
-        Ecx = self.data["Edd+_cx"]
+        Fcx = self.data["Fcx"]
+        Ecx = self.data["Ecx"]
 
-        sigmav_amj = np.zeros_like(Te) # CX frequency
+        Ti = self.data["Ti"] if self.ion_eqn else Te
+        Tn = self.data["Tn"] if self.evolve_pn else Ti
+        Vn = self.data["Vn"] if self.evolve_nvn else 0
 
-        for i, _ in enumerate(pos):
-            sigmav_amj[i] = rtools.amjuel_1d("H.2 3.1.8", Te[i])
+        if self.hermes:
+            sigmav_amj = np.zeros_like(Te) # CX frequency
+            print("This is a Hermes case. Comparing to H.2 3.1.8 low E limit AMJUEL rate.")
+            for i, _ in enumerate(pos):
+                sigmav_amj[i] = rtools.amjuel_1d("H.2 3.1.8", Te[i])
+        else:
+            sigmav_amj = atools.cx_willett(Te)
+            print("This is an SD1D case. Comparing to H.3 3.1.8 @ E=10eV.")
 
         rate_amj = sigmav_amj * Ne * Nn
 
@@ -1089,8 +1098,6 @@ class Atomics():
             for j in range(9):
                 lograte = lograte + cxcoeffs[i][j] * np.log(Te)**i * np.log(E)**j
         
-
-
         return 1.0E-6 * np.exp(lograte)
 
     def dn_sd1d(self, Te, Ne, Nn):
