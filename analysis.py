@@ -123,22 +123,22 @@ class Case:
             self.norm_data["Dn"] = self.norm_data["Dd_Dpar"]
             self.norm_data["Fcx"] = self.norm_data["Fdd+_cx"]
             self.norm_data["Ecx"] = self.norm_data["Edd+_cx"]
-            
-            if self.evolve_nvn:
+        else:
+            self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"] # in SD1D AA is in normalisation
+
+        if self.evolve_nvn:
+            if self.hermes:
                 self.norm_data["NVn"] = self.norm_data["NVd"]
                 self.norm_data["Vd"] = self.norm_data["NVd"] / (2 * self.norm_data["Nd"]) # AA
                 self.norm_data["Vn"] = self.norm_data["Vd"]
 
-
-            if self.evolve_pn:
-                if self.hermes:
-                    self.norm_data["Tn"] = self.norm_data["Pd"] / self.norm_data["Nd"] 
-                    self.norm_data["Pn"] = self.norm_data["Pd"]
-                else:
-                    self.norm_data["Tn"] = self.norm_data["Pn"] / self.norm_data["Nn"]
-
-        self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"] # Here AA is in normalisation
-
+        if self.evolve_pn:
+            if self.hermes:
+                self.norm_data["Tn"] = self.norm_data["Pd"] / self.norm_data["Nd"] 
+                self.norm_data["Pn"] = self.norm_data["Pd"]
+            else:
+                self.norm_data["Tn"] = self.norm_data["Pn"] / self.norm_data["Nn"]
+            
         if self.ion_eqn:
             self.norm_data["Te"] = (self.norm_data["Pe"] / self.norm_data["Ne"] ) # Electron temp
             self.norm_data["Ni"] = self.norm_data["Nd+"]
@@ -247,7 +247,6 @@ class Case:
 
         #------------Derived variables
         dnorm["Ntot"] = dnorm["Ne"] + dnorm["Nn"]
-        dnorm["Vi"] = dnorm["NVi"] / dnorm["Ne"]
         dnorm["Cs"] = self.Cs0 * np.sqrt(2 * dnorm["Te"]/self.Tnorm) # Sound speed
         dnorm["M"] = dnorm["Vi"] / dnorm["Cs"]
         dnorm["dynamic_p"] = norm["NVi"]**2 / norm["Ne"] * self.Pnorm
@@ -882,13 +881,13 @@ class Case:
         fig.subplots_adjust(wspace=0.3)
 
         ax = axes[0]
-        ax.plot(pos, Fcx, label = "Fcx (case)", c = "k")
-        ax.plot(pos, Fcx_amj, label = "Fcx (amjuel)", ls = ":", c = "r")
+        ax.plot(pos[:-1], Fcx[:-1], label = "Fcx (case)", c = "k")
+        ax.plot(pos[:-1], Fcx_amj[:-1], label = "Fcx (amjuel)", ls = ":", c = "r")
         ax.set_title("Ion momentum sink")
 
         ax = axes[1]
-        ax.plot(pos, Ecx, label = "Ecx (case)", c = "k")
-        ax.plot(pos, Ecx_amj, label = "Ecx (amjuel)", ls = ":", c = "r")
+        ax.plot(pos[:-1], Ecx[:-1], label = "Ecx (case)", c = "k")
+        ax.plot(pos[:-1], Ecx_amj[:-1], label = "Ecx (amjuel)", ls = ":", c = "r")
         ax.set_title("Ion energy sink")
 
         [ax.set_xlim(np.max(pos) * 0.99, np.max(pos) * 1.002) for ax in axes]
