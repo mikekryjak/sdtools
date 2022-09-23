@@ -169,9 +169,11 @@ class Case:
         # Derived normalisation factors
         self.Pnorm = self.Nnorm * self.Tnorm * constants("q_e") # Converts P to Pascals. 1.602e-19 is proton charge in C
         self.Snorm = self.Nnorm * self.Omega_ci # Normalisation for S: plasma density sink (m-3s-1)
-        self.Fnorm = (constants("mass_p") * 2) * self.Nnorm * self.Cs0 * self.Omega_ci # Plasma momentum sink normalisation (kgm-2s-1)
-        self.Enorm = constants("q_e") * self.Nnorm * self.Tnorm * self.Omega_ci # [Wm-3]Plasma energy sink normalisation
-        self.Xnorm = self.Nnorm * self.Cs0 # [m2/s] Flux
+        self.Fnorm = (constants("mass_p") * 2) * self.Nnorm * self.Cs0 * self.Omega_ci # [kgm-2s-1] Plasma momentum sink normalisation
+        self.Enorm = constants("q_e") * self.Nnorm * self.Tnorm * self.Omega_ci # [Wm-3] Plasma energy sink normalisation
+        self.Vnorm = self.Cs0 # [ms-1] Velocity
+        self.Xnorm = self.Nnorm * self.Cs0 # [m-2 s-1] Flux
+        self.Dnorm = self.rho_s0 * self.rho_s0 * self.Omega_ci  # [m2s-1] Diffusion
         self.Qnorm = self.Enorm * self.rho_s0 # [Wm-2] Heat flux
         
         list_tnorm = ["Te", "Td+", "Ti", "Td", "Tn"] # [eV]
@@ -184,7 +186,8 @@ class Case:
                     "Div_Q_SH", "Div_Q_SNB",
                     "Ed_Dpar", "Edd+_cx",] # [Wm-3]
         list_vnorm = ["Vi", "Ve", "Vd+", "Vd", "Vn"] 
-        list_xnorm = ["Dn", "NVi", "NVn", "NVd", "Dd_Dpar"] # m2s-1
+        list_xnorm = ["NVi", "NVn", "NVd"] # m-2s-1
+        list_dnorm = ["Dn", "Dd_Dpar"] # m2s-1
         list_qnorm = [] # [Wm-2]
 
         for var in norm:
@@ -201,9 +204,11 @@ class Case:
             elif var in list_enorm:
                 dnorm[var] = norm[var] * self.Enorm
             elif var in list_vnorm:
-                dnorm[var] = norm[var] * self.Cs0
+                dnorm[var] = norm[var] * self.Vnorm
             elif var in list_xnorm:
                 dnorm[var] = norm[var] * self.Xnorm
+            elif var in list_dnorm:
+                dnorm[var] = norm[var] * self.Dnorm
             elif var in list_qnorm:
                 dnorm[var] = norm[var] * self.Qnorm
 
