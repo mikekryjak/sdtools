@@ -1007,7 +1007,7 @@ class Atomics():
     def __init__(self):
         pass
 
-    def iz_willett(Te, coeffs = [-3.271397E1, 1.353656E1, -5.739329, 1.563155, -2.877056E-1, 3.482560e-2, -2.631976E-3, 1.119544E-4, -2.039150E-6]):
+    def iz_willett(self, Te, coeffs = [-3.271397E1, 1.353656E1, -5.739329, 1.563155, -2.877056E-1, 3.482560e-2, -2.631976E-3, 1.119544E-4, -2.039150E-6]):
         """ SD1D ionisation rate code"""
         
         TT = Te
@@ -1019,7 +1019,7 @@ class Atomics():
 
         return fION
 
-    def ex_willett(Te):
+    def ex_willett(self, Te):
         """ SD1D excitation energy rate code"""
 
         TT = Te
@@ -1028,7 +1028,7 @@ class Atomics():
     
         return fEXC
 
-    def cx_willett(Te, E = 10):
+    def cx_willett(self, Te, E = 10):
         """ SD1D charge exchange rate code"""
 
         cxcoeffs = [
@@ -1088,13 +1088,16 @@ class Atomics():
 
         return 1.0E-6 * np.exp(lograte)
 
-    def dn_sd1d(Te, Ne, Nn):
+    def dn_sd1d(self, Te, Ne, Nn):
         
         """SD1D neutral diffusion rate Dn"""
    
         mass_p = 1.6726219e-27
         mass_i = mass_p * 2
         q_e = 1.60217662E-19
+
+        fCX = self.cx_willett
+        fION = self.iz_willett
 
         # Thermal velocity
         vth_n = np.sqrt(Te*q_e/mass_i) 
@@ -1108,8 +1111,9 @@ class Atomics():
         # NN mfp - neutral-neutral elastic collisioms
         a0 = np.pi * 5.29e-11**2
         lambda_nn = 1/(Nn*a0)
-        if lambda_nn > 0.1:
-            lambda_nn = 0.1
+        for i, _ in enumerate(lambda_nn):
+            if lambda_nn[i] > 0.1:
+                lambda_nn[i] = 0.1
 
         # NN rate
         sigma_nn = vth_n / lambda_nn
@@ -1119,7 +1123,7 @@ class Atomics():
             
         return dn
 
-    def pop_ex(Te, Ne):
+    def pop_ex(self, Te, Ne):
         """
         Population method excitation
         Use H12 excited state population rates from AMJUEL
