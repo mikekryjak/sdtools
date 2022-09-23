@@ -123,8 +123,10 @@ class Case:
             self.norm_data["Dn"] = self.norm_data["Dd_Dpar"]
             self.norm_data["Fcx"] = self.norm_data["Fdd+_cx"]
             self.norm_data["Ecx"] = self.norm_data["Edd+_cx"]
+            self.dneut = self.options["neutral_parallel_diffusion"]["dneut"]
         else:
             self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"] # in SD1D AA is in normalisation
+            self.dneut = self.options["sd1d"]["dneut"]
 
         if self.evolve_nvn:
             if self.hermes:
@@ -892,6 +894,64 @@ class Case:
 
         [ax.set_xlim(np.max(pos) * 0.99, np.max(pos) * 1.002) for ax in axes]
         [ax.legend() for ax in axes]
+
+    def check_dn(self):
+        # ----- Charge exchange
+        rtools = AMJUEL()
+        atools = Atomics()
+        fION = atools.iz_willett # SD1D iz rate
+        pos = self.data["pos"]
+        Te = self.data["Te"]
+        Ne = self.data["Ne"]
+        Nn = self.data["Nn"]
+        Dn = self.data["Dn"]
+        
+        mass_i = constants("mass_p") * 2
+        q_e = constants("q_e")
+
+        Ti = self.data["Ti"] if self.ion_eqn else Te
+        Tn = self.data["Tn"] if self.evolve_pn else Ti
+
+        # ----- Calculate CX rate
+        if self.hermes:
+            sigmav_amj = np.zeros_like(Te) # CX frequency
+            print("This is a Hermes case. Comparing to H.2 3.1.8 low E limit AMJUEL rate.")
+            for i, _ in enumerate(pos):
+                sigmav_amj[i] = rtools.amjuel_1d("H.2 3.1.8", Te[i])
+        else:
+            sigmav_amj = atools.cx_willett(Te)
+            print("This is an SD1D case. Comparing to H.3 3.1.8 @ E=10eV.")
+
+        nu_cx = sigmav_amj * Ne
+        
+        # ----- NN rate (SD1D only):
+        vth_n = np.sqrt(Tn*q_e/mass_i) 
+        a0 = np.pi * 5.29e-11**2
+        lambda_nn = 1/(Nn*a0)
+        for i, _ in enumerate(lambda_nn):
+            if lambda_nn[i] > 0.1:
+                lambda_nn[i] = 0.1
+        nu_nn = vth_n / lambda_nn
+
+        # ----- IZ rate (SD1D only):
+        nu_iz = Ne * fION(Te)
+
+        # ----- Assemble Dn 
+        if self.hermes:
+            Dn_calc = self.dneut * vth_n**2 / (nu_cx)
+        else:
+            Dn_calc = self.dneut * vth_n**2 / (nu_cx + nu_iz + nu_nn)
+
+        # ----- Plot
+        zoom = 0.8
+        zoom_idx = int(len(pos)*zoom)
+        fig, ax = plt.subplots(figsize = (6,5))
+        fig.subplots_adjust(wspace=0.3)
+        ax.plot(pos[zoom_idx:-1], Dn[zoom_idx:-1], label = "Dn (case)", c = "k")
+        ax.plot(pos[zoom_idx:-1], Dn_calc[zoom_idx:-1], label = "Dn (check)", ls = ":", c = "r")
+        ax.set_title("Ion momentum sink")
+        ax.set_xlim(pos[zoom_idx], np.max(pos) * 1.002)
+        ax.legend()
 
 
 class CaseDeck:
