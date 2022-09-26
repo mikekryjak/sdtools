@@ -120,9 +120,11 @@ class Case:
             self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
             self.norm_data["S"] = self.norm_data["SNd+"]
             self.norm_data["Ti"] = self.norm_data["Td+"]
-            self.norm_data["Dn"] = self.norm_data["Dd_Dpar"]
-            self.norm_data["Fcx"] = self.norm_data["Fdd+_cx"]
-            self.norm_data["Ecx"] = self.norm_data["Edd+_cx"]
+            if "Dd_Dpar" in self.norm_data.keys():
+                self.norm_data["Dn"] = self.norm_data["Dd_Dpar"]
+            if "Fdd+_cx" in self.norm_data.keys():
+                self.norm_data["Fcx"] = self.norm_data["Fdd+_cx"]
+                self.norm_data["Ecx"] = self.norm_data["Edd+_cx"]
             self.dneut = self.options["neutral_parallel_diffusion"]["dneut"]
         else:
             self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"] # in SD1D AA is in normalisation
@@ -1416,7 +1418,23 @@ class AMJUEL():
         self.amjuel_data["H.12 2.1.5e"]  = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.12 2.1.5e.csv")) # H(6)/H ratio, Reiter/Sawada/Fujimoto
 
 
+def find_cases(path_studies):
+    """ 
+    Find all cases in all the studies in a studies folder
+    Return dictionary with keys of case names and values of their paths
+    """
 
+    casepaths = dict()
+
+    for folder in os.listdir(path_studies):
+
+        path_study = path_studies + "\\" + folder
+
+        for case in os.listdir(path_study):
+            casepaths[case] = path_study + "\\" + case
+            
+    return casepaths
+    
 def replace_guards(var):
     """
     This in-place replaces the points in the guard cells with the points on the boundary
@@ -1953,5 +1971,17 @@ def energy_flux(path, tind=-1):
             "conduction":conduction,
             "convection_ke":convect_ke,
             "convection_thermal":convect_therm}
+
+def set_matplotlib_defaults():
+    fontsize = 14
+    plt.rc('font', size=fontsize) #controls default text size
+    plt.rc('axes', titlesize=fontsize) #fontsize of the title
+    plt.rc('axes', labelsize=fontsize) #fontsize of the x and y labels
+    plt.rc('xtick', labelsize=fontsize) #fontsize of the x tick labels
+    plt.rc('ytick', labelsize=fontsize) #fontsize of the y tick labels
+    plt.rc('legend', fontsize=fontsize) #fontsize of the legend
+    plt.rc('lines', linewidth=3)
+    plt.rc('figure', figsize=(5,5))
+    plt.rc('axes', grid = True)
 
 
