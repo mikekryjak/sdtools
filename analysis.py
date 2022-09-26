@@ -1047,7 +1047,8 @@ class CaseDeck:
         print("Heat flows in MW:")
         display(self.heat_balance)
 
-    def plot(self, vars = [["Te", "Ne", "Nn"], ["S", "R", "P"], ["NVi", "M", "F"]]):
+    def plot(self, vars = [["Te", "Ne", "Nn"], ["S", "R", "P"], ["NVi", "M", "F"]],
+             trim = True):
         lib = library()
 
 
@@ -1063,7 +1064,8 @@ class CaseDeck:
                 param = list_params[i]
                 for i, case in enumerate(self.casenames):
                     data = self.cases[case].data
-                    ax.plot(data["pos"], data[param], color = colors[i], linewidth = lw, label = case)
+                    if param in data.keys():
+                        ax.plot(data["pos"], data[param], color = colors[i], linewidth = lw, label = case)
 
 
                 ax.set_xlabel("Position (m)")
@@ -1072,8 +1074,9 @@ class CaseDeck:
                 ax.set_title(param)
                 ax.legend(fontsize = 10)
                 ax.grid(which="major", alpha = 0.3)
-                if param in ["NVi", "P", "M", "Ne", "Nn",  "Fcx", "Frec", "E", "F", "R", "Rex", "Rrec", "Riz", "Siz", "S", "Eiz", "Vi"]:
-                    ax.set_xlim(9,10.2)
+                zoomlims = (max(data["pos"])*0.91, max(data["pos"])*1.005)
+                if trim and param in ["NVi", "P", "M", "Ne", "Nn",  "Fcx", "Frec", "E", "F", "R", "Rex", "Rrec", "Riz", "Siz", "S", "Eiz", "Vi"]:
+                    ax.set_xlim(zoomlims)
                 ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
 
 class Atomics():
