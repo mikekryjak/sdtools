@@ -994,9 +994,9 @@ class CaseDeck:
 
         self.suffix = dict()
         for case in self.casenames:
-            self.cases[case] = Case(self.casepaths[case])
             print(f"{case}... ", end="")
-
+            self.cases[case] = Case(self.casepaths[case])
+            
             suffix = case.split("-")[-1]
             self.suffix[suffix] = self.cases[case]
             
@@ -1048,7 +1048,7 @@ class CaseDeck:
         display(self.heat_balance)
 
     def plot(self, vars = [["Te", "Ne", "Nn"], ["S", "R", "P"], ["NVi", "M", "F"]],
-             trim = True):
+             trim = True, scale = "auto", xlims = (0,0)):
         lib = library()
 
 
@@ -1070,13 +1070,27 @@ class CaseDeck:
 
                 ax.set_xlabel("Position (m)")
                 ax.set_ylabel("{} ({})".format(lib[param]["name"], lib[param]["unit"]), fontsize = 11)
-                ax.set_yscale(lib[param]["scale"])
+                
+                ax.set_yscale("log")
+                if scale == "auto":
+                    ax.set_yscale(lib[param]["scale"])
+                elif scale == "log":
+                    ax.set_yscale("log")
+                elif scale == "symlog":
+                    ax.set_yscale("symlog")
+                    
                 ax.set_title(param)
                 ax.legend(fontsize = 10)
                 ax.grid(which="major", alpha = 0.3)
                 zoomlims = (max(data["pos"])*0.91, max(data["pos"])*1.005)
-                if trim and param in ["NVi", "P", "M", "Ne", "Nn",  "Fcx", "Frec", "E", "F", "R", "Rex", "Rrec", "Riz", "Siz", "S", "Eiz", "Vi"]:
+                if trim and param in ["NVi", "P", "M", "Ne", "Nn",  "Fcx", 
+                "Frec", "E", "F", "R", "Rex", "Rrec", "Riz", 
+                "Siz", "S", "Eiz", "Vi", "Pn", "NVn"]:
                     ax.set_xlim(zoomlims)
+
+                if xlims != (0,0):
+                    ax.set_xlim(xlims)
+
                 ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
 
 class Atomics():
