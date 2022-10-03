@@ -442,6 +442,82 @@ class Case:
                 print(f"- Difference:--------- {self.hflux_imbalance:.3f}[MW]")
                 print(f"- Imbalance:---------- {self.hflux_imbalance_ratio:.1%}")
 
+    def mass_balance_hermes(self):
+        """
+        Perform a total (system, so ions and neutrals) mass balance 
+        for Hermes-3. This is done from scratch and only requires BoutData.
+        TODO: Figure out if nloss exists in Hermes-3 and include it
+        """
+
+        # Collect all guard cells, so 2 on each side. The outer ones are not used. 
+        # Final domain grid centre is therefore index [-3].
+        # J/sqrt(g_22) = cross-sectional area of cell
+
+        d = BoutData(self.casepath, yguards = True, info = False, strict = True)["outputs"]
+        tind = -1
+        J = d["J"].squeeze()
+        dy = d["dy"].squeeze()
+        dV = J * dy
+        g_22 = d["g_22"].squeeze()
+
+        # Reconstruct grid position from dy
+        n = len(dy)
+        pos = np.zeros(n)
+        pos[0] = -0.5*dy[1]
+        pos[1] = 0.5*dy[1]
+
+        for i in range(2,n):
+            pos[i] = pos[i-1] + 0.5*dy[i-1] + 0.5*dy[i]
+
+        def get_boundary(x):
+            return (x[-2] + x[-3])/2
+
+        # ----- Boundary flux
+        sheath_area = get_boundary(J) / np.sqrt(get_boundary(g_22))
+        sheath_ion_flux = get_boundary(d["NVd+"].squeeze()[tind, :])
+        sheath_ion_flux *= sheath_area * d["Omega_ci"] * d["Nnorm"]
+
+        sheath_neutral_flux = get_boundary(d["NVd"].squeeze()[tind, :])
+        sheath_neutral_flux *= sheath_area * d["Omega_ci"] * d["Nnorm"]
+
+        # Still not quite sure why doing a sum instead of an integral is the correct way to go, but it is.
+
+        # ----- Density input source
+        input_source = d["Sd+_src"].squeeze()[tind, :][2:-2]
+        # input_source = np.trapz(x = pos[2:-2], y = input_source * dV[2:-2] * d["Omega_ci"] * d["Nnorm"])
+        input_source = np.sum(input_source * dV[2:-2] * d["Omega_ci"] * d["Nnorm"])
+
+        # ----- Ionisation source
+        iz_source = d["Sd+_iz"].squeeze()[tind, :][2:-2]
+        # iz_source = np.trapz(x = pos[2:-2], y = iz_source * dV[2:-2] * d["Omega_ci"] * d["Nnorm"])
+        iz_source = np.sum(iz_source * dV[2:-2] * d["Omega_ci"] * d["Nnorm"])
+
+        # ----- Recombination source
+        rec_source = d["Sd+_rec"].squeeze()[tind, :][2:-2]
+        # rec_source = np.trapz(x = pos[2:-2], y = rec_source * dV[2:-2] * d["Omega_ci"] * d["Nnorm"])
+        rec_source = np.sum(rec_source * dV[2:-2] * d["Omega_ci"] * d["Nnorm"])
+
+        # ----- Totals
+        total_in = input_source + iz_source
+        total_out = sheath_ion_flux + abs(rec_source)
+        total_balance = total_in - total_out
+
+        neutral_in = rec_source
+        neutral_out = iz_source
+
+        print("\System mass balance")
+        print("- Total in ---------------")
+        print(f"- Input source = {input_source:.3E} [s-1]")
+        print(f"- Ionisation source = {iz_source:.3E} [s-1]")
+        print(f"- Total = {total_in:.3E} [s-1]")
+        print("\n- Total out ---------------")
+        print(f"- Sheath ion flux = {sheath_ion_flux:.3E} [s-1]")
+        print(f"- Sheath neutral flux = {sheath_neutral_flux:.3E} [s-1]")
+        print(f"- Recombination source = {rec_source:.3E} [s-1]")
+        print(f"- Total = {total_out:.3E} [s-1]")
+        print(f"\n- Difference:")
+        print(f"---> {total_balance:.3E} [s-1] ({total_balance/total_in:.3%})")
+
     def mass_balance(self,          
         verbosity = False, 
         plot = False, 
@@ -474,17 +550,29 @@ class Case:
         d["J"] = collect("J", path = path_case, yguards = True, info = False)[0,1:-1]
         d["g_22"] = collect("g_22", path = path_case, yguards = True, info = False)[0,1:-1]
         h["Ne"] = collect("Ne", path = path_case, yguards = True, info = False, strict = True)[:,0,1:-1,0]
-        h["Vi"] = collect("Vi", path = path_case, yguards = True, info = False, strict = True)[:,0,1:-1,0]
-        h["NVi_original"] = collect("NVi", path = path_case, yguards = True, info = False, strict = True)[:,0,1:-1,0]
         d["Nnorm"] = collect("Nnorm", path = path_case)
         d["Cs0"] = collect("Cs0", path = path_case)
         d["Omega_ci"] = collect("Omega_ci", path = path_case)
         d["dy"] = collect("dy", path = path_case, yguards = True, info = False, strict = True)[0,1:-1]
         d["dy_full"] = collect("dy", path = path_case, yguards = True, info = False, strict = True)[0,:] 
         d["J_full"] = collect("J", path = path_case, yguards = True, info = False, strict = True)[0,:] 
-        nloss = self.options["sd1d"]["nloss"]
-        frecycle_intended = self.options["sd1d"]["frecycle"]
-        Nu_target = self.options["sd1d"]["density_upstream"]
+        
+
+        if self.hermes:
+            h["Vi"] = collect("Vd+", path = path_case, yguards = True, info = False, strict = True)[:,0,1:-1,0]
+            h["NVi_original"] = collect("NVd+", path = path_case, yguards = True, info = False, strict = True)[:,0,1:-1,0]
+            nloss = 0 # Can't find nloss in hermes-3
+            frecycle_intended = self.options["d+"]["recycle_multiplier"]
+            if "upstream_density_feedback" in self.options.keys():
+                Nu_target = self.options["upstream_density_feedback"]["density_upstream"]
+            else:
+                Nu_target = np.nan
+        else:
+            h["Vi"] = collect("Vi", path = path_case, yguards = True, info = False, strict = True)[:,0,1:-1,0]
+            h["NVi_original"] = collect("NVi", path = path_case, yguards = True, info = False, strict = True)[:,0,1:-1,0]
+            nloss = self.options["sd1d"]["nloss"]
+            frecycle_intended = self.options["sd1d"]["frecycle"]
+            Nu_target = self.options["sd1d"]["density_upstream"]
 
         if flux_input == True:
             flux_intended = BoutData(path_case)["options"]["Ne"]["flux"]
@@ -1434,7 +1522,7 @@ def find_cases(path_studies):
             casepaths[case] = path_study + "\\" + case
             
     return casepaths
-    
+
 def replace_guards(var):
     """
     This in-place replaces the points in the guard cells with the points on the boundary
