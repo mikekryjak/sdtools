@@ -55,6 +55,7 @@ class Case:
                         "Sd_Dpar", 
                         "Ed_Dpar", "Edd+_cx",
                         "Fd_Dpar", "Fdd+_cx",
+                        "Rd+_ex", "Rd+_rec"
                         ]
 
         #------------Unpack data
@@ -119,6 +120,8 @@ class Case:
             self.norm_data["NVi"] = self.norm_data["Vd+"] * self.norm_data["Nd+"] * 2 # AA
             self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
             self.norm_data["S"] = self.norm_data["SNd+"]
+            self.norm_data["Rex"] = self.norm_data["Rd+_ex"]
+            self.norm_data["Rrec"] = self.norm_data["Rd+_rec"]
             self.norm_data["Ti"] = self.norm_data["Td+"]
             if "Dd_Dpar" in self.norm_data.keys():
                 self.norm_data["Dn"] = self.norm_data["Dd_Dpar"]
@@ -191,7 +194,7 @@ class Case:
         list_enorm = ["E", "R", "Rrec", "Riz", "Rzrad", "Rex", "Erec", 
                     "Eiz", "Ecx", "Eel", "Ert", "PeSource",
                     "Div_Q_SH", "Div_Q_SNB",
-                    "Ed_Dpar", "Edd+_cx",] # [Wm-3]
+                    "Ed_Dpar", "Edd+_cx","Rd+_ex"] # [Wm-3]
         list_vnorm = ["Vi", "Ve", "Vd+", "Vd", "Vn"] 
         list_xnorm = ["NVi", "NVn", "NVd"] # m-2s-1
         list_dnorm = ["Dn", "Dd_Dpar"] # m2s-1
@@ -928,7 +931,70 @@ class Case:
         ax.plot(pos, Siz_amj, label = "AMJ H.4 2.1.5", ls = ":", c = "r")
         ax.set_xlim(np.max(pos) * 0.9, np.max(pos) * 1.01)
         ax.set_title("Ionisation freq")
-        ax.set_ylabel("freq [s-1]")
+        ax.set_ylabel("Ionisation rate [s-1]")
+        ax.set_xlabel("pos [m]")
+        ax.legend()
+
+    # def check_rec(self):
+    #     rtools = AMJUEL()
+    #     pos = self.data["pos"]
+    #     Te = self.data["Te"]
+    #     Ne = self.data["Ne"]
+    #     Nn = self.data["Nn"]
+
+    #     # ----- Ionisation
+    #     Srec = self.data["S"] # TODO this is wrong
+    #     Siz_amj = np.zeros_like(Te)
+
+    #     for i, _ in enumerate(pos):
+    #         Siz_amj[i] = rtools.amjuel_2d("H.4 2.1.5", Te[i], Ne[i]) * Ne[i] * Nn[i]
+
+    #     fig, ax = plt.subplots(figsize = (5,5))
+    #     ax.plot(pos, Siz, label = "Case", c = "k")
+    #     ax.plot(pos, Siz_amj, label = "AMJ H.4 2.1.5", ls = ":", c = "r")
+    #     ax.set_xlim(np.max(pos) * 0.9, np.max(pos) * 1.01)
+    #     ax.set_title("Ionisation freq")
+    #     ax.set_ylabel("Ionisation rate [s-1]")
+    #     ax.set_xlabel("pos [m]")
+    #     ax.legend()
+
+    def check_rad(self):
+        rtools = AMJUEL()
+        pos = self.data["pos"]
+        Te = self.data["Te"]
+        Ne = self.data["Ne"]
+        Nn = self.data["Nn"]
+
+        # ----- Ionisation
+        Rex = self.data["Rex"] * -1
+        Rrec = self.data["Rrec"] * -1
+
+        Rex_amj = np.zeros_like(Te)
+        Rrec_amj = np.zeros_like(Te)
+
+        for i, _ in enumerate(pos):
+            Rex_amj[i] = rtools.amjuel_2d("H.10 2.1.5", Te[i], Ne[i]) * Ne[i] * Nn[i] * constants("q_e")
+            Rrec_amj[i] = (rtools.amjuel_2d("H.10 2.1.8", Te[i], Ne[i]) * Ne[i] * Nn[i] - \
+                            rtools.amjuel_2d("H.4 2.1.8", Te[i], Ne[i]) * Ne[i] * Nn[i] * 13.6) * constants("q_e")
+
+        fig, axes = plt.subplots(1,2, figsize = (11,5))
+        fig.subplots_adjust(wspace = 0.5)
+
+        ax = axes[0]
+        ax.plot(pos, Rex, label = "Case", c = "k")
+        ax.plot(pos, Rex_amj, label = "AMJ H.10 2.1.5", ls = ":", c = "r")
+        ax.set_xlim(np.max(pos) * 0.9, np.max(pos) * 1.01)
+        ax.set_title("Excitation radiation")
+        ax.set_ylabel("Radiation [Wm-3]")
+        ax.set_xlabel("pos [m]")
+        ax.legend()
+
+        ax = axes[1]
+        ax.plot(pos, Rrec, label = "Case", c = "k")
+        ax.plot(pos, Rrec_amj, label = "AMJ H.10 2.1.8", ls = ":", c = "r")
+        ax.set_xlim(np.max(pos) * 0.99, np.max(pos) * 1.001)
+        ax.set_title("Recombination radiation")
+        ax.set_ylabel("Radiation [Wm-3]")
         ax.set_xlabel("pos [m]")
         ax.legend()
 
@@ -976,14 +1042,17 @@ class Case:
         ax.plot(pos[:-1], Fcx[:-1], label = "Fcx (case)", c = "k")
         ax.plot(pos[:-1], Fcx_amj[:-1], label = "Fcx (amjuel)", ls = ":", c = "r")
         ax.set_title("Ion momentum sink")
+        ax.set_ylabel("Momentum [Nm-3]")
 
         ax = axes[1]
         ax.plot(pos[:-1], Ecx[:-1], label = "Ecx (case)", c = "k")
         ax.plot(pos[:-1], Ecx_amj[:-1], label = "Ecx (amjuel)", ls = ":", c = "r")
         ax.set_title("Ion energy sink")
+        ax.set_ylabel("Power [Wm-3]")
 
         [ax.set_xlim(np.max(pos) * 0.99, np.max(pos) * 1.002) for ax in axes]
         [ax.legend() for ax in axes]
+        [ax.set_xlabel("Pos [m]") for ax in axes]
 
     def check_dn(self):
         # ----- Charge exchange
@@ -1039,7 +1108,9 @@ class Case:
         fig.subplots_adjust(wspace=0.3)
         ax.plot(pos[zoom_idx:-1], Dn[zoom_idx:-1], label = "Dn (case)", c = "k")
         ax.plot(pos[zoom_idx:-1], Dn_calc[zoom_idx:-1], label = "Dn (check)", ls = ":", c = "r")
-        ax.set_title("Ion momentum sink")
+        ax.set_title("Neutral diffusion coefficient")
+        ax.set_xlabel("Pos [m]")
+        ax.set_ylabel("Dn [m-2s-1]")
         ax.set_xlim(pos[zoom_idx], np.max(pos) * 1.002)
         ax.legend()
 
@@ -1481,6 +1552,7 @@ class AMJUEL():
         self.amjuel_data["H.10 2.1.5JH"] = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.10 2.1.5JH.csv")) # Excitation, L.C.Johnson
         self.amjuel_data["H.10 2.1.5"] = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.10 2.1.5.csv")) # Excitation, Sawada
         self.amjuel_data["H.10 2.1.5o"] = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.10 2.1.5o.csv")) # Excitation, L.C.Johnson, Ly-opaque
+        self.amjuel_data["H.10 2.1.8"] = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.10 2.1.8.csv")) # Recombination, Sawada
 
         # Recombination particle source rate
         self.amjuel_data["H.4 2.1.8"]   = self.read_amjuel_2d(os.path.join(onedrive, r"Project\Atomicrates\H.4 2.1.8.csv")) # Sawada, radiative + 3 body
