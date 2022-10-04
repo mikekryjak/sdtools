@@ -52,9 +52,9 @@ class Case:
                         "Div_Q_SH", "Div_Q_SNB",
                         # Hermes only variables
                         "Dd_Dpar",
-                        "Sd_Dpar", 
-                        "Ed_Dpar", "Edd+_cx",
-                        "Fd_Dpar", "Fdd+_cx",
+                        "Sd_Dpar", "Sd+_iz", "Sd+_rec",
+                        "Ed_Dpar", "Edd+_cx", "Ed+_iz", "Ed+_rec",
+                        "Fd_Dpar", "Fdd+_cx", "Fd+_iz", "Fd+_rec",
                         "Rd+_ex", "Rd+_rec"
                         ]
 
@@ -122,6 +122,12 @@ class Case:
             self.norm_data["S"] = self.norm_data["SNd+"]
             self.norm_data["Rex"] = self.norm_data["Rd+_ex"]
             self.norm_data["Rrec"] = self.norm_data["Rd+_rec"]
+            self.norm_data["Srec"] = self.norm_data["Sd+_rec"]
+            self.norm_data["Siz"] = self.norm_data["Sd+_iz"]
+            self.norm_data["Fiz"] = self.norm_data["Fd+_iz"]
+            self.norm_data["Frec"] = self.norm_data["Fd+_rec"]
+            self.norm_data["Eiz"] = self.norm_data["Ed+_iz"]
+            self.norm_data["Erec"] = self.norm_data["Ed+_rec"]
             self.norm_data["Ti"] = self.norm_data["Td+"]
             if "Dd_Dpar" in self.norm_data.keys():
                 self.norm_data["Dn"] = self.norm_data["Dd_Dpar"]
@@ -132,6 +138,7 @@ class Case:
         else:
             self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"] # in SD1D AA is in normalisation
             self.dneut = self.options["sd1d"]["dneut"]
+            
 
         if self.evolve_nvn:
             if self.hermes:
@@ -189,12 +196,13 @@ class Case:
         list_tnorm = ["Te", "Td+", "Ti", "Td", "Tn"] # [eV]
         list_nnorm = ["Ne", "Nn", "Nd+", "Nd", "Ni"] # [m-3]
         list_pnorm = ["P", "Pn", "dynamic_p", "dynamic_n", "Pe", "SPd+", "Pd+", "Pd"] # [Pa]
-        list_snorm = ["S", "Srec", "Siz", "NeSource", "SNd+", "Sd_Dpar"] # [m-3s-1]
+        list_snorm = ["S", "Srec", "Siz", "NeSource", "SNd+", "Sd_Dpar", "Siz", "Srec",
+                    "Sd+_iz", "Sd+_rec"] # [m-3s-1]
         list_fnorm = ["F", "Frec", "Fiz", "Fcx", "Fel", "Fd_Dpar", "Fdd+_cx"] # [kgm-2s-2 or Nm-3]
         list_enorm = ["E", "R", "Rrec", "Riz", "Rzrad", "Rex", "Erec", 
                     "Eiz", "Ecx", "Eel", "Ert", "PeSource",
                     "Div_Q_SH", "Div_Q_SNB",
-                    "Ed_Dpar", "Edd+_cx","Rd+_ex"] # [Wm-3]
+                    "Ed_Dpar", "Edd+_cx","Rd+_ex",] # [Wm-3]
         list_vnorm = ["Vi", "Ve", "Vd+", "Vd", "Vn"] 
         list_xnorm = ["NVi", "NVn", "NVd"] # m-2s-1
         list_dnorm = ["Dn", "Dd_Dpar"] # m2s-1
@@ -920,7 +928,7 @@ class Case:
         Nn = self.data["Nn"]
 
         # ----- Ionisation
-        Siz = self.data["S"] # TODO this is wrong
+        Siz = abs(self.data["Siz"])
         Siz_amj = np.zeros_like(Te)
 
         for i, _ in enumerate(pos):
@@ -931,32 +939,83 @@ class Case:
         ax.plot(pos, Siz_amj, label = "AMJ H.4 2.1.5", ls = ":", c = "r")
         ax.set_xlim(np.max(pos) * 0.9, np.max(pos) * 1.01)
         ax.set_title("Ionisation freq")
-        ax.set_ylabel("Ionisation rate [s-1]")
+        ax.set_ylabel("Ionisation rate [m-3s-1]")
         ax.set_xlabel("pos [m]")
         ax.legend()
 
-    # def check_rec(self):
-    #     rtools = AMJUEL()
-    #     pos = self.data["pos"]
-    #     Te = self.data["Te"]
-    #     Ne = self.data["Ne"]
-    #     Nn = self.data["Nn"]
+    def check_rec(self):
+        """
+        Something is not right here in the energy and momentum
+        """
+       
+        rtools = AMJUEL()
+        pos = self.data["pos"]
+        Te = self.data["Te"]
+        Ne = self.data["Ne"]
+        Nn = self.data["Nn"]
+        Vi = self.data["Vi"]
 
-    #     # ----- Ionisation
-    #     Srec = self.data["S"] # TODO this is wrong
-    #     Siz_amj = np.zeros_like(Te)
+        if self.evolve_pn:
+            Tn = self.data["Tn"]
+        if self.evolve_nvn:
+            Vn = self.data["Vn"]
+        else:
+            Vn = np.zeros_like(Vi)
+        if self.hermes:
+            Ti = self.data["Ti"]
+        else:
+            Ti = Te
 
-    #     for i, _ in enumerate(pos):
-    #         Siz_amj[i] = rtools.amjuel_2d("H.4 2.1.5", Te[i], Ne[i]) * Ne[i] * Nn[i]
+        # ----- Ionisation
+        Srec = abs(self.data["Srec"])
+        Erec = self.data["Erec"] * 1e-6 / (3/2)
+        Frec = self.data["Frec"]
 
-    #     fig, ax = plt.subplots(figsize = (5,5))
-    #     ax.plot(pos, Siz, label = "Case", c = "k")
-    #     ax.plot(pos, Siz_amj, label = "AMJ H.4 2.1.5", ls = ":", c = "r")
-    #     ax.set_xlim(np.max(pos) * 0.9, np.max(pos) * 1.01)
-    #     ax.set_title("Ionisation freq")
-    #     ax.set_ylabel("Ionisation rate [s-1]")
-    #     ax.set_xlabel("pos [m]")
-    #     ax.legend()
+        freq_amj = np.zeros_like(Te)
+        Srec_amj = np.zeros_like(Te)
+        Erec_amj = np.zeros_like(Te)
+        Frec_amj = np.zeros_like(Te)
+
+        for i, _ in enumerate(pos):
+            freq_amj[i] = rtools.amjuel_2d("H.4 2.1.8JH", Te[i], Ne[i]) * Ne[i]**2
+            Srec_amj[i] = freq_amj[i]
+
+            if self.evolve_pn:
+                Erec_amj[i] = -freq_amj[i] * Ti[i] * constants("q_e") * 1e-6
+            if self.evolve_nvn:
+                # Frec_amj[i] = -freq_amj[i] * (Vi[i] - Vn[i]) * constants("mass_p") * 2
+                Frec_amj[i] = -freq_amj[i] * Vi[i] * constants("mass_p") * 2 
+
+
+        fig, axes = plt.subplots(1,3, figsize = (15,5))
+        fig.subplots_adjust(wspace = 0.4)
+
+        ax = axes[0]
+        ax.plot(pos, Srec, label = "Case", c = "k")
+        ax.plot(pos, Srec_amj, label = "AMJ H.4 2.1.8", ls = ":", c = "r")
+        ax.set_title("Recombination freq")
+        ax.set_ylabel("Recombination rate [m-3s-1]")
+
+        ax = axes[1]
+        if self.evolve_pn:
+            ax.plot(pos, Erec, label = "case", c = "k")
+            ax.plot(pos, Erec_amj, label = "AMJ", ls = ":", c = "r")
+        ax.set_title("Rec. energy transfer")
+        ax.set_ylabel("Energy source [MWm-3]")
+
+        ax = axes[2]
+        if self.evolve_nvn:
+            ax.plot(pos, Frec, label = "case", c = "k")
+            ax.plot(pos, Frec_amj, label = "AMJ", ls = ":", c = "r")
+        ax.set_title("Rec. mom transfer")
+        ax.set_ylabel("Momentum source [Nm-3]")
+
+        for ax in axes:
+            ax.set_xlabel("pos [m]")
+            ax.legend()
+            ax.set_xlim(np.max(pos) * 0.995, np.max(pos) * 1.001) 
+
+
 
     def check_rad(self):
         rtools = AMJUEL()
@@ -966,16 +1025,16 @@ class Case:
         Nn = self.data["Nn"]
 
         # ----- Ionisation
-        Rex = self.data["Rex"] * -1
-        Rrec = self.data["Rrec"] * -1
+        Rex = abs(self.data["Rex"])
+        Rrec = abs(self.data["Rrec"])
 
         Rex_amj = np.zeros_like(Te)
         Rrec_amj = np.zeros_like(Te)
 
         for i, _ in enumerate(pos):
-            Rex_amj[i] = rtools.amjuel_2d("H.10 2.1.5", Te[i], Ne[i]) * Ne[i] * Nn[i] * constants("q_e")
-            Rrec_amj[i] = (rtools.amjuel_2d("H.10 2.1.8", Te[i], Ne[i]) * Ne[i] * Nn[i] - \
-                            rtools.amjuel_2d("H.4 2.1.8", Te[i], Ne[i]) * Ne[i] * Nn[i] * 13.6) * constants("q_e")
+            Rex_amj[i] = rtools.amjuel_2d("H.10 2.1.5", Te[i], Ne[i]) * Ne[i] * Nn[i] * constants("q_e") * 1e-6 #MW
+            Rrec_amj[i] = (rtools.amjuel_2d("H.10 2.1.8", Te[i], Ne[i]) * Ne[i] * Ne[i] - \
+                            rtools.amjuel_2d("H.4 2.1.8", Te[i], Ne[i]) * Ne[i] * Ne[i] * 13.6) * constants("q_e") * 1e-6
 
         fig, axes = plt.subplots(1,2, figsize = (11,5))
         fig.subplots_adjust(wspace = 0.5)
