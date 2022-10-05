@@ -42,7 +42,7 @@ class Case:
         self.missing_vars = []
         self.norm_data = dict()
 
-        var_collect = ["P", "Ne", "Nn", "NVi", "NVn", "NVd", "kappa_epar", "Pn", "Dn",
+        var_collect = ["P", "Ne", "Nn", "NVi", "NVn", "NVd", "NVd+", "kappa_epar", "Pn", "Dn",
                         "S", "Srec", "Siz", 
                         "F", "Frec", "Fiz", "Fcx", "Fel", # Momentum source/sinks to neutrals
                         "R", "Rrec", "Riz", "Rzrad", "Rex", # Radiation, energy loss from system
@@ -186,7 +186,10 @@ class Case:
         # Derived normalisation factors
         self.Pnorm = self.Nnorm * self.Tnorm * constants("q_e") # Converts P to Pascals. 1.602e-19 is proton charge in C
         self.Snorm = self.Nnorm * self.Omega_ci # Normalisation for S: plasma density sink (m-3s-1)
-        self.Fnorm = (constants("mass_p") * 2) * self.Nnorm * self.Cs0 * self.Omega_ci # [kgm-2s-1] Plasma momentum sink normalisation
+        if self.hermes:
+            self.Fnorm = (constants("mass_p")) * self.Nnorm * self.Cs0 * self.Omega_ci # Everything normalised to mass_p not mass_i in Hermes-3
+        else:
+            self.Fnorm = (constants("mass_p") * 2) * self.Nnorm * self.Cs0 * self.Omega_ci # [kgm-2s-1] Plasma momentum sink normalisation
         self.Enorm = constants("q_e") * self.Nnorm * self.Tnorm * self.Omega_ci # [Wm-3] Plasma energy sink normalisation
         self.Vnorm = self.Cs0 # [ms-1] Velocity
         self.Xnorm = self.Nnorm * self.Cs0 # [m-2 s-1] Flux
@@ -204,7 +207,7 @@ class Case:
                     "Div_Q_SH", "Div_Q_SNB",
                     "Ed_Dpar", "Edd+_cx","Rd+_ex",] # [Wm-3]
         list_vnorm = ["Vi", "Ve", "Vd+", "Vd", "Vn"] 
-        list_xnorm = ["NVi", "NVn", "NVd"] # m-2s-1
+        list_xnorm = ["NVi", "NVn", "NVd", "NVd+"] # m-2s-1
         list_dnorm = ["Dn", "Dd_Dpar"] # m2s-1
         list_qnorm = [] # [Wm-2]
 
@@ -968,7 +971,7 @@ class Case:
 
         # ----- Ionisation
         Srec = abs(self.data["Srec"])
-        Erec = self.data["Erec"] * 1e-6 / (3/2)
+        Erec = self.data["Erec"] * 1e-6 / (3/2) # TODO figure out why on earth the 3/2 is needed
         Frec = self.data["Frec"]
 
         freq_amj = np.zeros_like(Te)
