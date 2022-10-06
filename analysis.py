@@ -32,7 +32,7 @@ class Case:
             self.process_variables()
 
     def load_data(self):
-        self.boutdata = BoutData(self.casepath, yguards=True, strict = True)
+        self.boutdata = BoutData(self.casepath, yguards=True, strict = True, DataFileCaching=False)
         self.raw_data = self.boutdata["outputs"]
         self.options = self.boutdata["options"]
 
