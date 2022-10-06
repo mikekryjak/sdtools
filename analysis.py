@@ -929,26 +929,71 @@ class Case:
         Te = self.data["Te"]
         Ne = self.data["Ne"]
         Nn = self.data["Nn"]
+        Vi = self.data["Vi"]
+
+        if self.evolve_pn:
+            Tn = self.data["Tn"]
+        if self.evolve_nvn:
+            Vn = self.data["Vn"]
+        else:
+            Vn = np.zeros_like(Vi)
+        if self.hermes:
+            Ti = self.data["Ti"]
+        else:
+            Ti = Te
 
         # ----- Ionisation
         Siz = abs(self.data["Siz"])
+        Eiz = self.data["Eiz"] * 1e-6 / (3/2)
+        Fiz = self.data["Fiz"]
+
+        freq_amj = np.zeros_like(Te)
         Siz_amj = np.zeros_like(Te)
+        Eiz_amj = np.zeros_like(Te)
+        Fiz_amj = np.zeros_like(Te)
 
         for i, _ in enumerate(pos):
-            Siz_amj[i] = rtools.amjuel_2d("H.4 2.1.5", Te[i], Ne[i]) * Ne[i] * Nn[i]
+            freq_amj[i] = rtools.amjuel_2d("H.4 2.1.5", Te[i], Ne[i]) * Ne[i] * Nn[i]
+            Siz_amj[i] = freq_amj[i]
 
-        fig, ax = plt.subplots(figsize = (5,5))
+            if self.evolve_pn:
+                Eiz_amj[i] = freq_amj[i] * Tn[i] * constants("q_e") * 1e-6
+            if self.evolve_nvn:
+                Fiz_amj[i] = freq_amj[i] * Vn[i] * constants("mass_p") * 2
+
+
+        fig, axes = plt.subplots(1,3, figsize = (15,5))
+        fig.subplots_adjust(wspace = 0.4)
+
+        ax = axes[0]
         ax.plot(pos, Siz, label = "Case", c = "k")
         ax.plot(pos, Siz_amj, label = "AMJ H.4 2.1.5", ls = ":", c = "r")
-        ax.set_xlim(np.max(pos) * 0.9, np.max(pos) * 1.01)
-        ax.set_title("Ionisation freq")
+        ax.set_title("Ionisation")
         ax.set_ylabel("Ionisation rate [m-3s-1]")
-        ax.set_xlabel("pos [m]")
-        ax.legend()
+
+        ax = axes[1]
+        if self.evolve_pn:
+            ax.plot(pos, Eiz, label = "case", c = "k")
+            ax.plot(pos, Eiz_amj, label = "Calc", ls = ":", c = "r")
+        ax.set_title("iz. energy transfer")
+        ax.set_ylabel("Energy source [MWm-3]")
+
+        ax = axes[2]
+        if self.evolve_nvn:
+            ax.plot(pos, Fiz, label = "case", c = "k")
+            ax.plot(pos, Fiz_amj, label = "Calc", ls = ":", c = "r")
+        ax.set_title("iz. mom transfer")
+        ax.set_ylabel("Momentum source [Nm-3]")
+
+        for ax in axes:
+            ax.set_xlabel("pos [m]")
+            ax.legend()
+            ax.set_xlim(np.max(pos) * 0.995, np.max(pos) * 1.001)
 
     def check_rec(self):
         """
         Something is not right here in the energy and momentum
+        Probably related to sheath ..it's the last few values
         """
        
         rtools = AMJUEL()
@@ -1028,18 +1073,27 @@ class Case:
         Nn = self.data["Nn"]
 
         # ----- Ionisation
-        Rex = abs(self.data["Rex"])
-        Rrec = abs(self.data["Rrec"])
+        Rex = abs(self.data["Rex"]) * 1e-6
+        Rrec = abs(self.data["Rrec"]) * 1e-6
 
         Rex_amj = np.zeros_like(Te)
         Rrec_amj = np.zeros_like(Te)
+        Rrec_base = np.zeros_like(Te)
+        Rrec_rad = np.zeros_like(Te)
 
         for i, _ in enumerate(pos):
             Rex_amj[i] = rtools.amjuel_2d("H.10 2.1.5", Te[i], Ne[i]) * Ne[i] * Nn[i] * constants("q_e") * 1e-6 #MW
-            Rrec_amj[i] = (rtools.amjuel_2d("H.10 2.1.8", Te[i], Ne[i]) * Ne[i] * Ne[i] - \
+
+            # The ion releases 13.6eV because it gets recombined (so 13.6eV of heating)
+            # The resulting neutral de-excites and releases a photon equivalent to total ion energy - 13.6eV
+            # TODO understand this as it's likely >>> wrong
+            Rrec_amj[i] = (-rtools.amjuel_2d("H.10 2.1.8", Te[i], Ne[i]) * Ne[i] * Ne[i] + \
                             rtools.amjuel_2d("H.4 2.1.8", Te[i], Ne[i]) * Ne[i] * Ne[i] * 13.6) * constants("q_e") * 1e-6
 
-        fig, axes = plt.subplots(1,2, figsize = (11,5))
+            Rrec_base[i] = rtools.amjuel_2d("H.4 2.1.8", Te[i], Ne[i]) * Ne[i] * Ne[i] * 13.6 * constants("q_e") * 1e-6
+            Rrec_rad[i] = rtools.amjuel_2d("H.10 2.1.8", Te[i], Ne[i]) * Ne[i] * Ne[i] * constants("q_e") * 1e-6
+
+        fig, axes = plt.subplots(1,3, figsize = (16,5))
         fig.subplots_adjust(wspace = 0.5)
 
         ax = axes[0]
@@ -1054,6 +1108,15 @@ class Case:
         ax = axes[1]
         ax.plot(pos, Rrec, label = "Case", c = "k")
         ax.plot(pos, Rrec_amj, label = "AMJ H.10 2.1.8", ls = ":", c = "r")
+        ax.set_xlim(np.max(pos) * 0.99, np.max(pos) * 1.001)
+        ax.set_title("Recombination radiation")
+        ax.set_ylabel("Radiation [Wm-3]")
+        ax.set_xlabel("pos [m]")
+        ax.legend()
+
+        ax = axes[2]
+        ax.plot(pos, Rrec_base, label = "13.6 cost", c = "navy")
+        ax.plot(pos, Rrec_rad, label = "Total radiation",  c = "darkorange")
         ax.set_xlim(np.max(pos) * 0.99, np.max(pos) * 1.001)
         ax.set_title("Recombination radiation")
         ax.set_ylabel("Radiation [Wm-3]")
