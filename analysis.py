@@ -948,7 +948,7 @@ class Case:
                     ax.set_yscale("symlog")
                     
                 ax.set_title(param)
-                ax.legend(fontsize = 10)
+                # ax.legend(fontsize = 10)
                 ax.grid(which="major", alpha = 0.3)
                 zoomlims = (max(data["pos"])*0.91, max(data["pos"])*1.005)
                 if trim and param in ["NVi", "P", "M", "Ne", "Nn",  "Fcx", 
