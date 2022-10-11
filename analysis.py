@@ -53,7 +53,7 @@ class Case:
                         # Hermes only variables
                         "Dd_Dpar",
                         "Sd_Dpar", "Sd+_iz", "Sd+_rec",
-                        "Ed_Dpar", "Edd+_cx", "Ed+_iz", "Ed+_rec",
+                        "Ed_Dpar", "Edd+_cx", "Ed+_iz", "Ed+_rec", "Ed+_src", "Ee_src",
                         "Fd_Dpar", "Fdd+_cx", "Fd+_iz", "Fd+_rec",
                         "Rd+_ex", "Rd+_rec"
                         ]
@@ -112,6 +112,10 @@ class Case:
             self.snb = False
 
         #------------Derive variables
+        # Hermes-3 deals with it differently and the raw J is equal to Bnorm/Lnorm = 1/rho_s0
+        # Only relative changes are important... so let's just normalise it like this so 
+        # that it's consistent with SD1D. TODO figure this out properly
+        self.J = self.J / min(self.J)
         self.dV = self.dy * self.J
         
         if self.hermes:
@@ -205,7 +209,8 @@ class Case:
         list_enorm = ["E", "R", "Rrec", "Riz", "Rzrad", "Rex", "Erec", 
                     "Eiz", "Ecx", "Eel", "Ert", "PeSource",
                     "Div_Q_SH", "Div_Q_SNB",
-                    "Ed_Dpar", "Edd+_cx","Rd+_ex",] # [Wm-3]
+                    "Ed_Dpar", "Edd+_cx","Rd+_ex",
+                    "Ed+_src", "Ee_src"] # [Wm-3]
         list_vnorm = ["Vi", "Ve", "Vd+", "Vd", "Vn"] 
         list_xnorm = ["NVi", "NVn", "NVd", "NVd+"] # m-2s-1
         list_dnorm = ["Dn", "Dd_Dpar"] # m2s-1
@@ -408,8 +413,8 @@ class Case:
 
         _, self.data["conduction_SH_script"] = heat_conduction(self.pos, self.data["Te"])
         
-    def heat_balance(self, verbose = False):
-        if self.hermes:
+    def heat_balance(self, verbose = False, override = False):
+        if self.hermes and override == False:
             print("Hermes heat balance not implemented")
         else:
 
@@ -498,19 +503,15 @@ class Case:
 
         # ----- Density input source
         input_source = d["Sd+_src"].squeeze()[tind, :][2:-2]
-        # input_source = np.trapz(x = pos[2:-2], y = input_source * dV[2:-2] * d["Omega_ci"] * d["Nnorm"])
-        input_source = np.sum(input_source * dV[2:-2] * d["Omega_ci"] * d["Nnorm"])
+        input_source = np.trapz(x = pos[2:-2], y = input_source * J[2:-2] * d["Omega_ci"] * d["Nnorm"])
 
         # ----- Ionisation source
         iz_source = d["Sd+_iz"].squeeze()[tind, :][2:-2]
-        # iz_source = np.trapz(x = pos[2:-2], y = iz_source * dV[2:-2] * d["Omega_ci"] * d["Nnorm"])
-        iz_source = np.sum(iz_source * dV[2:-2] * d["Omega_ci"] * d["Nnorm"])
+        iz_source = np.trapz(x = pos[2:-2], y = iz_source * J[2:-2] * d["Omega_ci"] * d["Nnorm"])
 
         # ----- Recombination source
         rec_source = d["Sd+_rec"].squeeze()[tind, :][2:-2]
-        # rec_source = np.trapz(x = pos[2:-2], y = rec_source * dV[2:-2] * d["Omega_ci"] * d["Nnorm"])
-        rec_source = np.sum(rec_source * dV[2:-2] * d["Omega_ci"] * d["Nnorm"])
-
+        rec_source = np.trapz(x = pos[2:-2], y = rec_source * J[2:-2] * d["Omega_ci"] * d["Nnorm"])
         # ----- Totals
         total_in = input_source + iz_source
         total_out = sheath_ion_flux + abs(rec_source)
@@ -543,6 +544,7 @@ class Case:
         error_only = True):
         
         """ 
+        >>> WARNING this code needs to be redone. Need to do trapz(x=pos, y=source * J) to do volume integral!!
         path_case, << Case path          
         verbosity = False, << Print output
         plot = True,  << Pretty pictures
@@ -913,6 +915,52 @@ class Case:
                                     info = False, keep_yboundaries = True)
         ds = ds.squeeze(drop = True)
         xbout.plotting.animate.animate_line(ds[param])
+
+    def plot(self, vars = [["Te", "Ne", "Nn"], ["S", "R", "P"], ["NVi", "M", "F"]],
+             trim = True, scale = "auto", xlims = (0,0)):
+        lib = library()
+
+        colors = mike_cmap(10)
+        lw = 2
+
+        for list_params in vars:
+
+            fig, axes = plt.subplots(1,3, figsize = (18,5))
+            fig.subplots_adjust(wspace=0.4)
+
+            for i, ax in enumerate(axes):
+                param = list_params[i]
+
+                data = self.data
+                if param in data.keys():
+                    ax.plot(data["pos"], data[param], color = colors[i], linewidth = lw)
+
+
+                ax.set_xlabel("Position (m)")
+                ax.set_ylabel("{} ({})".format(lib[param]["name"], lib[param]["unit"]), fontsize = 11)
+                
+                ax.set_yscale("log")
+                if scale == "auto":
+                    ax.set_yscale(lib[param]["scale"])
+                elif scale == "log":
+                    ax.set_yscale("log")
+                elif scale == "symlog":
+                    ax.set_yscale("symlog")
+                    
+                ax.set_title(param)
+                ax.legend(fontsize = 10)
+                ax.grid(which="major", alpha = 0.3)
+                zoomlims = (max(data["pos"])*0.91, max(data["pos"])*1.005)
+                if trim and param in ["NVi", "P", "M", "Ne", "Nn",  "Fcx", 
+                "Frec", "E", "F", "R", "Rex", "Rrec", "Riz", 
+                "Siz", "S", "Eiz", "Vi", "Pn", "NVn"]:
+                    ax.set_xlim(zoomlims)
+
+                if xlims != (0,0):
+                    ax.set_xlim(xlims)
+
+                ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
+
 
     def get_timestats(self):
 
