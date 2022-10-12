@@ -47,7 +47,7 @@ class Case:
                         "F", "Frec", "Fiz", "Fcx", "Fel", # Momentum source/sinks to neutrals
                         "R", "Rrec", "Riz", "Rzrad", "Rex", # Radiation, energy loss from system
                         "E", "Erec", "Eiz", "Ecx", "Eel", # Energy transfer between neutrals and plasma
-                        "Pe", "Pd", "Pd+", "Ve", "Vd+", "Nd", "Nd+", "Td+", "SPd+", "SNd+", "Ert",
+                        "Pe", "Pd", "Pd+", "Ve", "Vd+", "Vi", "Nd", "Nd+", "Td+", "SPd+", "SNd+", "Ert",
                         "PeSource", "NeSource",
                         "Div_Q_SH", "Div_Q_SNB",
                         # Hermes only variables
@@ -121,11 +121,12 @@ class Case:
         if self.hermes:
             self.norm_data["Nn"] = self.norm_data["Nd"]
             self.norm_data["Vi"] = self.norm_data["Vd+"]
-            self.norm_data["NVi"] = self.norm_data["Vd+"] * self.norm_data["Nd+"] * 2 # AA
+            # self.norm_data["NVi"] = self.norm_data["Vd+"] * self.norm_data["Nd+"] * 2 # AA update: this is already in file...
             self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
             self.norm_data["S"] = self.norm_data["SNd+"]
             self.norm_data["Rex"] = self.norm_data["Rd+_ex"]
             self.norm_data["Rrec"] = self.norm_data["Rd+_rec"]
+            self.norm_data["R"] = self.norm_data["Rex"] + self.norm_data["Rrec"]
             self.norm_data["Srec"] = self.norm_data["Sd+_rec"]
             self.norm_data["Siz"] = self.norm_data["Sd+_iz"]
             self.norm_data["Fiz"] = self.norm_data["Fd+_iz"]
@@ -133,6 +134,7 @@ class Case:
             self.norm_data["Eiz"] = self.norm_data["Ed+_iz"]
             self.norm_data["Erec"] = self.norm_data["Ed+_rec"]
             self.norm_data["Ti"] = self.norm_data["Td+"]
+            
             if "Dd_Dpar" in self.norm_data.keys():
                 self.norm_data["Dn"] = self.norm_data["Dd_Dpar"]
             if "Fdd+_cx" in self.norm_data.keys():
@@ -140,7 +142,7 @@ class Case:
                 self.norm_data["Ecx"] = self.norm_data["Edd+_cx"]
             self.dneut = self.options["neutral_parallel_diffusion"]["dneut"]
         else:
-            self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"] # in SD1D AA is in normalisation
+            # self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"] # in SD1D AA is in normalisation update: this is already in file...
             self.dneut = self.options["sd1d"]["dneut"]
             
 
@@ -270,7 +272,8 @@ class Case:
 
         #------------Derived variables
         dnorm["Ntot"] = dnorm["Ne"] + dnorm["Nn"]
-        dnorm["Cs"] = self.Cs0 * np.sqrt(2 * dnorm["Te"]/self.Tnorm) # Sound speed
+        # dnorm["Cs"] = self.Cs0 * np.sqrt(2 * dnorm["Te"]/self.Tnorm) # Sound speed
+        dnorm["Cs"] = np.sqrt(constants("q_e") * (dnorm["Te"]*2)/(constants("mass_p")*2))
         dnorm["M"] = dnorm["Vi"] / dnorm["Cs"]
         dnorm["dynamic_p"] = norm["NVi"]**2 / norm["Ne"] * self.Pnorm
         dnorm["Ne_avg"] = sum(dnorm["Ne"] * self.dV)/sum(self.dy)
@@ -494,24 +497,24 @@ class Case:
         # ----- Boundary flux
         sheath_area = get_boundary(J) / np.sqrt(get_boundary(g_22))
         sheath_ion_flux = get_boundary(d["NVd+"].squeeze()[tind, :])
-        sheath_ion_flux *= sheath_area * d["Omega_ci"] * d["Nnorm"]
+        sheath_ion_flux *= sheath_area * d["Cs0"] * d["Nnorm"]
 
         sheath_neutral_flux = get_boundary(d["NVd"].squeeze()[tind, :])
-        sheath_neutral_flux *= sheath_area * d["Omega_ci"] * d["Nnorm"]
+        sheath_neutral_flux *= sheath_area * d["Cs0"] * d["Nnorm"]
 
         # Still not quite sure why doing a sum instead of an integral is the correct way to go, but it is.
 
         # ----- Density input source
         input_source = d["Sd+_src"].squeeze()[tind, :][2:-2]
-        input_source = np.trapz(x = pos[2:-2], y = input_source * J[2:-2] * d["Omega_ci"] * d["Nnorm"])
+        input_source = np.trapz(x = pos[2:-2], y = input_source * J[2:-2] * d["Cs0"] * d["Nnorm"])
 
         # ----- Ionisation source
         iz_source = d["Sd+_iz"].squeeze()[tind, :][2:-2]
-        iz_source = np.trapz(x = pos[2:-2], y = iz_source * J[2:-2] * d["Omega_ci"] * d["Nnorm"])
+        iz_source = np.trapz(x = pos[2:-2], y = iz_source * J[2:-2] * d["Cs0"] * d["Nnorm"])
 
         # ----- Recombination source
         rec_source = d["Sd+_rec"].squeeze()[tind, :][2:-2]
-        rec_source = np.trapz(x = pos[2:-2], y = rec_source * J[2:-2] * d["Omega_ci"] * d["Nnorm"])
+        rec_source = np.trapz(x = pos[2:-2], y = rec_source * J[2:-2] * d["Cs0"] * d["Nnorm"])
         # ----- Totals
         total_in = input_source + iz_source
         total_out = sheath_ion_flux + abs(rec_source)
@@ -542,7 +545,7 @@ class Case:
         NVi_is_NeVi = False,
         additional_plots = False,
         error_only = True):
-        
+        # TODO Potentially wrong as momentum should be Nnorm * Cs0
         """ 
         >>> WARNING this code needs to be redone. Need to do trapz(x=pos, y=source * J) to do volume integral!!
         path_case, << Case path          
