@@ -51,7 +51,7 @@ class Case:
                         "F", "Frec", "Fiz", "Fcx", "Fel", # Momentum source/sinks to neutrals
                         "R", "Rrec", "Riz", "Rzrad", "Rex", # Radiation, energy loss from system
                         "E", "Erec", "Eiz", "Ecx", "Eel", # Energy transfer between neutrals and plasma
-                        "Pe", "Pd", "Pd+", "Ve", "Vd+", "Vi", "Nd", "Nd+", "Td+", "SPd+", "SNd+", "Ert",
+                        "Pe", "Pd", "Pd+", "Ve", "Vd+", "Vi", "Nd", "Nd+", "Td+", "SPd+", "SNd+", "Ert", "Te",
                         "PeSource", "NeSource",
                         "Div_Q_SH", "Div_Q_SNB",
                         # Hermes only variables
@@ -924,6 +924,101 @@ class Case:
                     "actual_frecycle" : frecycle[-1], "recycle_error" : frecycle_error[-1],
                     "imbalance" : flux_imbalance[-1], "mass_rate_frac" : d["mass_rate_frac"]
                     }
+
+
+    def sheath_boundary_simple(case):
+        """
+        Reconstruct Hermes-3 sheath_boundary_simple.cxx.
+        Work in progress
+        """
+
+        casepath = casepaths["hrac-c5-10-fixbc"]
+        d = BoutData(casepath, yguards = True, info = False, strict = True, DataFileCaching=False)["outputs"]
+
+        def get_boundary(x):
+            return (x[-2] + x[-3])/2
+
+        def extract(x):
+            return x.squeeze()[tind,:]
+
+        def limitFree(fm, fc):
+            #  fm  fc | fp
+            #         ^ boundary
+            # Linear extrapolation & limit
+            # To force to 0 gradient if var increasing into sheath
+            if fm < fc:
+                return fc
+            if fm < 1e-10:
+                return fc
+            
+            fp = fc**2 / fm
+            return fp
+
+        tind = -1
+
+        mass_i = constants("mass_p") * 2 # [kg]
+        mass_e = constants("mass_e") # [kg]
+        q_e = constants("q_e") # [J/eV]
+        k_b = constants("k_b") # [J/K]
+
+        Vnorm = d["Cs0"]
+        Enorm = q_e * d["Nnorm"] * d["Tnorm"] * d["Omega_ci"] # [Wm-3]
+        Xnorm = d["Cs0"] * d["Nnorm"] # [m-2s-1]
+        Nnorm = d["Nnorm"] # [m-3]
+        Tnorm = d["Tnorm"] # [eV]
+        Bnorm = d["Bnorm"] # [T]
+        Pnorm = Nnorm * Tnorm * q_e # [Pa]
+        Fnorm = mass_i * Nnorm * d["Cs0"] * d["Omega_ci"]
+
+        # ----- Unpack things
+        Zi = 1
+        AA = 2
+        NVi = extract(d["NVd+"]) * Xnorm
+        Ve = extract(d["Ve"]) * Vnorm
+        Vi = extract(d["Vd+"]) * Vnorm
+        Ti = extract(d["Td+"]) * Tnorm
+        Te = extract(d["Te"]) * Tnorm
+        Ni = extract(d["Nd+"]) * Nnorm
+        Ne = extract(d["Ne"]) * Nnorm
+        Pe = extract(d["Ne"]) * Pnorm
+        Pi = extract(d["Pd+"]) * Pnorm
+        NVe = Ne * Ve 
+
+        # ----- Geometry
+        J = d["J"].squeeze() * d["rho_s0"] / Bnorm # from hermes-3.cxx
+        g_22 = d["g_22"].squeeze() * d["rho_s0"]**2 # from hermes-3.cxx
+        dy = d["dy"].squeeze()
+        dV = J * dy
+        A = get_boundary(J) / np.sqrt(get_boundary(g_22)) # sheath area
+
+        # NOTATION to match upper_y
+        # i = last cell index
+        # ip = guard cell index
+        # im = second to last cell index
+        # Note we include all guard cells here (two on each end)
+        im = -4
+        i = -3
+
+        Ne_ip = limitFree(Ne[im], Ne[i])
+        Ni_ip = limitFree(Ni[im], Ni[i])
+        Ti_ip = limitFree(Ti[im], Ti[i])
+
+        Te_ip = limitFree(Te[im], Te[i])
+        Pi_ip = limitFree(Pi[im], Pi[i])
+
+        nesheath = 0.5 * (Ne_ip + Ne[i])
+        nisheath = 0.5 * (Ni_ip + Ni[i])
+        tesheath = 0.5 * (Te_ip + Te[i])
+        tisheath = 0.5 * (Ti_ip + Ti[i])
+
+        print(f"Ratio of calculated to model sheath values:")
+        print(f"- Ne: {nesheath/get_boundary(Ne)}")
+        print(f"- Ni: {nisheath/get_boundary(Ni)}")
+        print(f"- Te: {tesheath/get_boundary(Te)}")
+        print(f"- Ti: {tisheath/get_boundary(Ti)}")
+
+        C_i_sq = ()
+
 
     def animate(self, param):
         ds = xbout.open_boutdataset(datapath = self.datapath, inputfilepath = self.inputfilepath,
