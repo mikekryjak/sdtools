@@ -198,6 +198,10 @@ class Case:
         Cs0 : Speed : [ms-1]
         Omega_ci : Time : [s-1]
         rho_s0 : Length : [m]
+
+        CURRENT = Nnorm * Cs0 = [m-3s-1]. Because of Z*Ni*Vi and Z is unitless
+        POTENTIAL = Tnorm = [eV] = [C] remember 1eV = q_e [J] = q_e [C]
+
         """
 
         # Derived normalisation factors
@@ -928,12 +932,33 @@ class Case:
 
     def sheath_boundary_simple(case):
         """
-        Reconstruct Hermes-3 sheath_boundary_simple.cxx.
-        Work in progress
+        Replication of sheath_boundary_simple.cxx
+        Done for the upper_y boundary only for clarity
+        Works only for a single ion and single neutral species atm!
+        WIP
         """
 
         casepath = casepaths["hrac-c5-10-fixbc"]
         d = BoutData(casepath, yguards = True, info = False, strict = True, DataFileCaching=False)["outputs"]
+        o = BoutData(casepath, yguards = True, info = False, strict = True, DataFileCaching=False)["options"]
+
+        # ----- Options functions and constanats
+        gamma_e = float(o["sheath_boundary_simple"]["gamma_e"])
+        gamma_i = float(o["sheath_boundary_simple"]["gamma_i"])
+
+        try:
+            Ge = float(o["sheath_boundary_simple"]["secondary_electron_coef"])
+        except:
+            Ge = 0 # Default
+            pass
+
+        try:
+            sheath_ion_polytropic = float(o["sheath_ion_polytropic"])
+        except:
+            sheath_ion_polytropic = 1 # Default
+            pass
+
+        Zi = 1
 
         def get_boundary(x):
             return (x[-2] + x[-3])/2
@@ -970,10 +995,16 @@ class Case:
         Pnorm = Nnorm * Tnorm * q_e # [Pa]
         Fnorm = mass_i * Nnorm * d["Cs0"] * d["Omega_ci"]
 
-        # ----- Unpack things
+        """
+        Hey @mikekryjak It's the momentum density, rather than the particle flux. Dividing by AA gives the particle flux as it was in SD1D.
+        For example, the NVd+ output if multiplied by m_p * Nnorm * Cs0 is the momentum density, or equivalently mass flux, with units of [kg m^-2 s^-1]. m_p here is the proton mass.
+        Taking out the AA factor gives particle flux, so NVd+ / 2 multiplied by Nnorm * Cs0 is the particle flux with units of [m^-2 s^-1]
+        """
+
+        # ----- Unpack and denormalise things
         Zi = 1
         AA = 2
-        NVi = extract(d["NVd+"]) * Xnorm
+        NVi = extract(d["NVd+"]) * Xnorm * mass_p # Momentum density [kgm-2s-1]
         Ve = extract(d["Ve"]) * Vnorm
         Vi = extract(d["Vd+"]) * Vnorm
         Ti = extract(d["Td+"]) * Tnorm
@@ -982,7 +1013,11 @@ class Case:
         Ne = extract(d["Ne"]) * Nnorm
         Pe = extract(d["Ne"]) * Pnorm
         Pi = extract(d["Pd+"]) * Pnorm
-        NVe = Ne * Ve 
+        i_hflux_add = -1 * d["Ed+_sheath"].squeeze()[-1,:][-3] * dV[-3] * Enorm * 1e-6
+        e_hflux_add = -1 * d["Ee_sheath"].squeeze()[-1,:][-3] * dV[-3] * Enorm * 1e-6
+        case_J = d["J_sheath"].squeeze()[-1,:] * Nnorm * d["Cs0"]
+        case_phi = d["phi_sheath"].squeeze()[-1,:] * Tnorm
+
 
         # ----- Geometry
         J = d["J"].squeeze() * d["rho_s0"] / Bnorm # from hermes-3.cxx
@@ -991,6 +1026,7 @@ class Case:
         dV = J * dy
         A = get_boundary(J) / np.sqrt(get_boundary(g_22)) # sheath area
 
+        # ----- Calculate sheath and guard cell values
         # NOTATION to match upper_y
         # i = last cell index
         # ip = guard cell index
@@ -1012,12 +1048,76 @@ class Case:
         tisheath = 0.5 * (Ti_ip + Ti[i])
 
         print(f"Ratio of calculated to model sheath values:")
-        print(f"- Ne: {nesheath/get_boundary(Ne)}")
-        print(f"- Ni: {nisheath/get_boundary(Ni)}")
-        print(f"- Te: {tesheath/get_boundary(Te)}")
-        print(f"- Ti: {tisheath/get_boundary(Ti)}")
+        print(f"- Ne: x{nesheath/get_boundary(Ne)}")
+        print(f"- Ni: x{nisheath/get_boundary(Ni)}")
+        print(f"- Te: x{tesheath/get_boundary(Te)}")
+        print(f"- Ti: x{tisheath/get_boundary(Ti)}")
 
-        C_i_sq = ()
+        # ----- Ion flux
+
+        C_i_sq = (sheath_ion_polytropic * tisheath*q_e + Zi * tesheath*q_e) / mass_i
+        Cs = np.sqrt(C_i_sq)
+        visheath = Cs
+        nvisheath = mass_i*nisheath*visheath
+
+        #  last | guard
+        #       ^ sheath
+        # sheath = (last + guard) / 2
+        # -> guard = 2 * sheath - last
+        Vi_ip = 2 * visheath - Vi[i]
+        NVi_ip = 2 * nvisheath - NVi[i]
+
+        print(f"- Vi: x{visheath/get_boundary(Vi):.1f} which is {visheath:.2E} [m/s]")
+        print("")
+        print(f"- Ratio of NVi/Ni/Vi/mass_p at guard = {NVi_ip / Vi_ip / Ne_ip / mass_p}")
+        print(f"- Ratio of NVi/Ni/Vi/mass_p at sheath = {nvisheath / visheath / nesheath / mass_p}")
+        print(f"- Note that the ratio is satisfied at the sheath, and the guard cell diverges due to extrapolation.")
+        print("")
+
+        # ----- Heat flux
+        # Stangeby heat flux is 2.5*TH + 1.0*KE = 3.5xTH which is a gamma of 3.5 by definition
+        # Which is calculated by solving pressure and momentum in the main equations
+        # The sheath BC allows you to have a different gamma by adding or taking away heat 
+        # Based on difference from chosen gamma to 3.5. 
+        q_i = (gamma_i-2.5) * tisheath*q_e - 0.5*C_i_sq*mass_i * nisheath*visheath * 1e-6
+
+        print(f"- Additional ion cooling in BC: {q_i:.2f} [MW] Model check: x{q_i / i_hflux_add:.2f}")
+
+        # ----- Electron flux
+
+        ion_sum = np.zeros_like(Ne)
+        phi = np.zeros_like(Ne)
+
+        ion_sum[i] = Zi * nisheath * Cs # Ion current
+        phi[i] = tesheath * np.log(np.sqrt(tesheath*q_e / (mass_e * np.pi*2)) * (1-Ge) * nesheath / ion_sum[i])
+
+        print(f"- Current in last cell: x{ion_sum[i]/case_J[-3]:.1f} which is {ion_sum[i]:.2E} [A]")
+        print(f"- Potential in last cell: x{phi[i]/case_phi[-3]:.1f} which is {phi[i]:.2E} [A]")
+
+        Ne_ip = limitFree(Ne[im], Ne[i])
+        Te_ip = limitFree(Te[im], Te[i])
+        Pe_ip = limitFree(Pe[im], Pe[i])
+
+        # Phi not limited because it naturally increases into sheath!
+        phi_ip = 2 * phi[i] - phi[im]
+
+        nesheath = 0.5 * (Ne_ip + Ne[i])
+        tesheath = 0.5 * (Te_ip + Te[i])
+        phisheath = np.clip(0.5 * (phi_ip + phi[i]), 0, None) # Electron saturation at phi = 0
+
+        vesheath  = np.sqrt((tesheath)*q_e / (2*np.pi*mass_e) ) * (1-Ge) * np.exp(-phisheath / tesheath)
+        # vesheath = np.sqrt(tesheath)*q_e * (np.sqrt(mass_e) / (2 * np.sqrt(np.pi))) * np.exp(-phisheath / tesheath)
+
+        #  sqrt(tesheath) * (sqrt(mi_me) / (2. * sqrt(PI))) * exp(-phi_te);
+        nvesheath = mass_e*nesheath*vesheath
+
+        Ve_ip = 2 * vesheath - Ve[i]
+        NVe_ip = 2 * nvesheath - NVe[i]
+
+        # Ve is supposed to be the same as Vi all the time, apart from when there are currents. It also is this in the code.
+        # It is not so in my reproduction. This must be an error.
+
+        print(f"- Ve: x{vesheath/get_boundary(Ve):.1f} which is {vesheath:.2E} [m/s]")
 
 
     def animate(self, param):
