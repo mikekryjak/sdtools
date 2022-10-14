@@ -42,6 +42,10 @@ class Case:
         self.missing_vars = []
         self.norm_data = dict()
 
+        # NOTE: in Hermes-3, NVi is actually the momentum in [kg m-2 s-1].
+        # That means to get flux you need to do NVi/(mass_p * AA).
+        # Which means you can get flux by normalising NVd+ by 1/AA * Nnorm * Cs0 to get [m-2s-1].
+
         var_collect = ["P", "Ne", "Nn", "NVi", "NVn", "NVd", "NVd+", "kappa_epar", "Pn", "Dn",
                         "S", "Srec", "Siz", 
                         "F", "Frec", "Fiz", "Fcx", "Fel", # Momentum source/sinks to neutrals
@@ -115,6 +119,12 @@ class Case:
         # Hermes-3 deals with it differently and the raw J is equal to Bnorm/Lnorm = 1/rho_s0
         # Only relative changes are important... so let's just normalise it like this so 
         # that it's consistent with SD1D. TODO figure this out properly
+        """
+        Hey @mikekryjak It's the momentum density, rather than the particle flux. Dividing by AA gives the particle flux as it was in SD1D.
+        For example, the NVd+ output if multiplied by m_p * Nnorm * Cs0 is the momentum density, or equivalently mass flux, with units of [kg m^-2 s^-1]. m_p here is the proton mass.
+        Taking out the AA factor gives particle flux, so NVd+ / 2 multiplied by Nnorm * Cs0 is the particle flux with units of [m^-2 s^-1]
+        
+        """
         self.J = self.J / min(self.J)
         self.dV = self.dy * self.J
         
@@ -122,6 +132,7 @@ class Case:
             self.norm_data["Nn"] = self.norm_data["Nd"]
             self.norm_data["Vi"] = self.norm_data["Vd+"]
             # self.norm_data["NVi"] = self.norm_data["Vd+"] * self.norm_data["Nd+"] * 2 # AA update: this is already in file...
+            self.norm_data["NVi"] = self.norm_data["NVd+"] / 2
             self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
             self.norm_data["S"] = self.norm_data["SNd+"]
             self.norm_data["Rex"] = self.norm_data["Rd+_ex"]
@@ -148,8 +159,8 @@ class Case:
 
         if self.evolve_nvn:
             if self.hermes:
-                self.norm_data["NVn"] = self.norm_data["NVd"]
-                self.norm_data["Vd"] = self.norm_data["NVd"] / (2 * self.norm_data["Nd"]) # AA
+                self.norm_data["NVn"] = self.norm_data["NVd"] / 2
+                self.norm_data["Vd"] = self.norm_data["NVd"] / self.norm_data["Nd"] # AA
                 self.norm_data["Vn"] = self.norm_data["Vd"]
 
         if self.evolve_pn:
@@ -267,8 +278,9 @@ class Case:
                 dnorm[var][-1] = np.nan
                 dnorm[var][0] = np.nan
                     
-        # Correct Te to reflect BC condition within code
-        dnorm["Te"][-1] = dnorm["Te"][-2]
+        # Correct Te to reflect BC condition within code which is zero gradient
+        if self.hermes:
+            dnorm["Te"][-1] = dnorm["Te"][-2]
 
         #------------Derived variables
         dnorm["Ntot"] = dnorm["Ne"] + dnorm["Nn"]
