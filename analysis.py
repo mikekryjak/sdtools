@@ -131,8 +131,7 @@ class Case:
         if self.hermes:
             self.norm_data["Nn"] = self.norm_data["Nd"]
             self.norm_data["Vi"] = self.norm_data["Vd+"]
-            # self.norm_data["NVi"] = self.norm_data["Vd+"] * self.norm_data["Nd+"] * 2 # AA update: this is already in file...
-            self.norm_data["NVi"] = self.norm_data["NVd+"] / 2
+            self.norm_data["NVi"] = self.norm_data["NVd+"] * constants("mass_p") / (constants("mass_p")*2) # Originally [kgm2s-1], then divide by mass_i to get flux.
             self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
             self.norm_data["S"] = self.norm_data["SNd+"]
             self.norm_data["Rex"] = self.norm_data["Rd+_ex"]
@@ -159,7 +158,7 @@ class Case:
 
         if self.evolve_nvn:
             if self.hermes:
-                self.norm_data["NVn"] = self.norm_data["NVd"] / 2
+                self.norm_data["NVn"] = self.norm_data["NVd"] * constants("mass_p") / (constants("mass_p")*2) # Originally [kgm2s-1], then divide by mass_i to get flux.
                 self.norm_data["Vd"] = self.norm_data["NVd"] / self.norm_data["Nd"] # AA
                 self.norm_data["Vn"] = self.norm_data["Vd"]
 
