@@ -479,6 +479,163 @@ class Case:
                 print(f"- Difference:--------- {self.hflux_imbalance:.3f}[MW]")
                 print(f"- Imbalance:---------- {self.hflux_imbalance_ratio:.1%}")
 
+    def heat_balance_hermes(self):
+        """
+        This works only for a single ion species plasma
+        """
+
+        d = BoutData(self.casepath, yguards = True, info = False, strict = True, DataFileCaching=False)["outputs"]
+        o = BoutData(self.casepath, yguards = True, info = False, strict = True, DataFileCaching=False)["options"]
+
+
+        def get_boundary(x):
+            return (x[-2] + x[-3])/2
+
+        def extract(x):
+            return x.squeeze()[tind,:]
+
+        def volume_integral(x):
+            return np.trapz(x = pos[2:-2], y = x[2:-2] * J[2:-2])
+
+        tind = -1
+
+        gamma_e = float(o["sheath_boundary_simple"]["gamma_e"])
+        gamma_i = float(o["sheath_boundary_simple"]["gamma_i"])
+
+        try:
+            Ge = float(o["sheath_boundary_simple"]["secondary_electron_coef"])
+        except:
+            Ge = 0 # Default
+            pass
+
+        try:
+            polytropic = float(o["sheath_ion_polytropic"])
+        except:
+            polytropic = 1 # Default
+            pass
+
+        mass_p = constants("mass_p")
+        mass_i = constants("mass_p") * 2 # [kg]
+        mass_e = constants("mass_e") # [kg]
+        q_e = constants("q_e") # [J/eV]
+        k_b = constants("k_b") # [J/K]
+
+        Vnorm = d["Cs0"]
+        Enorm = q_e * d["Nnorm"] * d["Tnorm"] * d["Omega_ci"] # [Wm-3]
+        Xnorm = d["Cs0"] * d["Nnorm"] # [m-2s-1]
+        Nnorm = d["Nnorm"] # [m-3]
+        Tnorm = d["Tnorm"] # [eV]
+        Bnorm = d["Bnorm"] # [T]
+        Pnorm = Nnorm * Tnorm * q_e # [Pa]
+        Fnorm = mass_i * Nnorm * d["Cs0"] * d["Omega_ci"]
+
+
+        # TODO include gamma_n (which is not implemented yet)
+
+        # ----- Unpack things
+        # NOTE here NVi is just flux in [m2s-1] while in hermes it's technically kgm2s-1
+        Zi = 1
+        AA = 2
+        NVi = extract(d["NVd+"]) * Xnorm * mass_p / mass_i # Originally [kgm2s-1], then divide by mass_i to get flux.
+        Ve = extract(d["Ve"]) * Vnorm
+        Vi = extract(d["Vd+"]) * Vnorm
+        Ti = extract(d["Td+"]) * Tnorm
+        Te = extract(d["Te"]) * Tnorm
+        Ni = extract(d["Nd+"]) * Nnorm
+        Ne = extract(d["Ne"]) * Nnorm
+        Pe = extract(d["Pe"]) * Pnorm
+        Pi = extract(d["Pd+"]) * Pnorm
+        Fcx = extract(d["Fdd+_cx"]) * Fnorm
+        Rrec = extract(d["Rd+_rec"]) * Enorm
+        Rex = extract(d["Rd+_ex"]) * Enorm
+        Ee_src = extract(d["Pe_src"]) * Enorm * 3/2
+        Ei_src = extract(d["Pd+_src"]) * Enorm * 3/2
+        R = Rrec + Rex
+
+        # ----- Geometry
+        J = d["J"].squeeze() * d["rho_s0"] / Bnorm # from hermes-3.cxx
+        g_22 = d["g_22"].squeeze() * d["rho_s0"]**2 # from hermes-3.cxx
+        dy = d["dy"].squeeze()
+        dV = J * dy
+        A = get_boundary(J) / np.sqrt(get_boundary(g_22)) # sheath area
+
+        # ------ Reconstruct grid position from dy
+        n = len(dy)
+        pos = np.zeros(n)
+        pos[0] = -0.5*dy[1]
+        pos[1] = 0.5*dy[1]
+
+        for i in range(2,n):
+            pos[i] = pos[i-1] + 0.5*dy[i-1] + 0.5*dy[i]
+
+
+        Ti_t = get_boundary(Ti)
+        Te_t = get_boundary(Te)
+
+        # From saved output:
+        case_i_hflux_add = -1 * d["Ed+_sheath"].squeeze()[-1,:][-3] * dV[-3] * Enorm * 1e-6
+        case_e_hflux_add = -1 * d["Ee_sheath"].squeeze()[-1,:][-3] * dV[-3] * Enorm * 1e-6
+
+        Cs = np.sqrt(q_e * (polytropic*Ti_t + Zi*Te_t)/mass_i)
+
+        # ----- Boundary particle flux
+
+        sheath_i_flux = -get_boundary(Ni) * get_boundary(Vi) * A # [s-1]
+        sheath_e_flux = -get_boundary(Ne) * get_boundary(Ve) * A # [s-1]
+
+        # ----- Boundary heat flux for ions
+
+        sheath_i_hflux_th = 2.5 * Ti_t*q_e * sheath_i_flux * 1e-6 # Stangeby
+        sheath_i_hflux_ke = 0.5 * mass_i * Cs**2 * sheath_i_flux * 1e-6 # Stangeby
+        sheath_i_hflux_total = sheath_i_hflux_th + sheath_i_hflux_ke
+
+        sheath_i_hflux_desired = gamma_i * Ti_t * q_e * sheath_i_flux * 1e-6
+        sheath_i_hflux_additional = sheath_i_hflux_desired - sheath_i_hflux_total
+
+        # ----- Boundary heat flux for electrons
+
+        sheath_e_hflux_th = 2.5 * Te_t*q_e * sheath_e_flux * 1e-6 # Stangeby
+        sheath_e_hflux_ke = 0.5 * mass_e * Cs**2 * sheath_e_flux * 1e-6 # Stangeby
+        sheath_e_hflux_total = sheath_e_hflux_th + sheath_e_hflux_ke
+
+        sheath_e_hflux_desired = gamma_e * Te_t * q_e * sheath_e_flux * 1e-6
+        sheath_e_hflux_additional = sheath_e_hflux_desired - sheath_e_hflux_total
+
+        # ----- Total
+        sheath_total_hflux = sheath_i_hflux_total + sheath_e_hflux_total
+
+        # ----- Radiation
+        Rex_hflux = volume_integral(Rex) * 1e-6
+        Rrec_hflux = volume_integral(Rrec) * 1e-6
+
+        # ----- Source
+        src_e_hflux = volume_integral(Ee_src) * 1e-6
+        src_i_hflux = volume_integral(Ei_src) * 1e-6
+
+        total_in = src_e_hflux + src_i_hflux
+        total_out = Rex_hflux + Rrec_hflux + sheath_total_hflux
+
+        print("\n- Ions ---------------")
+        print(f"- Required additional power for chosen gamma = {sheath_i_hflux_additional:.2f} [MW]")
+        print(f"- Additional cooling power in code = {case_i_hflux_add:.2f} [MW]")
+        print("\n- Electrons ---------------")
+        print(f"- Required additional power for chosen gamma = {sheath_e_hflux_additional:.2f} [MW]")
+        print(f"- Additional cooling power in code = {case_e_hflux_add:.2f} [MW]")
+
+        print("\n- All source summary ---------------")
+        print(f"- Electron energy source = {src_e_hflux:.2f} [MW]")
+        print(f"- Ion energy source = {src_i_hflux:.2f} [MW]")
+
+        print(f"- Sheath ion heat flux = {sheath_i_hflux_desired:.2f} [MW]")
+        print(f"- Sheath electron flux = {sheath_e_hflux_desired:.2f} [MW]")
+        print(f"- Excitation = {Rex_hflux:.2f} [MW]")
+        print(f"- Recombination = {Rrec_hflux:.2f} [MW]")
+
+        print("\n- Totals ---------------")
+        print(f"- Total in = {total_in:.2f} [MW]")
+        print(f"- Total out = {total_out:.2f} [MW]")
+        print(f"- Difference = {total_in + total_out:.2f} [MW] or {(total_in+total_out)/total_in:.1%}")
+
     def mass_balance_hermes(self):
         """
         Perform a total (system, so ions and neutrals) mass balance 
@@ -928,6 +1085,7 @@ class Case:
                     "imbalance" : flux_imbalance[-1], "mass_rate_frac" : d["mass_rate_frac"]
                     }
 
+    
 
     def sheath_boundary_simple(case):
         """
