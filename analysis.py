@@ -317,7 +317,7 @@ class Case:
                         )
         
         
-        BoutData(self.casepath)["options"]["NOUT"]
+        self.options["NOUT"]
         resolution = int(num_timesteps/skip) #skip of 2 means half the points
 
         # Calculate steps. Sequence starts after first timestep
@@ -472,7 +472,7 @@ class Case:
         # Final domain grid centre is therefore index [-3].
         # J/sqrt(g_22) = cross-sectional area of cell
 
-        d = BoutData(self.casepath, yguards = True, info = False, strict = True)["outputs"]
+        d = BoutData(self.casepath, yguards = True, info = False, strict = True, DataFileCaching=False)["outputs"]
         tind = -1
         J = d["J"].squeeze()
         dy = d["dy"].squeeze()
@@ -591,7 +591,7 @@ class Case:
             Nu_target = self.options["sd1d"]["density_upstream"]
 
         if flux_input == True:
-            flux_intended = BoutData(path_case)["options"]["Ne"]["flux"]
+            flux_intended = self.options["Ne"]["flux"]
         else:
             flux_intended = 0
 
