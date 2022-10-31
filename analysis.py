@@ -42,12 +42,16 @@ class Case:
         self.missing_vars = []
         self.norm_data = dict()
 
+        # NOTE: in Hermes-3, NVi is actually the momentum in [kg m-2 s-1].
+        # That means to get flux you need to do NVi/(mass_p * AA).
+        # Which means you can get flux by normalising NVd+ by 1/AA * Nnorm * Cs0 to get [m-2s-1].
+
         var_collect = ["P", "Ne", "Nn", "NVi", "NVn", "NVd", "NVd+", "kappa_epar", "Pn", "Dn",
                         "S", "Srec", "Siz", 
                         "F", "Frec", "Fiz", "Fcx", "Fel", # Momentum source/sinks to neutrals
                         "R", "Rrec", "Riz", "Rzrad", "Rex", # Radiation, energy loss from system
                         "E", "Erec", "Eiz", "Ecx", "Eel", # Energy transfer between neutrals and plasma
-                        "Pe", "Pd", "Pd+", "Ve", "Vd+", "Nd", "Nd+", "Td+", "SPd+", "SNd+", "Ert",
+                        "Pe", "Pd", "Pd+", "Ve", "Vd+", "Vi", "Nd", "Nd+", "Td+", "SPd+", "SNd+", "Ert", "Te",
                         "PeSource", "NeSource",
                         "Div_Q_SH", "Div_Q_SNB",
                         # Hermes only variables
@@ -115,17 +119,24 @@ class Case:
         # Hermes-3 deals with it differently and the raw J is equal to Bnorm/Lnorm = 1/rho_s0
         # Only relative changes are important... so let's just normalise it like this so 
         # that it's consistent with SD1D. TODO figure this out properly
+        """
+        Hey @mikekryjak It's the momentum density, rather than the particle flux. Dividing by AA gives the particle flux as it was in SD1D.
+        For example, the NVd+ output if multiplied by m_p * Nnorm * Cs0 is the momentum density, or equivalently mass flux, with units of [kg m^-2 s^-1]. m_p here is the proton mass.
+        Taking out the AA factor gives particle flux, so NVd+ / 2 multiplied by Nnorm * Cs0 is the particle flux with units of [m^-2 s^-1]
+        
+        """
         self.J = self.J / min(self.J)
         self.dV = self.dy * self.J
         
         if self.hermes:
             self.norm_data["Nn"] = self.norm_data["Nd"]
             self.norm_data["Vi"] = self.norm_data["Vd+"]
-            self.norm_data["NVi"] = self.norm_data["Vd+"] * self.norm_data["Nd+"] * 2 # AA
+            self.norm_data["NVi"] = self.norm_data["NVd+"] * constants("mass_p") / (constants("mass_p")*2) # Originally [kgm2s-1], then divide by mass_i to get flux.
             self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
             self.norm_data["S"] = self.norm_data["SNd+"]
             self.norm_data["Rex"] = self.norm_data["Rd+_ex"]
             self.norm_data["Rrec"] = self.norm_data["Rd+_rec"]
+            self.norm_data["R"] = self.norm_data["Rex"] + self.norm_data["Rrec"]
             self.norm_data["Srec"] = self.norm_data["Sd+_rec"]
             self.norm_data["Siz"] = self.norm_data["Sd+_iz"]
             self.norm_data["Fiz"] = self.norm_data["Fd+_iz"]
@@ -133,6 +144,7 @@ class Case:
             self.norm_data["Eiz"] = self.norm_data["Ed+_iz"]
             self.norm_data["Erec"] = self.norm_data["Ed+_rec"]
             self.norm_data["Ti"] = self.norm_data["Td+"]
+            
             if "Dd_Dpar" in self.norm_data.keys():
                 self.norm_data["Dn"] = self.norm_data["Dd_Dpar"]
             if "Fdd+_cx" in self.norm_data.keys():
@@ -140,14 +152,14 @@ class Case:
                 self.norm_data["Ecx"] = self.norm_data["Edd+_cx"]
             self.dneut = self.options["neutral_parallel_diffusion"]["dneut"]
         else:
-            self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"] # in SD1D AA is in normalisation
+            # self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"] # in SD1D AA is in normalisation update: this is already in file...
             self.dneut = self.options["sd1d"]["dneut"]
             
 
         if self.evolve_nvn:
             if self.hermes:
-                self.norm_data["NVn"] = self.norm_data["NVd"]
-                self.norm_data["Vd"] = self.norm_data["NVd"] / (2 * self.norm_data["Nd"]) # AA
+                self.norm_data["NVn"] = self.norm_data["NVd"] * constants("mass_p") / (constants("mass_p")*2) # Originally [kgm2s-1], then divide by mass_i to get flux.
+                self.norm_data["Vd"] = self.norm_data["NVd"] / self.norm_data["Nd"] # AA
                 self.norm_data["Vn"] = self.norm_data["Vd"]
 
         if self.evolve_pn:
@@ -185,6 +197,10 @@ class Case:
         Cs0 : Speed : [ms-1]
         Omega_ci : Time : [s-1]
         rho_s0 : Length : [m]
+
+        CURRENT = Nnorm * Cs0 = [m-3s-1]. Because of Z*Ni*Vi and Z is unitless
+        POTENTIAL = Tnorm = [eV] = [C] remember 1eV = q_e [J] = q_e [C]
+
         """
 
         # Derived normalisation factors
@@ -265,12 +281,14 @@ class Case:
                 dnorm[var][-1] = np.nan
                 dnorm[var][0] = np.nan
                     
-        # Correct Te to reflect BC condition within code
-        dnorm["Te"][-1] = dnorm["Te"][-2]
+        # Correct Te to reflect BC condition within code which is zero gradient
+        if self.hermes:
+            dnorm["Te"][-1] = dnorm["Te"][-2]
 
         #------------Derived variables
         dnorm["Ntot"] = dnorm["Ne"] + dnorm["Nn"]
-        dnorm["Cs"] = self.Cs0 * np.sqrt(2 * dnorm["Te"]/self.Tnorm) # Sound speed
+        # dnorm["Cs"] = self.Cs0 * np.sqrt(2 * dnorm["Te"]/self.Tnorm) # Sound speed
+        dnorm["Cs"] = np.sqrt(constants("q_e") * (dnorm["Te"]*2)/(constants("mass_p")*2))
         dnorm["M"] = dnorm["Vi"] / dnorm["Cs"]
         dnorm["dynamic_p"] = norm["NVi"]**2 / norm["Ne"] * self.Pnorm
         dnorm["Ne_avg"] = sum(dnorm["Ne"] * self.dV)/sum(self.dy)
@@ -461,6 +479,163 @@ class Case:
                 print(f"- Difference:--------- {self.hflux_imbalance:.3f}[MW]")
                 print(f"- Imbalance:---------- {self.hflux_imbalance_ratio:.1%}")
 
+    def heat_balance_hermes(self):
+        """
+        This works only for a single ion species plasma
+        """
+
+        d = BoutData(self.casepath, yguards = True, info = False, strict = True, DataFileCaching=False)["outputs"]
+        o = BoutData(self.casepath, yguards = True, info = False, strict = True, DataFileCaching=False)["options"]
+
+
+        def get_boundary(x):
+            return (x[-2] + x[-3])/2
+
+        def extract(x):
+            return x.squeeze()[tind,:]
+
+        def volume_integral(x):
+            return np.trapz(x = pos[2:-2], y = x[2:-2] * J[2:-2])
+
+        tind = -1
+
+        gamma_e = float(o["sheath_boundary_simple"]["gamma_e"])
+        gamma_i = float(o["sheath_boundary_simple"]["gamma_i"])
+
+        try:
+            Ge = float(o["sheath_boundary_simple"]["secondary_electron_coef"])
+        except:
+            Ge = 0 # Default
+            pass
+
+        try:
+            polytropic = float(o["sheath_ion_polytropic"])
+        except:
+            polytropic = 1 # Default
+            pass
+
+        mass_p = constants("mass_p")
+        mass_i = constants("mass_p") * 2 # [kg]
+        mass_e = constants("mass_e") # [kg]
+        q_e = constants("q_e") # [J/eV]
+        k_b = constants("k_b") # [J/K]
+
+        Vnorm = d["Cs0"]
+        Enorm = q_e * d["Nnorm"] * d["Tnorm"] * d["Omega_ci"] # [Wm-3]
+        Xnorm = d["Cs0"] * d["Nnorm"] # [m-2s-1]
+        Nnorm = d["Nnorm"] # [m-3]
+        Tnorm = d["Tnorm"] # [eV]
+        Bnorm = d["Bnorm"] # [T]
+        Pnorm = Nnorm * Tnorm * q_e # [Pa]
+        Fnorm = mass_i * Nnorm * d["Cs0"] * d["Omega_ci"]
+
+
+        # TODO include gamma_n (which is not implemented yet)
+
+        # ----- Unpack things
+        # NOTE here NVi is just flux in [m2s-1] while in hermes it's technically kgm2s-1
+        Zi = 1
+        AA = 2
+        NVi = extract(d["NVd+"]) * Xnorm * mass_p / mass_i # Originally [kgm2s-1], then divide by mass_i to get flux.
+        Ve = extract(d["Ve"]) * Vnorm
+        Vi = extract(d["Vd+"]) * Vnorm
+        Ti = extract(d["Td+"]) * Tnorm
+        Te = extract(d["Te"]) * Tnorm
+        Ni = extract(d["Nd+"]) * Nnorm
+        Ne = extract(d["Ne"]) * Nnorm
+        Pe = extract(d["Pe"]) * Pnorm
+        Pi = extract(d["Pd+"]) * Pnorm
+        Fcx = extract(d["Fdd+_cx"]) * Fnorm
+        Rrec = extract(d["Rd+_rec"]) * Enorm
+        Rex = extract(d["Rd+_ex"]) * Enorm
+        Ee_src = extract(d["Pe_src"]) * Enorm * 3/2
+        Ei_src = extract(d["Pd+_src"]) * Enorm * 3/2
+        R = Rrec + Rex
+
+        # ----- Geometry
+        J = d["J"].squeeze() * d["rho_s0"] / Bnorm # from hermes-3.cxx
+        g_22 = d["g_22"].squeeze() * d["rho_s0"]**2 # from hermes-3.cxx
+        dy = d["dy"].squeeze()
+        dV = J * dy
+        A = get_boundary(J) / np.sqrt(get_boundary(g_22)) # sheath area
+
+        # ------ Reconstruct grid position from dy
+        n = len(dy)
+        pos = np.zeros(n)
+        pos[0] = -0.5*dy[1]
+        pos[1] = 0.5*dy[1]
+
+        for i in range(2,n):
+            pos[i] = pos[i-1] + 0.5*dy[i-1] + 0.5*dy[i]
+
+
+        Ti_t = get_boundary(Ti)
+        Te_t = get_boundary(Te)
+
+        # From saved output:
+        case_i_hflux_add = -1 * d["Ed+_sheath"].squeeze()[-1,:][-3] * dV[-3] * Enorm * 1e-6
+        case_e_hflux_add = -1 * d["Ee_sheath"].squeeze()[-1,:][-3] * dV[-3] * Enorm * 1e-6
+
+        Cs = np.sqrt(q_e * (polytropic*Ti_t + Zi*Te_t)/mass_i)
+
+        # ----- Boundary particle flux
+
+        sheath_i_flux = -get_boundary(Ni) * get_boundary(Vi) * A # [s-1]
+        sheath_e_flux = -get_boundary(Ne) * get_boundary(Ve) * A # [s-1]
+
+        # ----- Boundary heat flux for ions
+
+        sheath_i_hflux_th = 2.5 * Ti_t*q_e * sheath_i_flux * 1e-6 # Stangeby
+        sheath_i_hflux_ke = 0.5 * mass_i * Cs**2 * sheath_i_flux * 1e-6 # Stangeby
+        sheath_i_hflux_total = sheath_i_hflux_th + sheath_i_hflux_ke
+
+        sheath_i_hflux_desired = gamma_i * Ti_t * q_e * sheath_i_flux * 1e-6
+        sheath_i_hflux_additional = sheath_i_hflux_desired - sheath_i_hflux_total
+
+        # ----- Boundary heat flux for electrons
+
+        sheath_e_hflux_th = 2.5 * Te_t*q_e * sheath_e_flux * 1e-6 # Stangeby
+        sheath_e_hflux_ke = 0.5 * mass_e * Cs**2 * sheath_e_flux * 1e-6 # Stangeby
+        sheath_e_hflux_total = sheath_e_hflux_th + sheath_e_hflux_ke
+
+        sheath_e_hflux_desired = gamma_e * Te_t * q_e * sheath_e_flux * 1e-6
+        sheath_e_hflux_additional = sheath_e_hflux_desired - sheath_e_hflux_total
+
+        # ----- Total
+        sheath_total_hflux = sheath_i_hflux_total + sheath_e_hflux_total
+
+        # ----- Radiation
+        Rex_hflux = volume_integral(Rex) * 1e-6
+        Rrec_hflux = volume_integral(Rrec) * 1e-6
+
+        # ----- Source
+        src_e_hflux = volume_integral(Ee_src) * 1e-6
+        src_i_hflux = volume_integral(Ei_src) * 1e-6
+
+        total_in = src_e_hflux + src_i_hflux
+        total_out = Rex_hflux + Rrec_hflux + sheath_total_hflux
+
+        print("\n- Ions ---------------")
+        print(f"- Required additional power for chosen gamma = {sheath_i_hflux_additional:.2f} [MW]")
+        print(f"- Additional cooling power in code = {case_i_hflux_add:.2f} [MW]")
+        print("\n- Electrons ---------------")
+        print(f"- Required additional power for chosen gamma = {sheath_e_hflux_additional:.2f} [MW]")
+        print(f"- Additional cooling power in code = {case_e_hflux_add:.2f} [MW]")
+
+        print("\n- All source summary ---------------")
+        print(f"- Electron energy source = {src_e_hflux:.2f} [MW]")
+        print(f"- Ion energy source = {src_i_hflux:.2f} [MW]")
+
+        print(f"- Sheath ion heat flux = {sheath_i_hflux_desired:.2f} [MW]")
+        print(f"- Sheath electron flux = {sheath_e_hflux_desired:.2f} [MW]")
+        print(f"- Excitation = {Rex_hflux:.2f} [MW]")
+        print(f"- Recombination = {Rrec_hflux:.2f} [MW]")
+
+        print("\n- Totals ---------------")
+        print(f"- Total in = {total_in:.2f} [MW]")
+        print(f"- Total out = {total_out:.2f} [MW]")
+        print(f"- Difference = {total_in + total_out:.2f} [MW] or {(total_in+total_out)/total_in:.1%}")
+
     def mass_balance_hermes(self):
         """
         Perform a total (system, so ions and neutrals) mass balance 
@@ -494,24 +669,24 @@ class Case:
         # ----- Boundary flux
         sheath_area = get_boundary(J) / np.sqrt(get_boundary(g_22))
         sheath_ion_flux = get_boundary(d["NVd+"].squeeze()[tind, :])
-        sheath_ion_flux *= sheath_area * d["Omega_ci"] * d["Nnorm"]
+        sheath_ion_flux *= sheath_area * d["Cs0"] * d["Nnorm"]
 
         sheath_neutral_flux = get_boundary(d["NVd"].squeeze()[tind, :])
-        sheath_neutral_flux *= sheath_area * d["Omega_ci"] * d["Nnorm"]
+        sheath_neutral_flux *= sheath_area * d["Cs0"] * d["Nnorm"]
 
         # Still not quite sure why doing a sum instead of an integral is the correct way to go, but it is.
 
         # ----- Density input source
         input_source = d["Sd+_src"].squeeze()[tind, :][2:-2]
-        input_source = np.trapz(x = pos[2:-2], y = input_source * J[2:-2] * d["Omega_ci"] * d["Nnorm"])
+        input_source = np.trapz(x = pos[2:-2], y = input_source * J[2:-2] * d["Cs0"] * d["Nnorm"])
 
         # ----- Ionisation source
         iz_source = d["Sd+_iz"].squeeze()[tind, :][2:-2]
-        iz_source = np.trapz(x = pos[2:-2], y = iz_source * J[2:-2] * d["Omega_ci"] * d["Nnorm"])
+        iz_source = np.trapz(x = pos[2:-2], y = iz_source * J[2:-2] * d["Cs0"] * d["Nnorm"])
 
         # ----- Recombination source
         rec_source = d["Sd+_rec"].squeeze()[tind, :][2:-2]
-        rec_source = np.trapz(x = pos[2:-2], y = rec_source * J[2:-2] * d["Omega_ci"] * d["Nnorm"])
+        rec_source = np.trapz(x = pos[2:-2], y = rec_source * J[2:-2] * d["Cs0"] * d["Nnorm"])
         # ----- Totals
         total_in = input_source + iz_source
         total_out = sheath_ion_flux + abs(rec_source)
@@ -542,7 +717,7 @@ class Case:
         NVi_is_NeVi = False,
         additional_plots = False,
         error_only = True):
-        
+        # TODO Potentially wrong as momentum should be Nnorm * Cs0
         """ 
         >>> WARNING this code needs to be redone. Need to do trapz(x=pos, y=source * J) to do volume integral!!
         path_case, << Case path          
@@ -909,6 +1084,198 @@ class Case:
                     "actual_frecycle" : frecycle[-1], "recycle_error" : frecycle_error[-1],
                     "imbalance" : flux_imbalance[-1], "mass_rate_frac" : d["mass_rate_frac"]
                     }
+
+    
+
+    def sheath_boundary_simple(case):
+        """
+        Replication of sheath_boundary_simple.cxx
+        Done for the upper_y boundary only for clarity
+        Works only for a single ion and single neutral species atm!
+        WIP
+        """
+
+        casepath = casepaths["hrac-c5-10-fixbc"]
+        d = BoutData(casepath, yguards = True, info = False, strict = True, DataFileCaching=False)["outputs"]
+        o = BoutData(casepath, yguards = True, info = False, strict = True, DataFileCaching=False)["options"]
+
+        # ----- Options functions and constanats
+        gamma_e = float(o["sheath_boundary_simple"]["gamma_e"])
+        gamma_i = float(o["sheath_boundary_simple"]["gamma_i"])
+
+        try:
+            Ge = float(o["sheath_boundary_simple"]["secondary_electron_coef"])
+        except:
+            Ge = 0 # Default
+            pass
+
+        try:
+            sheath_ion_polytropic = float(o["sheath_ion_polytropic"])
+        except:
+            sheath_ion_polytropic = 1 # Default
+            pass
+
+        Zi = 1
+
+        def get_boundary(x):
+            return (x[-2] + x[-3])/2
+
+        def extract(x):
+            return x.squeeze()[tind,:]
+
+        def limitFree(fm, fc):
+            #  fm  fc | fp
+            #         ^ boundary
+            # Linear extrapolation & limit
+            # To force to 0 gradient if var increasing into sheath
+            if fm < fc:
+                return fc
+            if fm < 1e-10:
+                return fc
+            
+            fp = fc**2 / fm
+            return fp
+
+        tind = -1
+
+        mass_i = constants("mass_p") * 2 # [kg]
+        mass_e = constants("mass_e") # [kg]
+        q_e = constants("q_e") # [J/eV]
+        k_b = constants("k_b") # [J/K]
+
+        Vnorm = d["Cs0"]
+        Enorm = q_e * d["Nnorm"] * d["Tnorm"] * d["Omega_ci"] # [Wm-3]
+        Xnorm = d["Cs0"] * d["Nnorm"] # [m-2s-1]
+        Nnorm = d["Nnorm"] # [m-3]
+        Tnorm = d["Tnorm"] # [eV]
+        Bnorm = d["Bnorm"] # [T]
+        Pnorm = Nnorm * Tnorm * q_e # [Pa]
+        Fnorm = mass_i * Nnorm * d["Cs0"] * d["Omega_ci"]
+
+        """
+        Hey @mikekryjak It's the momentum density, rather than the particle flux. Dividing by AA gives the particle flux as it was in SD1D.
+        For example, the NVd+ output if multiplied by m_p * Nnorm * Cs0 is the momentum density, or equivalently mass flux, with units of [kg m^-2 s^-1]. m_p here is the proton mass.
+        Taking out the AA factor gives particle flux, so NVd+ / 2 multiplied by Nnorm * Cs0 is the particle flux with units of [m^-2 s^-1]
+        """
+
+        # ----- Unpack and denormalise things
+        Zi = 1
+        AA = 2
+        NVi = extract(d["NVd+"]) * Xnorm * mass_p # Momentum density [kgm-2s-1]
+        Ve = extract(d["Ve"]) * Vnorm
+        Vi = extract(d["Vd+"]) * Vnorm
+        Ti = extract(d["Td+"]) * Tnorm
+        Te = extract(d["Te"]) * Tnorm
+        Ni = extract(d["Nd+"]) * Nnorm
+        Ne = extract(d["Ne"]) * Nnorm
+        Pe = extract(d["Ne"]) * Pnorm
+        Pi = extract(d["Pd+"]) * Pnorm
+        i_hflux_add = -1 * d["Ed+_sheath"].squeeze()[-1,:][-3] * dV[-3] * Enorm * 1e-6
+        e_hflux_add = -1 * d["Ee_sheath"].squeeze()[-1,:][-3] * dV[-3] * Enorm * 1e-6
+        case_J = d["J_sheath"].squeeze()[-1,:] * Nnorm * d["Cs0"]
+        case_phi = d["phi_sheath"].squeeze()[-1,:] * Tnorm
+
+
+        # ----- Geometry
+        J = d["J"].squeeze() * d["rho_s0"] / Bnorm # from hermes-3.cxx
+        g_22 = d["g_22"].squeeze() * d["rho_s0"]**2 # from hermes-3.cxx
+        dy = d["dy"].squeeze()
+        dV = J * dy
+        A = get_boundary(J) / np.sqrt(get_boundary(g_22)) # sheath area
+
+        # ----- Calculate sheath and guard cell values
+        # NOTATION to match upper_y
+        # i = last cell index
+        # ip = guard cell index
+        # im = second to last cell index
+        # Note we include all guard cells here (two on each end)
+        im = -4
+        i = -3
+
+        Ne_ip = limitFree(Ne[im], Ne[i])
+        Ni_ip = limitFree(Ni[im], Ni[i])
+        Ti_ip = limitFree(Ti[im], Ti[i])
+
+        Te_ip = limitFree(Te[im], Te[i])
+        Pi_ip = limitFree(Pi[im], Pi[i])
+
+        nesheath = 0.5 * (Ne_ip + Ne[i])
+        nisheath = 0.5 * (Ni_ip + Ni[i])
+        tesheath = 0.5 * (Te_ip + Te[i])
+        tisheath = 0.5 * (Ti_ip + Ti[i])
+
+        print(f"Ratio of calculated to model sheath values:")
+        print(f"- Ne: x{nesheath/get_boundary(Ne)}")
+        print(f"- Ni: x{nisheath/get_boundary(Ni)}")
+        print(f"- Te: x{tesheath/get_boundary(Te)}")
+        print(f"- Ti: x{tisheath/get_boundary(Ti)}")
+
+        # ----- Ion flux
+
+        C_i_sq = (sheath_ion_polytropic * tisheath*q_e + Zi * tesheath*q_e) / mass_i
+        Cs = np.sqrt(C_i_sq)
+        visheath = Cs
+        nvisheath = mass_i*nisheath*visheath
+
+        #  last | guard
+        #       ^ sheath
+        # sheath = (last + guard) / 2
+        # -> guard = 2 * sheath - last
+        Vi_ip = 2 * visheath - Vi[i]
+        NVi_ip = 2 * nvisheath - NVi[i]
+
+        print(f"- Vi: x{visheath/get_boundary(Vi):.1f} which is {visheath:.2E} [m/s]")
+        print("")
+        print(f"- Ratio of NVi/Ni/Vi/mass_p at guard = {NVi_ip / Vi_ip / Ne_ip / mass_p}")
+        print(f"- Ratio of NVi/Ni/Vi/mass_p at sheath = {nvisheath / visheath / nesheath / mass_p}")
+        print(f"- Note that the ratio is satisfied at the sheath, and the guard cell diverges due to extrapolation.")
+        print("")
+
+        # ----- Heat flux
+        # Stangeby heat flux is 2.5*TH + 1.0*KE = 3.5xTH which is a gamma of 3.5 by definition
+        # Which is calculated by solving pressure and momentum in the main equations
+        # The sheath BC allows you to have a different gamma by adding or taking away heat 
+        # Based on difference from chosen gamma to 3.5. 
+        q_i = (gamma_i-2.5) * tisheath*q_e - 0.5*C_i_sq*mass_i * nisheath*visheath * 1e-6
+
+        print(f"- Additional ion cooling in BC: {q_i:.2f} [MW] Model check: x{q_i / i_hflux_add:.2f}")
+
+        # ----- Electron flux
+
+        ion_sum = np.zeros_like(Ne)
+        phi = np.zeros_like(Ne)
+
+        ion_sum[i] = Zi * nisheath * Cs # Ion current
+        phi[i] = tesheath * np.log(np.sqrt(tesheath*q_e / (mass_e * np.pi*2)) * (1-Ge) * nesheath / ion_sum[i])
+
+        print(f"- Current in last cell: x{ion_sum[i]/case_J[-3]:.1f} which is {ion_sum[i]:.2E} [A]")
+        print(f"- Potential in last cell: x{phi[i]/case_phi[-3]:.1f} which is {phi[i]:.2E} [A]")
+
+        Ne_ip = limitFree(Ne[im], Ne[i])
+        Te_ip = limitFree(Te[im], Te[i])
+        Pe_ip = limitFree(Pe[im], Pe[i])
+
+        # Phi not limited because it naturally increases into sheath!
+        phi_ip = 2 * phi[i] - phi[im]
+
+        nesheath = 0.5 * (Ne_ip + Ne[i])
+        tesheath = 0.5 * (Te_ip + Te[i])
+        phisheath = np.clip(0.5 * (phi_ip + phi[i]), 0, None) # Electron saturation at phi = 0
+
+        vesheath  = np.sqrt((tesheath)*q_e / (2*np.pi*mass_e) ) * (1-Ge) * np.exp(-phisheath / tesheath)
+        # vesheath = np.sqrt(tesheath)*q_e * (np.sqrt(mass_e) / (2 * np.sqrt(np.pi))) * np.exp(-phisheath / tesheath)
+
+        #  sqrt(tesheath) * (sqrt(mi_me) / (2. * sqrt(PI))) * exp(-phi_te);
+        nvesheath = mass_e*nesheath*vesheath
+
+        Ve_ip = 2 * vesheath - Ve[i]
+        NVe_ip = 2 * nvesheath - NVe[i]
+
+        # Ve is supposed to be the same as Vi all the time, apart from when there are currents. It also is this in the code.
+        # It is not so in my reproduction. This must be an error.
+
+        print(f"- Ve: x{vesheath/get_boundary(Ve):.1f} which is {vesheath:.2E} [m/s]")
+
 
     def animate(self, param):
         ds = xbout.open_boutdataset(datapath = self.datapath, inputfilepath = self.inputfilepath,
