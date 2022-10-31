@@ -134,17 +134,21 @@ class Case:
             self.norm_data["NVi"] = self.norm_data["NVd+"] * constants("mass_p") / (constants("mass_p")*2) # Originally [kgm2s-1], then divide by mass_i to get flux.
             self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
             self.norm_data["S"] = self.norm_data["SNd+"]
-            self.norm_data["Rex"] = self.norm_data["Rd+_ex"]
-            self.norm_data["Rrec"] = self.norm_data["Rd+_rec"]
-            self.norm_data["R"] = self.norm_data["Rex"] + self.norm_data["Rrec"]
-            self.norm_data["Srec"] = self.norm_data["Sd+_rec"]
-            self.norm_data["Siz"] = self.norm_data["Sd+_iz"]
-            self.norm_data["Fiz"] = self.norm_data["Fd+_iz"]
-            self.norm_data["Frec"] = self.norm_data["Fd+_rec"]
-            self.norm_data["Eiz"] = self.norm_data["Ed+_iz"]
-            self.norm_data["Erec"] = self.norm_data["Ed+_rec"]
+            
+            
             self.norm_data["Ti"] = self.norm_data["Td+"]
             
+            if "Rd+_rec" in self.norm_data.keys():
+                self.norm_data["Rex"] = self.norm_data["Rd+_ex"]
+                self.norm_data["Rrec"] = self.norm_data["Rd+_rec"]
+                self.norm_data["R"] = self.norm_data["Rex"] + self.norm_data["Rrec"]
+                self.norm_data["Srec"] = self.norm_data["Sd+_rec"]
+                self.norm_data["Siz"] = self.norm_data["Sd+_iz"]
+                self.norm_data["Fiz"] = self.norm_data["Fd+_iz"]
+                self.norm_data["Frec"] = self.norm_data["Fd+_rec"]
+                self.norm_data["Eiz"] = self.norm_data["Ed+_iz"]
+                self.norm_data["Erec"] = self.norm_data["Ed+_rec"]
+
             if "Dd_Dpar" in self.norm_data.keys():
                 self.norm_data["Dn"] = self.norm_data["Dd_Dpar"]
             if "Fdd+_cx" in self.norm_data.keys():
