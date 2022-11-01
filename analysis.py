@@ -420,6 +420,137 @@ class Case:
         ax.tick_params(axis = "both", which = "major", labelsize = 12)
         ax.tick_params(axis = "both", which = "minor", labelsize = 12)
 
+    def plot_density_controller(
+        self, plot_start = 0, plot_end = -1, 
+                                zoom = 1, ymin = None, ymax = None,
+                            labels_override = None, absolute_source = False, 
+                                error_plot = False, single_plot = True):
+        # Plot the history of upstream density to show
+        # performance of PI controller.
+        # Zoom: controls y axis limits.
+        # Stepsize: controls how many timepoints are sampled to reduce loading time.
+
+        plot_cases = [self.casepath]
+
+        # Collect density history
+        h_Ne = defaultdict(list)
+        h_NeSource = defaultdict(list)
+        intended_Ne = dict() # Intended upstream density.
+        num_timesteps = dict()
+        error_Ne = dict()
+        labels = dict()
+        final_values = list() # for finding final values for plot scales
+
+        print("Collecting data...", end = "")
+        for i, case in enumerate(plot_cases):
+        # Collect upstream density (density in first cell) for each time point.
+
+            # Extract number of timesteps in total.
+            
+            Nnorm = collect("Nnorm", path = self.casepath)
+            Omega_ci = collect("Omega_ci", path = self.casepath)
+            hist_Ne = collect("Ne", path = self.casepath, yguards=True, info=False)[:,0,1:-1,0]
+            
+            try:
+                if self.hermes:
+                    hist_NeSource = collect("Sd+_src", path = self.casepath, yguards=True, info=False)[:,0,1:-1]
+                else:
+                    hist_NeSource = collect("NeSource", path = self.casepath, yguards=True, info=False)[:,0,1:-1]
+            except:
+                print("NeSource not found for case {}".format(case))
+                pass
+            num_timesteps[case] = hist_Ne.shape[0]
+
+            for t in range(num_timesteps[case]):
+                h_Ne[case].append(replace_guards(hist_Ne[t,:])[0]*Nnorm)
+                
+                try:
+                    h_NeSource[case].append(replace_guards(hist_NeSource[t,:])[0]*Nnorm*Omega_ci)
+                except:
+                    pass
+
+            if self.hermes:
+                intended_Ne[case] = BoutData(self.casepath)["options"]["d+"]["density_upstream"]
+            else:
+                intended_Ne[case] = BoutData(self.casepath)["options"]["sd1d"]["density_upstream"]
+            
+            
+            # Find Ne error
+            error_Ne[case] = abs(1 - np.array(h_Ne[case]) / intended_Ne[case])
+            
+            # Append final values
+            if error_plot == True:
+                final_values.append(error_Ne[case][-1])
+            else:
+                final_values.append(h_Ne[case][-1])
+
+            # Get labels done
+            if labels_override != None:
+                labels[case] = labels_override[i]
+            else:
+                labels[case] = case
+                
+            # print(intended_Ne)
+            # print(error_Ne)
+                
+
+            print("{}...".format(case), end="")
+        print("\nComplete.")
+
+        # Make colors
+        colors = dict(zip(plot_cases, cc.glasbey_category10[:len(plot_cases)]))
+
+        # Plot
+        if single_plot == True:
+            for case in plot_cases:
+                fig, ax = plt.subplots(figsize = [6,6])
+                ax2 = ax.twinx()
+                ax.set_title("Upstream density error")
+                ax.plot(range(len(h_Ne[case])), 
+                        h_Ne[case], label = "Nu", 
+                        linewidth = 1, color = "black")
+                ax.hlines(intended_Ne[case], 0, num_timesteps[case], linewidth = 2,
+                        linestyle = "--", color = "black", label = "Nu target")  
+                
+                ax.grid(which="both")
+                ax2.plot(range(len(h_NeSource[case])), 
+                        h_NeSource[case], 
+                        linewidth = 2, color = "red", alpha = 1, label = "Particle source")
+                ax.set_ylabel("Upstream density (m-3)")
+                ax2.set_ylabel("Upstream particle source (s-1)")
+                ax.set_xlabel("Timestep")
+                fig.legend(loc="upper right", bbox_to_anchor=(1,1), bbox_transform=ax.transAxes, fontsize = 12)
+            
+        else:  
+            fig, ax = plt.subplots(1,2, figsize = [12,6])
+            for case in plot_cases:   
+                if error_plot == True: 
+                    ax[0].set_title("Upstream density error")
+                    ax[0].plot(range(len(error_Ne[case])), 
+                            error_Ne[case], label = f"{labels[case]}", 
+                            linewidth = 1, color = colors[case])
+
+                else:
+                    ax[0].set_title("Upstream density & target")
+                    ax[0].plot(range(len(h_Ne[case])), 
+                            h_Ne[case], label = f"{labels[case]}", 
+                            linewidth = 2, color = colors[case], linestyle = "-")
+
+                    ax[0].hlines(intended_Ne[case], 0, num_timesteps[case], linewidth = 2,
+                            linestyle = "--", color = colors[case])     
+                try:
+                    if absolute_source == True:
+                        ax[1].plot(range(len(h_NeSource[case])), 
+                                abs(np.array(h_NeSource[case])), 
+                                label = f"{labels[case]}", 
+                                linewidth = 2, color = colors[case])
+                    else:
+                        ax[1].plot(range(len(h_NeSource[case])), 
+                                h_NeSource[case], label = f"{labels[case]}", 
+                                linewidth = 2, color = colors[case])
+                except:
+                    pass
+
     def get_htransfer(self):
         
         self.data["pos_boundary"], self.data["convect_ke"] = ke_convection(self.pos, self.data["Ne"], self.data["Vi"])
