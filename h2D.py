@@ -28,8 +28,9 @@ class Case:
 
         if load:
             self.load_data()
-            # self.extract_variables()
-            # self.process_variables()
+        if process:
+            self.extract_variables()
+            self.process_variables()
 
     def load_data(self):
         self.boutdata = BoutData(self.casepath, yguards=True, strict = True, DataFileCaching=False)
