@@ -572,7 +572,7 @@ class Case:
         else:
 
             self.sheath_gamma = self.options["sd1d"]["sheath_gamma"]
-            self.flux_sheath = self.data["NVi"][-1]
+            self.flux_sheath = self.data["NVi"][-1] # Not correct in Hermes
             self.Tt = self.data["Te"][-1]
             
             self.hflux_source = np.nansum(self.data["ESource"] * self.dV) * 1e-6
