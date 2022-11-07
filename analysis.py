@@ -791,6 +791,9 @@ class Case:
         dV = J * dy
         g_22 = d["g_22"].squeeze()
 
+        mass_p = constants("mass_p")
+        mass_i = mass_p * 2
+
         # Reconstruct grid position from dy
         n = len(dy)
         pos = np.zeros(n)
@@ -811,33 +814,40 @@ class Case:
 
         # ----- Boundary flux
         sheath_area = get_boundary(J) / np.sqrt(get_boundary(g_22))
-        sheath_ion_flux = get_boundary_time(d["NVd+"].squeeze()/2)
-        sheath_ion_flux *= sheath_area * d["Cs0"] * d["Nnorm"]
+        sheath_ion_flux = get_boundary_time(d["NVd+"].squeeze())
+        sheath_ion_flux *= sheath_area * d["Cs0"] * d["Nnorm"] * mass_p / mass_i
 
-        sheath_neutral_flux = get_boundary_time(d["NVd"].squeeze()/2)
-        sheath_neutral_flux *= sheath_area * d["Cs0"] * d["Nnorm"]
+        sheath_neutral_flux = get_boundary_time(d["NVd"].squeeze())
+        sheath_neutral_flux *= sheath_area * d["Cs0"] * d["Nnorm"] * mass_p / mass_i
 
         intended_recycle_flux = sheath_ion_flux * recycle_multiplier
 
         # ----- Density input source
-        input_source = d["Sd+_src"].squeeze()[:,2:-2]
-        input_source = np.trapz(x = pos[2:-2], y = input_source * J[2:-2] * d["Cs0"] * d["Nnorm"])
+        if "Sd+_src" in d.keys():
+            input_source = np.trapz(x = pos[2:-2], y = d["Sd+_src"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"] * d["Nnorm"])
+        else:
+            input_source = np.zeros_like(sheath_ion_flux)
 
         # ----- Ionisation source
-        iz_source = d["Sd+_iz"].squeeze()[:,2:-2]
-        iz_source = np.trapz(x = pos[2:-2], y = iz_source * J[2:-2] * d["Cs0"] * d["Nnorm"])
+        if "Sd+_iz" in d.keys():
+            iz_source = np.trapz(x = pos[2:-2], y = d["Sd+_iz"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"] * d["Nnorm"])
+        else:
+            iz_source = np.zeros_like(sheath_ion_flux)
 
         # ----- Recombination source
         if "Sd+_rec" in d.keys():
-            rec_source = d["Sd+_rec"].squeeze()[:,2:-2]
-            rec_source = np.trapz(x = pos[2:-2], y = rec_source * J[2:-2] * d["Cs0"] * d["Nnorm"])
+            rec_source = np.trapz(x = pos[2:-2], y = d["Sd+_rec"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"] * d["Nnorm"])
         else:
-            rec_source = np.zeros_like(input_source)
+            rec_source = np.zeros_like(sheath_ion_flux)
 
 
         # ----- Totals
-        total_particles = d["Nd+"].squeeze()[:,2:-2] + d["Nd"].squeeze()[:,2:-2]
-        total_particles = np.trapz(x = pos[2:-2], y = total_particles * J[2:-2] * d["Nnorm"])
+        total_ions = np.trapz(x = pos[2:-2], y = d["Nd+"].squeeze()[:,2:-2] * J[2:-2] * d["Nnorm"])
+        total_neutrals = np.trapz(x = pos[2:-2], y = d["Nd"].squeeze()[:,2:-2] * J[2:-2] * d["Nnorm"])
+        total_particles = total_ions + total_neutrals
+
+        case_ion_source = np.trapz(x = pos[2:-2], y = d["SNd+"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"]  * d["Nnorm"])
+
         total_in = input_source + iz_source 
         total_out = sheath_ion_flux + abs(rec_source)
         total_balance = total_in - total_out
@@ -845,17 +855,23 @@ class Case:
         neutral_in = rec_source
         neutral_out = iz_source
 
-        fig, axes = plt.subplots(1,2, figsize=(10,4), dpi = 100)
+        fig, axes = plt.subplots(1,2, figsize=(12,4), dpi = 100)
+        fig.suptitle(self.casename)
         t = range(len(iz_source))
         ax = axes[0]
         ax.plot(t, input_source, label = "Input source")
         ax.plot(t, iz_source, label = "Ionisation source")
         ax.plot(t, rec_source, label = "Recombination sink")
-        ax.plot(t, sheath_ion_flux, ls = ":", c = "grey", label = "Ion sheath sink")
+        ax.plot(t, sheath_ion_flux, ls = "-", c = "grey", label = "Ion sheath sink")
+        ax.plot(t, total_in, lw = 2, ls = ":", c = "k", label = "Total in")
+        ax.plot(t, total_out, lw = 2, ls = ":", c = "r", label = "Total out")
+        ax.plot(t, total_balance, lw = 2, alpha = 0.5, c = "k", label = "Imbalance")
         ax.set_ylabel("Particle flux [s-1]")
 
         ax = axes[1]
         ax.plot(t, total_particles, label = "Total domain particle count")
+        ax.plot(t, total_ions, label = "Total domain ion count")
+        ax.plot(t, total_neutrals, label = "Total domain neutral count")
         ax.set_ylabel("Particle count")
 
         for ax in axes:
@@ -876,6 +892,7 @@ class Case:
         print(f"- Total = {total_out[-1]:.3E} [s-1]")
         print(f"\n- Difference:")
         print(f"---> {total_balance[-1]:.3E} [s-1] ({total_balance[-1]/total_in[-1]:.3%})")
+
 
     def mass_balance(self,          
         verbosity = False, 
