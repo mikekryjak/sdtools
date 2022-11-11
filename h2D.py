@@ -18,24 +18,28 @@ import xbout
 
 class Case:
 
-    def __init__(self, casepath, verbose = False, load = True, process = True):
+    def __init__(self, casepath, gridfilepath, verbose = False, load = True, process = True):
         self.casename = casepath.split(os.path.sep)[-1]
+        self.gridfilepath = gridfilepath
         self.casepath = casepath
         self.datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
         self.inputfilepath = os.path.join(casepath, "BOUT.inp")
         self.verbose = verbose
 
+        print(gridfilepath)
+        print(casepath)
+
         if load:
-            self.load_data()
+            self.load_dataset()
         # if process:
         #     self.extract_variables()
         #     self.process_variables()
 
-    def load_dataset(self, gridfilepath):
+    def load_dataset(self):
         self.ds = xbout.load.open_boutdataset(
                 datapath = self.datapath, 
                 inputfilepath = self.inputfilepath, 
-                gridfilepath = gridfilepath,
+                gridfilepath = self.gridfilepath,
                 info = False,
                 geometry = "toroidal",
                 keep_xboundaries=True,
