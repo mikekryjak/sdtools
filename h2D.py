@@ -18,14 +18,18 @@ import xbout
 
 class Case:
 
-    def __init__(self, casepath, gridfilepath = None, verbose = False, load = True, process = True):
+    def __init__(self, casepath, gridfilepath, verbose = False, load = True, process = True):
         self.casename = casepath.split(os.path.sep)[-1]
+        self.gridfilepath = gridfilepath
         self.casepath = casepath
         self.datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
         self.inputfilepath = os.path.join(casepath, "BOUT.inp")
         self.gridfilepath = gridfilepath
         self.verbose = verbose
         self.normalised_vars = []
+
+        print(gridfilepath)
+        print(casepath)
 
         if load:
             self.load_dataset()
