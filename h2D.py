@@ -16,39 +16,57 @@ from boutdata.data import BoutData
 import xbout
 
 
-class Case:
+class Load:
+    def __init__(self):
+        pass
 
-    def __init__(self, casepath, gridfilepath, verbose = False, load = True, process = True):
-        self.casename = casepath.split(os.path.sep)[-1]
-        self.gridfilepath = gridfilepath
-        self.casepath = casepath
-        self.datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
-        self.inputfilepath = os.path.join(casepath, "BOUT.inp")
-        self.gridfilepath = gridfilepath
-        self.verbose = verbose
-        self.normalised_vars = []
+    def case_1D(casepath):
+        datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
+        inputfilepath = os.path.join(casepath, "BOUT.inp")
+
+        ds = xbout.load.open_boutdataset(
+                datapath = datapath, 
+                inputfilepath = inputfilepath, 
+                info = False,
+                keep_yboundaries=True,
+                )
+
+        ds = ds.squeeze(drop = True)
+
+        return Case(ds)
+
+    def case_2D(casepath, gridfilepath, verbose = False, keep_boundaries = True):
+        datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
+        inputfilepath = os.path.join(casepath, "BOUT.inp")
+        
 
         print(gridfilepath)
         print(casepath)
 
-        if load:
-            self.load_dataset()
-        if process:
-            self.unnormalise()
-            self.derive_vars()
-
-    def load_dataset(self):
-        self.ds = xbout.load.open_boutdataset(
-                datapath = self.datapath, 
-                inputfilepath = self.inputfilepath, 
-                gridfilepath = self.gridfilepath,
+        ds = xbout.load.open_boutdataset(
+                datapath = datapath, 
+                inputfilepath = inputfilepath, 
+                gridfilepath = gridfilepath,
                 info = False,
                 geometry = "toroidal",
-                keep_xboundaries=True,
-                keep_yboundaries=True,
+                keep_xboundaries=keep_boundaries,
+                keep_yboundaries=keep_boundaries,
                 )
+        ds = ds.squeeze(drop = True)
+        return Case(ds)
 
-        self.ds = self.ds.squeeze(drop = True)
+
+class Case:
+
+    def __init__(self, ds):
+
+        self.ds = ds
+        self.normalised_vars = []
+
+        self.unnormalise()
+        self.derive_vars()
+
+    
 
     def unnormalise(self):
         self.calc_norms()
@@ -58,36 +76,40 @@ class Case:
             # Unnormalise variables and coordinates
             if data_var in self.ds.variables or data_var in self.ds.coords:
                 if data_var not in self.normalised_vars:
-                    # print("data_var")
-                    # print(self.normalised_vars)
                     self.ds[data_var] = self.ds[data_var] * self.norms[data_var]["conversion"]
                     self.normalised_vars.append(data_var)
                 self.ds[data_var].attrs.update(self.norms[data_var])
 
+    # def derive_vars(self):
+    #     self.calc_derivations()
+    #     self.derived_vars = []
+
+    #     for data_var in self.derivations.keys():
+    #         self.ds[data_var] = self.derivations[data_var]["calculation"]
+    #         self.ds[data_var].attrs.update(self.norms[data_var])
+    #         self.derived_vars.append(data_var)
+
     def derive_vars(self):
-        self.calc_derivations()
-        self.derived_vars = []
-
-        for data_var in self.derivations.keys():
-            self.ds[data_var] = self.derivations[data_var]["calculation"]
-            self.ds[data_var].attrs.update(self.norms[data_var])
-            self.derived_vars.append(data_var)
-
-    def calc_derivations(self):
         ds = self.ds
         q_e = constants("q_e")
-        d = {
 
-        "Th+": {
-            "calculation": ds["Ph+"] / ds["Nh+"] / q_e,
-            "units": "eV",
-            "standard_name": "ion temperature (h+)",
-            "long_name": "Ion temperature (h+)",
-        },
-            
-        }
+        if "Ph+" in ds.data_vars:
+            ds["Th+"] = ds["Ph+"] / ds["Nh+"] / q_e
+            ds["Th+"].attrs.update({
+                "Th+": {
+                "units": "eV",
+                "standard_name": "ion temperature (h+)",
+                "long_name": "Ion temperature (h+)",
+                }})
 
-        self.derivations = d
+        if "Pd+" in ds.data_vars:
+            ds["Td+"] = ds["Pd+"] / ds["Nd+"] / q_e
+            ds["Td+"].attrs.update({
+                "Td+": {
+                "units": "eV",
+                "standard_name": "ion temperature (d+)",
+                "long_name": "Ion temperature (d+)",
+                }})
 
 
     def calc_norms(self):
@@ -136,6 +158,20 @@ class Case:
             "units": "Pa",
             "standard_name": "ion pressure (h+)",
             "long_name": "Ion pressure (h+)"
+        },
+
+        "Pd+": {
+            "conversion": m["Nnorm"] * m["Tnorm"] * q_e,
+            "units": "Pa",
+            "standard_name": "ion pressure (d+)",
+            "long_name": "Ion pressure (d+)"
+        },
+
+        "Pd+_src": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "ion energy source (d+)",
+            "long_name": "Ion energy source (d+)"
         },
         
         }
