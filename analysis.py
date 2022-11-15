@@ -828,6 +828,11 @@ class Case:
         else:
             input_source = np.zeros_like(sheath_ion_flux)
 
+        if "Sd_src" in d.keys():
+            input_n_source = np.trapz(x = pos[2:-2], y = d["Sd_src"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"] * d["Nnorm"])
+        else:
+            input_n_source = np.zeros_like(sheath_ion_flux)
+
         # ----- Ionisation source
         if "Sd+_iz" in d.keys():
             iz_source = np.trapz(x = pos[2:-2], y = d["Sd+_iz"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"] * d["Nnorm"])
@@ -840,6 +845,19 @@ class Case:
         else:
             rec_source = np.zeros_like(sheath_ion_flux)
 
+        # ----- Total SNd+
+        if "SNd+" in d.keys():
+            alt_source = np.trapz(x = pos[2:-2], y = d["SNd+"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"] * d["Nnorm"])
+        else:
+            alt_source = np.zeros_like(sheath_ion_flux)
+
+        # ----- Total ddt(Nd+)
+        if "ddt(Nd+)" in d.keys():
+            ddt_int = np.trapz(x = pos[2:-2], y = d["ddt(Nd+)"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"] * d["Nnorm"])
+            ddt_last = d["ddt(Nd+)"].squeeze()[:,2:-2] * d["Cs0"] * d["Nnorm"]
+        else:
+            ddt_int = np.zeros_like(sheath_ion_flux)
+
 
         # ----- Totals
         total_ions = np.trapz(x = pos[2:-2], y = d["Nd+"].squeeze()[:,2:-2] * J[2:-2] * d["Nnorm"])
@@ -848,40 +866,75 @@ class Case:
 
         case_ion_source = np.trapz(x = pos[2:-2], y = d["SNd+"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"]  * d["Nnorm"])
 
+        avg_dens = np.trapz(x = pos[2:-2], y = d["Nd+"].squeeze()[:,2:-2] * J[2:-2] * d["Nnorm"]) / sum(dy[2:-2])
+
         total_in = input_source + iz_source 
         total_out = sheath_ion_flux + abs(rec_source)
         total_balance = total_in - total_out
+        frac_balance = total_balance / total_in
 
         neutral_in = rec_source
         neutral_out = iz_source
 
-        fig, axes = plt.subplots(1,2, figsize=(12,4), dpi = 100)
+        fig, axes = plt.subplots(1,3, figsize=(18,4), dpi = 100)
         fig.suptitle(self.casename)
+        fig.subplots_adjust(wspace=0.4)
         t = range(len(iz_source))
+
+
         ax = axes[0]
-        ax.plot(t, input_source, label = "Input source")
+        ax.set_title("Domain particle sources/sinks")
+        ax.plot(t, input_source, label = "Input plasma source")
+        ax.plot(t, input_n_source, label = "Input neutral source", c = "k", zorder = 100)
         ax.plot(t, iz_source, label = "Ionisation source")
         ax.plot(t, rec_source, label = "Recombination sink")
         ax.plot(t, sheath_ion_flux, ls = "-", c = "grey", label = "Ion sheath sink")
-        ax.plot(t, total_in, lw = 2, ls = ":", c = "k", label = "Total in")
-        ax.plot(t, total_out, lw = 2, ls = ":", c = "r", label = "Total out")
-        ax.plot(t, total_balance, lw = 2, alpha = 0.5, c = "k", label = "Imbalance")
         ax.set_ylabel("Particle flux [s-1]")
 
+
         ax = axes[1]
+        ax.set_title("Total in/out, mass imbalance")
+        ax.plot(t, total_in, lw = 2, ls = "-", c = "k", label = "Total in")
+        ax.plot(t, total_out, lw = 2, ls = "-", c = "r", label = "Total out")
+        ax.set_ylabel("Particle flux [s-1]")
+
+        ax2 = ax.twinx()
+        ax2.plot(t, frac_balance, lw = 2, alpha = 0.3, ls = "-", c = "magenta", label = "Imbalance")
+        ax2.set_ylim(-1,1)
+        ax2.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.0%}"))
+        ax2.set_ylabel("Mass imbalance [%]", c = "magenta")
+        ax2.spines["right"].set_color("magenta")
+        ax2.yaxis.label.set_color("magenta")
+        ax2.tick_params(axis="y", colors = "magenta")
+
+
+        ax = axes[2]
+        ax.set_title("Total particle count, upstream density")
         ax.plot(t, total_particles, label = "Total domain particle count")
         ax.plot(t, total_ions, label = "Total domain ion count")
         ax.plot(t, total_neutrals, label = "Total domain neutral count")
         ax.set_ylabel("Particle count")
 
+        ax2 = ax.twinx()
+        ax2.plot(t, avg_dens, c = "r", ls = "-")
+        ax2.set_ylabel("Upstream plasma density")
+        ax2.spines["right"].set_color("red")
+        ax2.yaxis.label.set_color("red")
+        ax2.tick_params(axis="y", colors = "red")
+
         for ax in axes:
             ax.grid(which = "both")
             ax.set_xlabel("Timestep")
-            ax.legend()
+
+
+        axes[0].legend(loc="upper left", bbox_to_anchor = (-0.11,-0.15), ncol = 3)
+        axes[1].legend(loc="upper left", bbox_to_anchor = (0.15,-0.15), ncol = 1)
+        axes[2].legend(loc="upper left", bbox_to_anchor = (0.15,-0.15), ncol = 1)
 
         print(">>> System mass balance")
         print("- Total in ---------------")
-        print(f"- Input source = {input_source[-1]:.3E} [s-1]")
+        print(f"- Input ion source = {input_source[-1]:.3E} [s-1]")
+        print(f"- Input neutral source = {input_n_source[-1]:.3E} [s-1]")
         print(f"- Ionisation source = {iz_source[-1]:.3E} [s-1]")
         print(f"- Intended recycling source = {iz_source[-1]:.3E} [s-1]")
         print(f"- Total = {total_in[-1]:.3E} [s-1]")
@@ -892,6 +945,7 @@ class Case:
         print(f"- Total = {total_out[-1]:.3E} [s-1]")
         print(f"\n- Difference:")
         print(f"---> {total_balance[-1]:.3E} [s-1] ({total_balance[-1]/total_in[-1]:.3%})")
+
 
 
     def mass_balance(self,          
