@@ -33,7 +33,7 @@ class Load:
 
         ds = ds.squeeze(drop = True)
 
-        return Case(ds)
+        return Case(ds, casepath)
 
     def case_2D(casepath, gridfilepath, verbose = False, keep_boundaries = True):
         datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
@@ -53,14 +53,17 @@ class Load:
                 keep_yboundaries=keep_boundaries,
                 )
         ds = ds.squeeze(drop = True)
-        return Case(ds)
+        return Case(ds, casepath)
 
 
 class Case:
 
-    def __init__(self, ds):
+    def __init__(self, ds, casepath):
 
         self.ds = ds
+        self.name = os.path.split(casepath)[-1]
+        self.datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
+        self.inputfilepath = os.path.join(casepath, "BOUT.inp")
         self.normalised_vars = []
 
         self.unnormalise()
