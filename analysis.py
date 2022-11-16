@@ -1003,7 +1003,10 @@ class Case:
             h["NVi_original"] = collect("NVi", path = path_case, yguards = True, info = False, strict = True)[:,0,1:-1,0]
             nloss = self.options["sd1d"]["nloss"]
             frecycle_intended = self.options["sd1d"]["frecycle"]
-            Nu_target = self.options["sd1d"]["density_upstream"]
+            if "density_upstream" in self.options["sd1d"].keys():
+                Nu_target = self.options["sd1d"]["density_upstream"]
+            else:
+                Nu_target = np.nan
 
         if flux_input == True:
             flux_intended = self.options["Ne"]["flux"]
