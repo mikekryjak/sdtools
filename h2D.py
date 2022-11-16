@@ -52,7 +52,9 @@ class Load:
                 keep_xboundaries=keep_boundaries,
                 keep_yboundaries=keep_boundaries,
                 )
+
         ds = ds.squeeze(drop = True)
+
         return Case(ds)
 
 
@@ -62,6 +64,12 @@ class Case:
 
         self.ds = ds
         self.normalised_vars = []
+
+        if "x" in self.ds.dims:
+            self.is_2d = True
+        else:
+            self.is_2d = False
+
 
         self.unnormalise()
         self.derive_vars()
@@ -110,6 +118,16 @@ class Case:
                 "standard_name": "ion temperature (d+)",
                 "long_name": "Ion temperature (d+)",
                 }})
+
+    def guard_replace(self):
+
+        if self.is_2d == False:
+            for data_var in self.ds.data_vars:
+                if "x" in self.ds[data_var].dims:
+                    pass
+
+        else:
+            print("2D guard replacement not done yet")
 
 
     def calc_norms(self):
