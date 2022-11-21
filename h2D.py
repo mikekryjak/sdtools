@@ -112,6 +112,24 @@ class Case:
                 "long_name": "Ion temperature (h+)",
                 }})
 
+        if "Ph" in ds.data_vars:
+            ds["Th"] = ds["Ph"] / ds["Nh"] / q_e
+            ds["Th"].attrs.update({
+                "Th": {
+                "units": "eV",
+                "standard_name": "neutra; temperature (h)",
+                "long_name": "Neutral temperature (h)",
+                }})
+
+        if "Pd" in ds.data_vars:
+            ds["Td"] = ds["Pd"] / ds["Nd"] / q_e
+            ds["Td"].attrs.update({
+                "Td": {
+                "units": "eV",
+                "standard_name": "neutral temperature (d)",
+                "long_name": "Neutral temperature (d)",
+                }})
+
         if "Pd+" in ds.data_vars:
             ds["Td+"] = ds["Pd+"] / ds["Nd+"] / q_e
             ds["Td+"].attrs.update({
@@ -269,6 +287,62 @@ class Case:
         ax.set_xlabel("Timestep")
         ax.set_ylabel("Normalised residual")
         ax.set_title(f"Residual plot: {self.name}")
+
+    def plot_monitors(self, to_plot):
+        """
+        Plot time histories of parameters (density, pressure, or momentum)
+        In each plot the solid line is the mean and dashed lines 
+        represent the min/max at each timestep.
+        Momentum is shown as an absolute value
+        """
+
+        # Find parameters (species dependent)
+        # list_params = ["Ne", "Pe"]
+        to_plot = "density"
+        list_params = []
+        if to_plot == "pressure":
+            for var in self.ds.data_vars:
+                if "P" in var and not any([x in var for x in ["S", ")", "_", ]]):
+                    list_params.append(var)
+        elif to_plot == "density":
+            for var in self.ds.data_vars:
+                if "N" in var and not any([x in var for x in ["S", ")", "_", "V"]]):
+                    list_params.append(var)
+        elif to_plot == "momentum":
+            for var in self.ds.data_vars:
+                if "NV" in var and not any([x in var for x in ["S", ")", "_"]]):
+                    list_params.append(var)
+
+        list_params.sort()
+
+        data = dict()
+
+        for param in list_params:
+            data[param] = dict()
+            data[param]["mean"] = np.mean(self.ds[param], axis = (1,2))
+            data[param]["max"] = np.max(self.ds[param], axis = (1,2))
+            data[param]["min"] = np.min(self.ds[param], axis = (1,2))
+
+            if to_plot == "momentum":
+                for key in data[param]:
+                    data[param][key] = np.abs(data[param][key])
+
+        colors = ["teal", "darkorange", "firebrick",  "limegreen", "magenta", "cyan", "navy"]
+        fig, ax = plt.subplots(dpi = 100)
+
+        for i, param in enumerate(list_params):
+            ax.plot(data[param]["mean"], ls = "-", label = f"{param}", color = colors[i])
+            ax.plot(data[param]["max"], ls = ":",  color = colors[i])
+            ax.plot(data[param]["min"], ls = ":",  color = colors[i])
+
+        ax.set_yscale("log")
+        ax.grid(which = "major", lw = 1)
+        ax.grid(which = "minor", lw = 1, alpha = 0.3)
+        ax.legend(loc = "upper left", bbox_to_anchor=(1,1))
+        ax.set_xlabel("Timestep")
+        ax.set_ylabel("Normalised residual")
+        ax.set_title(f"{to_plot}: {self.name}")
+
 
 
 def constants(name):
