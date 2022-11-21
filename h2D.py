@@ -230,6 +230,47 @@ class Case:
                     axes[i,j].set_xlim(lims)
 
 
+    def plot_residuals(self):
+        """
+        Scaled residual calculation based on ANSYS Fluent
+        From 26.13-19 in https://www.afs.enea.it/project/neptunius/docs/fluent/html/ug/node812.htm       
+        - Take RMS of rate of change in each parameter over whole domain
+        - Normalise by maximum value of this parameter within first 5 iterations
+        - Plots parameters corresponding to equations solved (density, momentum, pressure)
+        """
+        # Find parameters (species dependent)
+        list_params = ["Ne", "Pe"]
+
+        for var in self.ds.data_vars:
+            if "NV" in var and not any([x in var for x in ["S", ")", "_"]]):
+                list_params.append(var)
+            if "P" in var and not any([x in var for x in ["S", ")", "_", "e"]]):
+                list_params.append(var)
+        list_params.sort()
+
+        
+        res = dict()
+
+        for param in list_params:
+
+            res[param] = np.diff(self.ds[param], axis = 0) # Rate of change
+            res[param] = np.sqrt(res[param]**2) # RMS of rate of change
+            res[param] = np.mean(res[param], axis = (1,2))
+            res[param] = res[param] / np.max(res[param][:4]) # Normalise by max in first 5 iterations
+
+        fig, ax = plt.subplots(dpi = 100)
+
+        for param in list_params:
+            ax.plot(res[param], label = param)
+        ax.set_yscale("log")
+        ax.grid(which = "major", lw = 1)
+        ax.grid(which = "minor", lw = 1, alpha = 0.3)
+        ax.legend()
+        ax.set_xlabel("Timestep")
+        ax.set_ylabel("Normalised residual")
+        ax.set_title(f"Residual plot: {self.name}")
+
+
 def constants(name):
     
     d = dict()
