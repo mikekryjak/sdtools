@@ -13,24 +13,19 @@ import time
 
 parser = argparse.ArgumentParser(description = "Run case")
 parser.add_argument("casepath", type=str, help = "Case to run")
+parser.add_argument("--b", type=str, help = "Branch (build folder name)")
 parser.add_argument("--restart", action="store_true", help = "Restart?")
 parser.add_argument("--append", action="store_true", help = "Append?")
-parser.add_argument("--build", type = str, nargs = 1, help = "Build folder to use")
 
 args = parser.parse_args()
 
+if args.b == None:
+    print("Please specify branch with --b <branch_name>")
+    quit()
+
 abscasepath = os.path.join(os.getcwd(), args.casepath)
 casename = os.path.basename(os.path.normpath(args.casepath))
-
-sd1dpath = "/ssd_scratch/SD1D-mk/"
 runscriptpath = os.path.join(abscasepath, f"run.sh")
-
-if args.build != None:
-    build_folder = args.build[0]
-else:
-    build_folder = "build"
-
-# print(f"Running case {args.case} in {build_folder}")
 
 if args.restart:
     restartappend = "restart"
@@ -57,14 +52,20 @@ f"""#!/bin/bash
 #SBATCH -o /mnt/lustre/users/mjk557/cases/slurmlogs/{jobname}.out
 #SBATCH -e /mnt/lustre/users/mjk557/cases/slurmlogs/{jobname}.err
 
-mpirun -n {nodes*cores} /mnt/lustre/users/mjk557/hermes-3/build/hermes-3 -d {abscasepath} {restartappend}
+mpirun -n {nodes*cores} /mnt/lustre/users/mjk557/hermes-3/{args.b}/hermes-3 -d {abscasepath} {restartappend}
 
 """
 
 with open(runscriptpath, "w") as f:
     f.write(slurmcommand)
 
-print("Made slurm script at ", runscriptpath)
+print(f"\n** Using branch {args.b}.")
+if args.restart:
+    print("-> Restarting")
+if args.append:
+    print("-> Appending")
+
+print(f"Made slurm script at ", runscriptpath)
 # run(f"sbatch", "{runscriptpath}")
 
 # print(f"Exectuted running of {jobname}")
