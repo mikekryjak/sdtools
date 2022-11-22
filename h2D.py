@@ -288,7 +288,7 @@ class Case:
         ax.set_ylabel("Normalised residual")
         ax.set_title(f"Residual plot: {self.name}")
 
-    def plot_monitors(self, to_plot):
+    def plot_monitors(self, to_plot, ignore = []):
         """
         Plot time histories of parameters (density, pressure, or momentum)
         In each plot the solid line is the mean and dashed lines 
@@ -296,21 +296,18 @@ class Case:
         Momentum is shown as an absolute value
         """
 
-        # Find parameters (species dependent)
-        # list_params = ["Ne", "Pe"]
-        to_plot = "density"
         list_params = []
         if to_plot == "pressure":
             for var in self.ds.data_vars:
-                if "P" in var and not any([x in var for x in ["S", ")", "_", ]]):
+                if "P" in var and not any([x in var for x in ignore+["S", ")", "_", ]]):
                     list_params.append(var)
         elif to_plot == "density":
             for var in self.ds.data_vars:
-                if "N" in var and not any([x in var for x in ["S", ")", "_", "V"]]):
+                if "N" in var and not any([x in var for x in ignore+["S", ")", "_", "V"]]):
                     list_params.append(var)
         elif to_plot == "momentum":
             for var in self.ds.data_vars:
-                if "NV" in var and not any([x in var for x in ["S", ")", "_"]]):
+                if "NV" in var and not any([x in var for x in ignore+["S", ")", "_"]]):
                     list_params.append(var)
 
         list_params.sort()
@@ -340,7 +337,7 @@ class Case:
         ax.grid(which = "minor", lw = 1, alpha = 0.3)
         ax.legend(loc = "upper left", bbox_to_anchor=(1,1))
         ax.set_xlabel("Timestep")
-        ax.set_ylabel("Normalised residual")
+        ax.set_ylabel("Value")
         ax.set_title(f"{to_plot}: {self.name}")
 
 
