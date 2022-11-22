@@ -75,6 +75,7 @@ class Case:
 
         self.unnormalise()
         self.derive_vars()
+        self.make_regions()
 
     
 
@@ -104,7 +105,7 @@ class Case:
         q_e = constants("q_e")
 
         if "Ph+" in ds.data_vars:
-            ds["Th+"] = ds["Ph+"] / ds["Nh+"] / q_e
+            ds["Th+"] = ds["Ph+"] / (ds["Nh+"] * q_e)
             ds["Th+"].attrs.update({
                 "Th+": {
                 "units": "eV",
@@ -113,7 +114,7 @@ class Case:
                 }})
 
         if "Ph" in ds.data_vars:
-            ds["Th"] = ds["Ph"] / ds["Nh"] / q_e
+            ds["Th"] = ds["Ph"] / (ds["Nh"] * q_e)
             ds["Th"].attrs.update({
                 "Th": {
                 "units": "eV",
@@ -122,7 +123,7 @@ class Case:
                 }})
 
         if "Pd" in ds.data_vars:
-            ds["Td"] = ds["Pd"] / ds["Nd"] / q_e
+            ds["Td"] = ds["Pd"] / (ds["Nd"] * q_e)
             ds["Td"].attrs.update({
                 "Td": {
                 "units": "eV",
@@ -131,7 +132,7 @@ class Case:
                 }})
 
         if "Pd+" in ds.data_vars:
-            ds["Td+"] = ds["Pd+"] / ds["Nd+"] / q_e
+            ds["Td+"] = ds["Pd+"] / (ds["Nd+"] * q_e)
             ds["Td+"].attrs.update({
                 "Td+": {
                 "units": "eV",
@@ -184,9 +185,16 @@ class Case:
             "long_name": "Ion density (h+)"
         },
 
+        "Nd+": {
+            "conversion": m["Nnorm"],
+            "units": "Pa",
+            "standard_name": "ion density (d+)",
+            "long_name": "Ion density (d+)"
+        },
+
         "Pe": {
             "conversion": m["Nnorm"] * m["Tnorm"] * q_e,
-            "units": "Pe",
+            "units": "Pa",
             "standard_name": "electron pressure",
             "long_name": "Electron pressure"
         },
@@ -216,7 +224,45 @@ class Case:
 
         self.norms = d
 
-    
+    def make_regions(self):
+        """
+        Make dataset slices for areas of interest, such as OMP, IMP, targets etc
+        """
+        data = self.ds
+        meta = self.ds.metadata
+
+        # *****OMP*****
+        # Find point between j1_2 and j2_2 with highest R coordinate
+        # Then interpolate from neighbouring cell centres to the OMP cell boundary
+        x = data.isel(t = -1, x = -1, theta = slice(meta["jyseps1_2"], meta["jyseps2_2"]))
+        Rmax_id = x.R.values.argmax()
+        omp_id_a = meta["jyseps1_2"] + Rmax_id - 1
+        omp_id_b = meta["jyseps1_2"] + Rmax_id 
+
+        omp = (data.isel(theta = omp_id_a) + data.isel(theta = omp_id_b)) /2
+
+        # Above operation doesn't allow coordinates to pass through
+        for coord in ["R", "Z"]:
+            omp.coords[coord] = (data.isel(theta = omp_id_a)[coord] + data.isel(theta = omp_id_b)[coord]) /2
+
+        self.omp = omp
+
+
+        # *****IMP*****
+        # Find point between j1_1 and j1_2 with lowest R coordinate
+        # Then interpolate from neighbouring cell centres to the IMP cell boundary
+        x = data.isel(t = -1, x = -1, theta = slice(meta["jyseps1_1"], meta["jyseps1_2"]))
+        Rmin_id = x.R.values.argmin()
+        imp_id_a = meta["jyseps1_1"] + Rmin_id 
+        imp_id_b = meta["jyseps1_1"] + Rmin_id + 1
+
+        imp = (data.isel(theta = imp_id_a) + data.isel(theta = imp_id_b)) /2
+        for coord in ["R", "Z"]:
+            imp.coords[coord] = (data.isel(theta = imp_id_a)[coord] + data.isel(theta = imp_id_b)[coord]) /2
+
+        self.imp = imp
+
+
 
     def diagnose_cvode(self, lims = (0,0), scale = "log"):
         ds = self.ds
