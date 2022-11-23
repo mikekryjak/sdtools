@@ -192,6 +192,13 @@ class Case:
             "long_name": "Ion density (d+)"
         },
 
+        "Nd": {
+            "conversion": m["Nnorm"],
+            "units": "Pa",
+            "standard_name": "neutral density (d)",
+            "long_name": "Neutral density (d)"
+        },
+
         "Pe": {
             "conversion": m["Nnorm"] * m["Tnorm"] * q_e,
             "units": "Pa",
