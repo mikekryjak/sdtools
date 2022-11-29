@@ -21,6 +21,7 @@ class Load:
         pass
 
     def case_1D(casepath):
+        
         datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
 
@@ -35,7 +36,8 @@ class Load:
 
         return Case(ds, casepath)
 
-    def case_2D(casepath, gridfilepath, verbose = False, keep_boundaries = True):
+    def case_2D(casepath, gridfilepath, verbose = False, keep_boundaries = True, squeeze = True):
+
         datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
         
@@ -53,7 +55,8 @@ class Load:
                 keep_yboundaries=keep_boundaries,
                 )
 
-        ds = ds.squeeze(drop = True)
+        if squeeze:
+            ds = ds.squeeze(drop = True)
         return Case(ds, casepath)
 
 
@@ -90,15 +93,6 @@ class Case:
                     self.ds[data_var] = self.ds[data_var] * self.norms[data_var]["conversion"]
                     self.normalised_vars.append(data_var)
                 self.ds[data_var].attrs.update(self.norms[data_var])
-
-    # def derive_vars(self):
-    #     self.calc_derivations()
-    #     self.derived_vars = []
-
-    #     for data_var in self.derivations.keys():
-    #         self.ds[data_var] = self.derivations[data_var]["calculation"]
-    #         self.ds[data_var].attrs.update(self.norms[data_var])
-    #         self.derived_vars.append(data_var)
 
     def derive_vars(self):
         ds = self.ds
@@ -226,6 +220,22 @@ class Case:
             "standard_name": "ion energy source (d+)",
             "long_name": "Ion energy source (d+)"
         },
+
+        "Rd+_ex": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "exciation radiation (d+)",
+            "long_name": "Multi-step ionisation radiation (d+)"
+        },
+
+        "Sd+_iz": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units": "m-3s-1",
+            "standard_name": "ionisation",
+            "long_name": "Ionisation ion source (d+)"
+        },
+
+        
         
         }
 
@@ -268,6 +278,18 @@ class Case:
             imp.coords[coord] = (data.isel(theta = imp_id_a)[coord] + data.isel(theta = imp_id_b)[coord]) /2
 
         self.imp = imp
+
+    def summarise_grid(self):
+        meta = self.ds.metadata
+        print(f' - ixseps1: {meta["ixseps1"]}    // id of first cell after separatrix 1')
+        print(f' - ixseps2: {meta["ixseps2"]}    // id of first cell after separatrix 2')
+        print(f' - jyseps1_1: {meta["jyseps1_1"]}    // near lower inner')
+        print(f' - jyseps1_2: {meta["jyseps1_2"]}    // near lower outer')
+        print(f' - jyseps2_1: {meta["jyseps2_1"]}    // near upper outer')
+        print(f' - jyseps2_2: {meta["jyseps2_2"]}    // near lower outer')
+        print(f' - ny_inner: {meta["ny_inner"]}    // no. poloidal cells in-between divertor regions')
+        print(f' - ny: {meta["ny"]}    // total cells in Y (poloidal, does not include guard cells)')
+        print(f' - nx: {meta["nx"]}    // total cells in X (radial, includes guard cells)')
 
 
 
