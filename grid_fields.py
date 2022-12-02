@@ -9,6 +9,8 @@ from boututils.boutarray import BoutArray
 
 
 class Mesh():
+    # TODO identify guard cells in plots
+    # TODO add separatrices to plots
     
     def __init__(self, filepath):
         """
@@ -23,6 +25,7 @@ class Mesh():
         
         self.ixseps1 = self.mesh["ixseps1"]
         self.MYG = self.mesh["y_boundary_guards"]
+        self.MXG = 2
         self.ny_inner = self.mesh["ny_inner"]
         self.ny = self.mesh["ny"]
         self.nyg = self.ny + self.MYG * 4 # with guard cells
@@ -37,6 +40,13 @@ class Mesh():
         self.j1_2g = self.j1_2 + self.MYG * 3
         self.j2_1g = self.j2_1 + self.MYG
         self.j2_2g = self.j2_2 + self.MYG * 3
+        
+        self.dx = self.mesh["dx"]
+        self.dy = self.mesh["dy"]
+        self.dydx = self.mesh["dy"] * self.mesh["dx"]    # Poloidal surface area
+        self.J = self.mesh["J"]
+        dz = 2*np.pi    # Axisymmetric
+        self.dv = self.dydx * dz * self.mesh["J"]    # Cell volume
 
         # Array of radial (x) indices and of poloidal (y) indices in the style of Rxy, Zxy
         self.x_idx = np.array([np.array(range(self.nx))] * int(self.nyg)).transpose()
@@ -66,8 +76,8 @@ class Mesh():
         slices["inner_core"] = (slice(0,self.ixseps1), np.r_[slice(self.j1_1g + 1, self.j2_1g+1), slice(self.j1_2g + 1, self.j2_2g + 1)])
         slices["outer_core"] = (slice(self.ixseps1, None), slice(0, self.nyg))
 
-        slices["outer_core_edge"] = (slice(0,1), slice(self.j1_2g + 1, self.j2_2g + 1))
-        slices["inner_core_edge"] = (slice(0,1), slice(self.j1_1g + 1, self.j2_1g + 1))
+        slices["outer_core_edge"] = (slice(0+self.MXG,1+self.MXG), slice(self.j1_2g + 1, self.j2_2g + 1))
+        slices["inner_core_edge"] = (slice(0+self.MXG,1+self.MXG), slice(self.j1_1g + 1, self.j2_1g + 1))
 
         slices["inner_lower_pfr"] = (slice(0, self.ixseps1), slice(None, self.j1_1g))
         slices["outer_lower_pfr"] = (slice(0, self.ixseps1), slice(self.j2_2g+1, self.nyg))
@@ -127,7 +137,7 @@ class Mesh():
         axes[2].scatter(rselect, zselect, s = 20, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 1, zorder = 100)
 
     def plot_xy_grid(self, ax):
-        ax.set_title("X, Y space")
+        ax.set_title("X, Y index space")
         ax.scatter(self.yflat, self.xflat, s = 1, c = "grey")
         ax.plot([self.yflat[self.j1_1g]]*np.ones_like(self.xflat), self.xflat, label = "j1_1g",   color = self.colors[0])
         ax.plot([self.yflat[self.j1_2g]]*np.ones_like(self.xflat), self.xflat, label = "j1_2g", color = self.colors[1])
@@ -177,7 +187,7 @@ class Field():
 
 
         field = self.data
-        cmap = plt.get_cmap("nipy_spectral")
+        cmap = plt.get_cmap("jet")
 
 
         fieldnorm = field / np.max(field) * 1
