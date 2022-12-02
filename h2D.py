@@ -151,6 +151,27 @@ class Case:
         q_e = constants("q_e")
         d = {
 
+        "dx": {
+            "conversion": m["rho_s0"]**2 * m["Bnorm"],
+            "units": "Wb",
+            "standard_name": "radial cell width",
+            "long_name": "Radial cell width in flux space",
+        },
+        
+        "dy": {
+            "conversion": 1,
+            "units": "radian",
+            "standard_name": "poloidal cell angular width",
+            "long_name": "Poloidal cell angular width",
+        },
+        
+        "J": {
+            "conversion": m["rho_s0"] / m["Bnorm"],
+            "units": "m/radianT",
+            "standard_name": "Jacobian",
+            "long_name": "Jacobian to translate from flux to cylindrical coordinates in real space",
+        },
+        
         "Th+": {
             "conversion": m["Tnorm"],
             "units": "eV",
@@ -240,6 +261,40 @@ class Case:
         }
 
         self.norms = d
+        
+    def slices(self, name):
+        """
+        DOUBLE NULL ONLY
+        Pass this touple to a field of any parameter spanning the grid
+        to select points of the appropriate region.
+        Each slice is a tuple: (x slice, y slice)
+        Use it as: selected_array = array[slice] where slice = (x selection, y selection) = output from this method.
+        """
+
+        slices = dict()
+
+        slices["all"] = (slice(None,None), slice(None,None))
+
+        slices["inner_core"] = (slice(0,self.ixseps1), np.r_[slice(self.j1_1g + 1, self.j2_1g+1), slice(self.j1_2g + 1, self.j2_2g + 1)])
+        slices["outer_core"] = (slice(self.ixseps1, None), slice(0, self.nyg))
+
+        slices["outer_core_edge"] = (slice(0+self.MXG,1+self.MXG), slice(self.j1_2g + 1, self.j2_2g + 1))
+        slices["inner_core_edge"] = (slice(0+self.MXG,1+self.MXG), slice(self.j1_1g + 1, self.j2_1g + 1))
+
+        slices["inner_lower_pfr"] = (slice(0, self.ixseps1), slice(None, self.j1_1g))
+        slices["outer_lower_pfr"] = (slice(0, self.ixseps1), slice(self.j2_2g+1, self.nyg))
+
+        slices["lower_pfr"] = (slice(0, self.ixseps1), np.r_[slice(None, self.j1_1g+1), slice(self.j2_2g+1, self.nyg)])
+        slices["upper_pfr"] = (slice(0, self.ixseps1), slice(self.j2_1g+1, self.j1_2g+1))
+
+        slices["outer_midplane_a"] = (slice(None, None), int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g)
+        slices["outer_midplane_b"] = (slice(None, None), int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1)
+
+        slices["inner_midplane_a"] = (slice(None, None), int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g + 1)
+        slices["inner_midplane_b"] = (slice(None, None), int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g)
+
+        return slices[name]
+
 
     def make_regions(self):
         """
