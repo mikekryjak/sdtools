@@ -178,6 +178,13 @@ class Case:
             "standard_name": "ion temperature (h+)",
             "long_name": "Ion temperature (h+)",
         },
+        
+        "Td+": {
+            "conversion": m["Tnorm"],
+            "units": "eV",
+            "standard_name": "ion temperature (d+)",
+            "long_name": "Ion temperature (d+)",
+        },
 
         "Te": {
             "conversion": m["Tnorm"],
