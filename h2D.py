@@ -443,11 +443,12 @@ class Case:
         ax.set_ylabel("Normalised residual")
         ax.set_title(f"Residual plot: {self.name}")
         
-    def plot_ddt(self, smoothing = 20):
+    def plot_ddt(self, smoothing = 50, volume_weighted = True):
         """
         RMS of all the ddt parameters, which are convergence metrics.
         Inputs:
         smoothing: moving average period used for plot smoothing (default = 20. 1 is no smoothing)
+        volume_weighted: weigh the ddt by cell volume
         """
         # Find parameters (species dependent)
         list_params = []
@@ -457,20 +458,27 @@ class Case:
                 list_params.append(var)
         list_params.sort()
         
-        # list_params = ["ddt(NVd)"]
+        # Account for case if not enough timesteps for smoothing
+        if len(self.ds.coords["t"]) < smoothing:
+            smoothing = len(self.ds.coords) / 10
 
         res = dict()
+        ma = dict()
 
         for param in list_params:
 
-            res[param] = np.diff(self.ds[param], axis = 0)**2 # Rate of change
-            res[param] = np.sqrt(np.mean(res[param], axis = (1,2)))
-            res[param] = np.convolve(res[param], np.ones(smoothing), "valid")
+            if volume_weighted:
+                res[param] = (self.ds[param] * self.dv) / np.sum(self.dv)    # Cell volume weighted
+            else:
+                res[param] = self.ds[param]
+            res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))    # Root mean square
+            res[param] = np.convolve(res[param], np.ones(smoothing), "same")    # Moving average with window = smoothing
 
         fig, ax = plt.subplots(figsize = (8,6), dpi = 100)
 
         for param in list_params:
-            ax.plot(res[param], label = param)
+            ax.plot(res[param], label = param, lw = 1)
+            
         ax.set_yscale("log")
         ax.grid(which = "major", lw = 1)
         ax.grid(which = "minor", lw = 1, alpha = 0.3)
