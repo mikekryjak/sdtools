@@ -463,7 +463,7 @@ class Case:
         ax.set_ylabel("Normalised residual")
         ax.set_title(f"Residual plot: {self.name}")
 
-    def plot_monitors(self, to_plot, ignore = []):
+    def plot_monitors(self, to_plot, what = ["mean", "max", "min"], ignore = []):
         """
         Plot time histories of parameters (density, pressure, or momentum)
         In each plot the solid line is the mean and dashed lines 
@@ -484,16 +484,23 @@ class Case:
             for var in self.ds.data_vars:
                 if "NV" in var and not any([x in var for x in ignore+["S", ")", "_"]]):
                     list_params.append(var)
+                    
+        else:
+            list_params = to_plot
 
         list_params.sort()
+        
 
         data = dict()
 
         for param in list_params:
             data[param] = dict()
-            data[param]["mean"] = np.mean(self.ds[param], axis = (1,2))
-            data[param]["max"] = np.max(self.ds[param], axis = (1,2))
-            data[param]["min"] = np.min(self.ds[param], axis = (1,2))
+            if "mean" in what:
+                data[param]["mean"] = np.mean(self.ds[param], axis = (1,2))
+            if "max" in what:
+                data[param]["max"] = np.max(self.ds[param], axis = (1,2))
+            if "min" in what:
+                data[param]["min"] = np.min(self.ds[param], axis = (1,2))
 
             if to_plot == "momentum":
                 for key in data[param]:
@@ -503,9 +510,12 @@ class Case:
         fig, ax = plt.subplots(dpi = 100)
 
         for i, param in enumerate(list_params):
-            ax.plot(data[param]["mean"], ls = "-", label = f"{param}", color = colors[i])
-            ax.plot(data[param]["max"], ls = ":",  color = colors[i])
-            ax.plot(data[param]["min"], ls = ":",  color = colors[i])
+            if "mean" in what:
+                ax.plot(data[param]["mean"], ls = "-", label = f"{param}", color = colors[i])
+            if "max" in what:
+                ax.plot(data[param]["max"], ls = ":",  color = colors[i])
+            if "min" in what:
+                ax.plot(data[param]["min"], ls = ":",  color = colors[i])
 
         ax.set_yscale("log")
         ax.grid(which = "major", lw = 1)
