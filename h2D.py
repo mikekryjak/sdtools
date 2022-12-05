@@ -78,7 +78,7 @@ class Case:
 
         self.unnormalise()
         self.derive_vars()
-        self.make_regions()
+        self.extract_geometry()
 
     
 
@@ -287,15 +287,34 @@ class Case:
 
         slices["outer_core_edge"] = (slice(0+self.MXG,1+self.MXG), slice(self.j1_2g + 1, self.j2_2g + 1))
         slices["inner_core_edge"] = (slice(0+self.MXG,1+self.MXG), slice(self.j1_1g + 1, self.j2_1g + 1))
-
+        slices["core_edge"] = (slice(0+self.MXG,1+self.MXG), np.r_[slice(self.j1_2g + 1, self.j2_2g + 1), slice(self.j1_1g + 1, self.j2_1g + 1)])
+        
+        slices["outer_sol_edge"] = (slice(-1 - self.MXG,- self.MXG), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG))
+        slices["inner_sol_edge"] = (slice(-1 - self.MXG,- self.MXG), slice(self.MYG, self.ny_inner+self.MYG))
+        
+        slices["sol_edge"] = (slice(-1 - self.MXG,- self.MXG), np.r_[slice(self.j1_1g + 1, self.j2_1g + 1), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
+        
+        
+        slices["inner_lower_target"] = (slice(None,None), slice(self.MYG, self.MYG + 1))
+        slices["inner_upper_target"] = (slice(None,None), slice(self.ny_inner+self.MYG -1, self.ny_inner+self.MYG))
+        slices["outer_upper_target"] = (slice(None,None), slice(self.ny_inner+self.MYG*3, self.ny_inner+self.MYG*3+1))
+        slices["outer_lower_target"] = (slice(None,None), slice(self.nyg-self.MYG-1, self.nyg - self.MYG))
+        
         slices["inner_lower_pfr"] = (slice(0, self.ixseps1), slice(None, self.j1_1g))
         slices["outer_lower_pfr"] = (slice(0, self.ixseps1), slice(self.j2_2g+1, self.nyg))
 
         slices["lower_pfr"] = (slice(0, self.ixseps1), np.r_[slice(None, self.j1_1g+1), slice(self.j2_2g+1, self.nyg)])
         slices["upper_pfr"] = (slice(0, self.ixseps1), slice(self.j2_1g+1, self.j1_2g+1))
+        slices["pfr"] = (slice(0, self.ixseps1), np.r_[ 
+                                                       np.r_[slice(None, self.j1_1g+1), slice(self.j2_2g+1, self.nyg)], 
+                                                       slice(self.j2_1g+1, self.j1_2g+1)])
         
+        slices["lower_pfr_edge"] = (slice(self.MXG, self.MXG+1), np.r_[slice(None, self.j1_1g+1), slice(self.j2_2g+1, self.nyg)])
+        slices["upper_pfr_edge"] = (slice(self.MXG, self.MXG+1), slice(self.j2_1g+1, self.j1_2g+1))
+        slices["pfr_edge"] = (slice(self.MXG, self.MXG+1), np.r_[
+                                                                    np.r_[slice(None, self.j1_1g+1), slice(self.j2_2g+1, self.nyg)],
+                                                                    slice(self.j2_1g+1, self.j1_2g+1)])
         
-
         slices["outer_midplane_a"] = (slice(None, None), int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g)
         slices["outer_midplane_b"] = (slice(None, None), int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1)
 
@@ -305,43 +324,40 @@ class Case:
         return slices[name]
 
 
-    def make_regions(self):
+    def extract_geometry(self):
         """
-        Make dataset slices for areas of interest, such as OMP, IMP, targets etc
+        Perpare geometry variables
         """
         data = self.ds
         meta = self.ds.metadata
 
-        # *****OMP*****
-        # Find point between j1_2 and j2_2 with highest R coordinate
-        # Then interpolate from neighbouring cell centres to the OMP cell boundary
-        x = data.isel(t = -1, x = -1, theta = slice(meta["jyseps1_2"], meta["jyseps2_2"]))
-        Rmax_id = x.R.values.argmax()
-        omp_id_a = meta["jyseps1_2"] + Rmax_id - 1
-        omp_id_b = meta["jyseps1_2"] + Rmax_id 
+        # self.Rxy = meta["Rxy"]    # R coordinate array
+        # self.Zxy = meta["Zxy"]    # Z coordinate array
+        
+        self.ixseps1 = meta["ixseps1"]
+        self.MYG = meta["MYG"]
+        self.MXG = 2
+        self.ny_inner = meta["ny_inner"]
+        self.ny = meta["ny"]
+        self.nyg = self.ny + self.MYG * 4 # with guard cells
+        self.nx = meta["nx"]
 
-        omp = (data.isel(theta = omp_id_a) + data.isel(theta = omp_id_b)) /2
+        self.j1_1 = meta["jyseps1_1"]
+        self.j1_2 = meta["jyseps1_2"]
+        self.j2_1 = meta["jyseps2_1"]
+        self.j2_2 = meta["jyseps2_2"]
 
-        # Above operation doesn't allow coordinates to pass through
-        for coord in ["R", "Z"]:
-            omp.coords[coord] = (data.isel(theta = omp_id_a)[coord] + data.isel(theta = omp_id_b)[coord]) /2
-
-        self.omp = omp
-
-
-        # *****IMP*****
-        # Find point between j1_1 and j1_2 with lowest R coordinate
-        # Then interpolate from neighbouring cell centres to the IMP cell boundary
-        x = data.isel(t = -1, x = -1, theta = slice(meta["jyseps1_1"], meta["jyseps1_2"]))
-        Rmin_id = x.R.values.argmin()
-        imp_id_a = meta["jyseps1_1"] + Rmin_id 
-        imp_id_b = meta["jyseps1_1"] + Rmin_id + 1
-
-        imp = (data.isel(theta = imp_id_a) + data.isel(theta = imp_id_b)) /2
-        for coord in ["R", "Z"]:
-            imp.coords[coord] = (data.isel(theta = imp_id_a)[coord] + data.isel(theta = imp_id_b)[coord]) /2
-
-        self.imp = imp
+        self.j1_1g = self.j1_1 + self.MYG
+        self.j1_2g = self.j1_2 + self.MYG * 3
+        self.j2_1g = self.j2_1 + self.MYG
+        self.j2_2g = self.j2_2 + self.MYG * 3
+        
+        self.dx = data["dx"]
+        self.dy = data["dy"]
+        self.dydx = data["dy"] * data["dx"]    # Poloidal surface area
+        self.J = data["J"]
+        dz = 2*np.pi    # Axisymmetric
+        self.dv = self.dydx * dz * data["J"]    # Cell volume
 
     def summarise_grid(self):
         meta = self.ds.metadata
@@ -427,11 +443,12 @@ class Case:
         ax.set_ylabel("Normalised residual")
         ax.set_title(f"Residual plot: {self.name}")
         
-    def plot_ddt(self, smoothing = 20):
+    def plot_ddt(self, smoothing = 50, volume_weighted = True):
         """
         RMS of all the ddt parameters, which are convergence metrics.
         Inputs:
         smoothing: moving average period used for plot smoothing (default = 20. 1 is no smoothing)
+        volume_weighted: weigh the ddt by cell volume
         """
         # Find parameters (species dependent)
         list_params = []
@@ -441,20 +458,27 @@ class Case:
                 list_params.append(var)
         list_params.sort()
         
-        # list_params = ["ddt(NVd)"]
+        # Account for case if not enough timesteps for smoothing
+        if len(self.ds.coords["t"]) < smoothing:
+            smoothing = len(self.ds.coords) / 10
 
         res = dict()
+        ma = dict()
 
         for param in list_params:
 
-            res[param] = np.diff(self.ds[param], axis = 0)**2 # Rate of change
-            res[param] = np.sqrt(np.mean(res[param], axis = (1,2)))
-            res[param] = np.convolve(res[param], np.ones(smoothing), "valid")
+            if volume_weighted:
+                res[param] = (self.ds[param] * self.dv) / np.sum(self.dv)    # Cell volume weighted
+            else:
+                res[param] = self.ds[param]
+            res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))    # Root mean square
+            res[param] = np.convolve(res[param], np.ones(smoothing), "same")    # Moving average with window = smoothing
 
         fig, ax = plt.subplots(figsize = (8,6), dpi = 100)
 
         for param in list_params:
-            ax.plot(res[param], label = param)
+            ax.plot(res[param], label = param, lw = 1)
+            
         ax.set_yscale("log")
         ax.grid(which = "major", lw = 1)
         ax.grid(which = "minor", lw = 1, alpha = 0.3)
