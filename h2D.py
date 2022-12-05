@@ -78,7 +78,7 @@ class Case:
 
         self.unnormalise()
         self.derive_vars()
-        self.make_regions()
+        self.extract_geometry()
 
     
 
@@ -324,43 +324,40 @@ class Case:
         return slices[name]
 
 
-    def make_regions(self):
+    def extract_geometry(self):
         """
-        Make dataset slices for areas of interest, such as OMP, IMP, targets etc
+        Perpare geometry variables
         """
         data = self.ds
         meta = self.ds.metadata
 
-        # *****OMP*****
-        # Find point between j1_2 and j2_2 with highest R coordinate
-        # Then interpolate from neighbouring cell centres to the OMP cell boundary
-        x = data.isel(t = -1, x = -1, theta = slice(meta["jyseps1_2"], meta["jyseps2_2"]))
-        Rmax_id = x.R.values.argmax()
-        omp_id_a = meta["jyseps1_2"] + Rmax_id - 1
-        omp_id_b = meta["jyseps1_2"] + Rmax_id 
+        # self.Rxy = meta["Rxy"]    # R coordinate array
+        # self.Zxy = meta["Zxy"]    # Z coordinate array
+        
+        self.ixseps1 = meta["ixseps1"]
+        self.MYG = meta["MYG"]
+        self.MXG = 2
+        self.ny_inner = meta["ny_inner"]
+        self.ny = meta["ny"]
+        self.nyg = self.ny + self.MYG * 4 # with guard cells
+        self.nx = meta["nx"]
 
-        omp = (data.isel(theta = omp_id_a) + data.isel(theta = omp_id_b)) /2
+        self.j1_1 = meta["jyseps1_1"]
+        self.j1_2 = meta["jyseps1_2"]
+        self.j2_1 = meta["jyseps2_1"]
+        self.j2_2 = meta["jyseps2_2"]
 
-        # Above operation doesn't allow coordinates to pass through
-        for coord in ["R", "Z"]:
-            omp.coords[coord] = (data.isel(theta = omp_id_a)[coord] + data.isel(theta = omp_id_b)[coord]) /2
-
-        self.omp = omp
-
-
-        # *****IMP*****
-        # Find point between j1_1 and j1_2 with lowest R coordinate
-        # Then interpolate from neighbouring cell centres to the IMP cell boundary
-        x = data.isel(t = -1, x = -1, theta = slice(meta["jyseps1_1"], meta["jyseps1_2"]))
-        Rmin_id = x.R.values.argmin()
-        imp_id_a = meta["jyseps1_1"] + Rmin_id 
-        imp_id_b = meta["jyseps1_1"] + Rmin_id + 1
-
-        imp = (data.isel(theta = imp_id_a) + data.isel(theta = imp_id_b)) /2
-        for coord in ["R", "Z"]:
-            imp.coords[coord] = (data.isel(theta = imp_id_a)[coord] + data.isel(theta = imp_id_b)[coord]) /2
-
-        self.imp = imp
+        self.j1_1g = self.j1_1 + self.MYG
+        self.j1_2g = self.j1_2 + self.MYG * 3
+        self.j2_1g = self.j2_1 + self.MYG
+        self.j2_2g = self.j2_2 + self.MYG * 3
+        
+        self.dx = data["dx"]
+        self.dy = data["dy"]
+        self.dydx = data["dy"] * data["dx"]    # Poloidal surface area
+        self.J = data["J"]
+        dz = 2*np.pi    # Axisymmetric
+        self.dv = self.dydx * dz * data["J"]    # Cell volume
 
     def summarise_grid(self):
         meta = self.ds.metadata
