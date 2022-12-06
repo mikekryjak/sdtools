@@ -198,6 +198,18 @@ class Mesh():
         if field.name in self.mesh.list():
             print(f">>> Field {field.name} already exists in {self.filepath}, it will be overwritten")
         print(f"-> Wrote field {field.name} to {self.filepath}")
+        
+    def summarise_grid(self):
+        meta = self.mesh
+        print(f' - ixseps1: {meta["ixseps1"]}    // id of first cell after separatrix 1')
+        print(f' - ixseps2: {meta["ixseps2"]}    // id of first cell after separatrix 2')
+        print(f' - jyseps1_1: {meta["jyseps1_1"]}    // near lower inner')
+        print(f' - jyseps1_2: {meta["jyseps1_2"]}    // near lower outer')
+        print(f' - jyseps2_1: {meta["jyseps2_1"]}    // near upper outer')
+        print(f' - jyseps2_2: {meta["jyseps2_2"]}    // near lower outer')
+        print(f' - ny_inner: {meta["ny_inner"]}    // no. poloidal cells in-between divertor regions')
+        print(f' - ny: {meta["ny"]}    // total cells in Y (poloidal, does not include guard cells)')
+        print(f' - nx: {meta["nx"]}    // total cells in X (radial, includes guard cells)')
 
 
 class Field():
