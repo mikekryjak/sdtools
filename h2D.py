@@ -262,6 +262,20 @@ class Case:
             "standard_name": "ionisation",
             "long_name": "Ionisation ion source (d+)"
         },
+        
+        "NVd+": {
+            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"],
+            "units": "kgms-1",
+            "standard_name": "ion momentum",
+            "long_name": "Ion momentum (d+)"
+        },
+        
+        "NVd": {
+            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"],
+            "units": "kgms-1",
+            "standard_name": "neutral momentum",
+            "long_name": "Neutral momentum (d+)"
+        },
 
         
         
@@ -357,12 +371,27 @@ class Case:
         self.j2_1g = self.j2_1 + self.MYG
         self.j2_2g = self.j2_2 + self.MYG * 3
         
+        # Cell areas in flux space
+        # dV = dx * dy * dz * J where dz is assumed to be 2pi in 2D
         self.dx = data["dx"]
         self.dy = data["dy"]
         self.dydx = data["dy"] * data["dx"]    # Poloidal surface area
         self.J = data["J"]
         dz = 2*np.pi    # Axisymmetric
         self.dv = self.dydx * dz * data["J"]    # Cell volume
+        
+        # Cell areas in real space
+        # TODO: Check these against dx/dy to ensure volume is the same
+        # dV = (hthe/Bpol) * (R*Bpol*dr) * dy*2pi = hthe * dy * dr * 2pi * R
+        self.dr = self.dx / (self.ds.R * self.ds.Bpxy)    # Length of cell in radial direction
+        self.hthe = self.J * self.ds["Bpxy"]    # h_theta
+        self.dl = self.dy * self.hthe    # poloidal arc length
+        
+    def collect_boundaries(self):
+        self.boundaries = dict()
+        for target_name in ["inner_lower_target", "inner_upper_target", "outer_upper_target", "outer_lower_target"]:
+            self.boundaries[target_name] = Target(self, target_name)
+            
 
     def summarise_grid(self):
         meta = self.ds.metadata
@@ -544,6 +573,50 @@ class Case:
         ax.set_ylabel("Value")
         ax.set_title(f"{to_plot}: {self.name}")
 
+
+class Target():
+    def __init__(self, case, target_name):
+        self.case = case
+        data = case.ds
+        mass_i = constants("mass_p") * 2
+
+        data["dr"] = data["dx"] / (data["R"] * data["Bpxy"])
+        self.last = data.isel(t=-1, x = case.slices(f"{target_name}")[0], theta = case.slices(f"{target_name}")[1])
+        self.guard = data.isel(t=-1, x = case.slices(f"{target_name}_guard")[0], theta = case.slices(f"{target_name}_guard")[1])
+
+        def bndry_val(param):
+            return (self.last[param].values + self.guard[param].values)/2
+
+        try:
+            gamma_i = self.ds.options["sheath_boundary_simple"]["gamma_i"]
+        except:
+            gamma_i = 3.5
+            
+        try:
+            gamma_e = self.ds.options["sheath_boundary_simple"]["gamma_e"]
+        except:
+            gamma_e = 3.5
+            
+        self.particle_flux = abs(bndry_val("NVd+")) / mass_i    
+        self.heat_flux = gamma_i * bndry_val("Td+") * constants("q_e") * self.particle_flux * 1e-6    # MW
+        self.r = np.cumsum(bndry_val("dr"))    # Length along divertor
+        # width = np.insert(0,0,width)
+
+        self.total_heat_flux = np.trapz(x = self.r, y = self.heat_flux.squeeze()) * 2*np.pi
+        self.total_particle_flux = np.trapz(x = self.r, y = self.particle_flux.squeeze()) * 2*np.pi
+        
+    def plot(self, what):
+        
+        fig, ax = plt.subplots(figsize = (6,4), dpi = 100)
+        ax.set_xlabel("Radial distance [m]")
+        ax.grid()
+        
+        
+        if what == "heat_flux":
+            
+            ax.set_title(f"{self.case.name}: total heat flux integral: {self.total_heat_flux:,.3f}[MW]")
+            ax.plot(self.r, self.heat_flux, c = "k", marker = "o")
+            ax.set_ylabel("Target heat flux [MW/m2]")
 
 
 def constants(name):
