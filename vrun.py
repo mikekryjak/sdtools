@@ -14,13 +14,19 @@ import time
 parser = argparse.ArgumentParser(description = "Run case")
 parser.add_argument("casepath", type=str, help = "Case to run")
 parser.add_argument("--b", type=str, help = "Branch (build folder name)")
+parser.add_argument("--c", type=str, help = "Number of cores")
 parser.add_argument("--restart", action="store_true", help = "Restart?")
 parser.add_argument("--append", action="store_true", help = "Append?")
+
 
 args = parser.parse_args()
 
 if args.b == None:
     print("Please specify branch with --b <branch_name>")
+    quit()
+    
+if args.c == None:
+    print("Please specify number of cores with --c <core_count>")
     quit()
 
 abscasepath = os.path.join(os.getcwd(), args.casepath)
@@ -38,7 +44,7 @@ if args.restart == False and args.append == False:
 
 jobname = casename
 nodes = 1
-cores = 24
+cores = args.c
 partition = "nodes"
 time = "48:00:00"
 
@@ -60,12 +66,13 @@ with open(runscriptpath, "w") as f:
     f.write(slurmcommand)
 
 print(f"\n** Using branch {args.b}.")
+print(f"\n** Running on {args.c} cores.")
 if args.restart:
-    print("-> Restarting")
+    print("\n-> Restarting")
 if args.append:
-    print("-> Appending")
+    print("\n-> Appending")
 
-print(f"Made slurm script at ", runscriptpath)
+print(f"\n--> Made slurm script at ", runscriptpath, "\n")
 # run(f"sbatch", "{runscriptpath}")
 
 # print(f"Exectuted running of {jobname}")
