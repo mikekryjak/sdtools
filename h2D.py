@@ -482,7 +482,7 @@ class Case:
         ax.set_yscale("log")
         ax.grid(which = "major", lw = 1)
         ax.grid(which = "minor", lw = 1, alpha = 0.3)
-        ax.legend()
+        ax.legend(loc = "upper left", bbox_to_anchor=(1,1))
         ax.set_xlabel("Timestep")
         ax.set_ylabel("Normalised residual")
         ax.set_title(f"Residual plot: {self.name}")
