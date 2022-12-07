@@ -91,6 +91,11 @@ class Mesh():
         slices["outer_upper_target"] = (slice(None,None), slice(self.ny_inner+self.MYG*3, self.ny_inner+self.MYG*3+1))
         slices["outer_lower_target"] = (slice(None,None), slice(self.nyg-self.MYG-1, self.nyg - self.MYG))
         
+        slices["inner_lower_target_guard"] = (slice(None,None), slice(self.MYG -1, self.MYG))
+        slices["inner_upper_target_guard"] = (slice(None,None), slice(self.ny_inner+self.MYG , self.ny_inner+self.MYG+1))
+        slices["outer_upper_target_guard"] = (slice(None,None), slice(self.ny_inner+self.MYG*3-1, self.ny_inner+self.MYG*3))
+        slices["outer_lower_target_guard"] = (slice(None,None), slice(self.nyg-self.MYG, self.nyg - self.MYG+1))
+        
         slices["inner_lower_pfr"] = (slice(0, self.ixseps1), slice(None, self.j1_1g))
         slices["outer_lower_pfr"] = (slice(0, self.ixseps1), slice(self.j2_2g+1, self.nyg))
 
@@ -193,6 +198,18 @@ class Mesh():
         if field.name in self.mesh.list():
             print(f">>> Field {field.name} already exists in {self.filepath}, it will be overwritten")
         print(f"-> Wrote field {field.name} to {self.filepath}")
+        
+    def summarise_grid(self):
+        meta = self.mesh
+        print(f' - ixseps1: {meta["ixseps1"]}    // id of first cell after separatrix 1')
+        print(f' - ixseps2: {meta["ixseps2"]}    // id of first cell after separatrix 2')
+        print(f' - jyseps1_1: {meta["jyseps1_1"]}    // near lower inner')
+        print(f' - jyseps1_2: {meta["jyseps1_2"]}    // near lower outer')
+        print(f' - jyseps2_1: {meta["jyseps2_1"]}    // near upper outer')
+        print(f' - jyseps2_2: {meta["jyseps2_2"]}    // near lower outer')
+        print(f' - ny_inner: {meta["ny_inner"]}    // no. poloidal cells in-between divertor regions')
+        print(f' - ny: {meta["ny"]}    // total cells in Y (poloidal, does not include guard cells)')
+        print(f' - nx: {meta["nx"]}    // total cells in X (radial, includes guard cells)')
 
 
 class Field():
