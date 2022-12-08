@@ -305,17 +305,33 @@ class Case:
             
             return (slice(0+self.MXG+i,1+self.MXG+i), np.r_[slice(self.j1_2g + 1, self.j2_2g + 1), slice(self.j1_1g + 1, self.j2_1g + 1)])
             
-        def custom_sol_ring(i):
+        def custom_sol_ring(i, region  = "all"):
             """
-            Creates custom SOL ring slice within the core.
-            i = 0 is at first domain cell.
-            i = -2 is at first inner guard cell.
-            i = ixseps - MXG is the separatrix.
+            Creates custom SOL ring slice beyond the separatrix.
+            i = index of SOL ring (0 is separatrix, 1 is first SOL ring)
+            region = all, inner, inner_lower, inner_upper, outer, outer_lower, outer_upper
             """
-            # if i > self.ixseps1 - self.MXG:
-            #     raise Exception("i is too large!")
             
-            return (slice(0+self.MXG+i,1+self.MXG+i), np.r_[slice(self.j1_2g + 1, self.j2_2g + 1), slice(self.j1_1g + 1, self.j2_1g + 1)])
+            i = i + self.ixseps1 - 1
+            if i > self.nx - self.MXG*2 :
+                raise Exception("i is too large!")
+            
+            if region == "all":
+                return (slice(i+1,i+2), np.r_[slice(0+self.MYG, self.j2_2g + 1), slice(self.j1_1g + 1, self.nyg - self.MYG)])
+            
+            if region == "inner":
+                return (slice(i+1,i+2), slice(0+self.MYG, self.ny_inner + self.MYG))
+            if region == "inner_lower":
+                return (slice(i+1,i+2), slice(0+self.MYG, int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g +2))
+            if region == "inner_upper":
+                return (slice(i+1,i+2), slice(int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g, self.ny_inner + self.MYG))
+            
+            if region == "outer":
+                return (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, self.nyg - self.MYG))
+            if region == "outer_lower":
+                return (slice(i+1,i+2), slice(int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g, self.nyg - self.MYG))
+            if region == "outer_upper":
+                return (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 2))
 
         slices = dict()
 
