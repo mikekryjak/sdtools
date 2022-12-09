@@ -36,7 +36,7 @@ class Load:
 
         return Case(ds, casepath)
 
-    def case_2D(casepath, gridfilepath, verbose = False, keep_boundaries = True, squeeze = True):
+    def case_2D(casepath, gridfilepath = None, verbose = False, keep_boundaries = True, squeeze = True):
 
         datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
