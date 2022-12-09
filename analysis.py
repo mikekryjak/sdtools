@@ -134,17 +134,21 @@ class Case:
             self.norm_data["NVi"] = self.norm_data["NVd+"] * constants("mass_p") / (constants("mass_p")*2) # Originally [kgm2s-1], then divide by mass_i to get flux.
             self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
             self.norm_data["S"] = self.norm_data["SNd+"]
-            self.norm_data["Rex"] = self.norm_data["Rd+_ex"]
-            self.norm_data["Rrec"] = self.norm_data["Rd+_rec"]
-            self.norm_data["R"] = self.norm_data["Rex"] + self.norm_data["Rrec"]
-            self.norm_data["Srec"] = self.norm_data["Sd+_rec"]
-            self.norm_data["Siz"] = self.norm_data["Sd+_iz"]
-            self.norm_data["Fiz"] = self.norm_data["Fd+_iz"]
-            self.norm_data["Frec"] = self.norm_data["Fd+_rec"]
-            self.norm_data["Eiz"] = self.norm_data["Ed+_iz"]
-            self.norm_data["Erec"] = self.norm_data["Ed+_rec"]
+            
+            
             self.norm_data["Ti"] = self.norm_data["Td+"]
             
+            if "Rd+_rec" in self.norm_data.keys():
+                self.norm_data["Rex"] = self.norm_data["Rd+_ex"]
+                self.norm_data["Rrec"] = self.norm_data["Rd+_rec"]
+                self.norm_data["R"] = self.norm_data["Rex"] + self.norm_data["Rrec"]
+                self.norm_data["Srec"] = self.norm_data["Sd+_rec"]
+                self.norm_data["Siz"] = self.norm_data["Sd+_iz"]
+                self.norm_data["Fiz"] = self.norm_data["Fd+_iz"]
+                self.norm_data["Frec"] = self.norm_data["Fd+_rec"]
+                self.norm_data["Eiz"] = self.norm_data["Ed+_iz"]
+                self.norm_data["Erec"] = self.norm_data["Ed+_rec"]
+
             if "Dd_Dpar" in self.norm_data.keys():
                 self.norm_data["Dn"] = self.norm_data["Dd_Dpar"]
             if "Fdd+_cx" in self.norm_data.keys():
@@ -416,6 +420,137 @@ class Case:
         ax.tick_params(axis = "both", which = "major", labelsize = 12)
         ax.tick_params(axis = "both", which = "minor", labelsize = 12)
 
+    def plot_density_controller(
+        self, plot_start = 0, plot_end = -1, 
+                                zoom = 1, ymin = None, ymax = None,
+                            labels_override = None, absolute_source = False, 
+                                error_plot = False, single_plot = True):
+        # Plot the history of upstream density to show
+        # performance of PI controller.
+        # Zoom: controls y axis limits.
+        # Stepsize: controls how many timepoints are sampled to reduce loading time.
+
+        plot_cases = [self.casepath]
+
+        # Collect density history
+        h_Ne = defaultdict(list)
+        h_NeSource = defaultdict(list)
+        intended_Ne = dict() # Intended upstream density.
+        num_timesteps = dict()
+        error_Ne = dict()
+        labels = dict()
+        final_values = list() # for finding final values for plot scales
+
+        print("Collecting data...", end = "")
+        for i, case in enumerate(plot_cases):
+        # Collect upstream density (density in first cell) for each time point.
+
+            # Extract number of timesteps in total.
+            
+            Nnorm = collect("Nnorm", path = self.casepath)
+            Omega_ci = collect("Omega_ci", path = self.casepath)
+            hist_Ne = collect("Ne", path = self.casepath, yguards=True, info=False)[:,0,1:-1,0]
+            
+            try:
+                if self.hermes:
+                    hist_NeSource = collect("Sd+_src", path = self.casepath, yguards=True, info=False)[:,0,1:-1]
+                else:
+                    hist_NeSource = collect("NeSource", path = self.casepath, yguards=True, info=False)[:,0,1:-1]
+            except:
+                print("NeSource not found for case {}".format(case))
+                pass
+            num_timesteps[case] = hist_Ne.shape[0]
+
+            for t in range(num_timesteps[case]):
+                h_Ne[case].append(replace_guards(hist_Ne[t,:])[0]*Nnorm)
+                
+                try:
+                    h_NeSource[case].append(replace_guards(hist_NeSource[t,:])[0]*Nnorm*Omega_ci)
+                except:
+                    pass
+
+            if self.hermes:
+                intended_Ne[case] = BoutData(self.casepath)["options"]["d+"]["density_upstream"]
+            else:
+                intended_Ne[case] = BoutData(self.casepath)["options"]["sd1d"]["density_upstream"]
+            
+            
+            # Find Ne error
+            error_Ne[case] = abs(1 - np.array(h_Ne[case]) / intended_Ne[case])
+            
+            # Append final values
+            if error_plot == True:
+                final_values.append(error_Ne[case][-1])
+            else:
+                final_values.append(h_Ne[case][-1])
+
+            # Get labels done
+            if labels_override != None:
+                labels[case] = labels_override[i]
+            else:
+                labels[case] = case
+                
+            # print(intended_Ne)
+            # print(error_Ne)
+                
+
+            print("{}...".format(case), end="")
+        print("\nComplete.")
+
+        # Make colors
+        colors = dict(zip(plot_cases, cc.glasbey_category10[:len(plot_cases)]))
+
+        # Plot
+        if single_plot == True:
+            for case in plot_cases:
+                fig, ax = plt.subplots(figsize = [6,6])
+                ax2 = ax.twinx()
+                ax.set_title("Upstream density error")
+                ax.plot(range(len(h_Ne[case])), 
+                        h_Ne[case], label = "Nu", 
+                        linewidth = 1, color = "black")
+                ax.hlines(intended_Ne[case], 0, num_timesteps[case], linewidth = 2,
+                        linestyle = "--", color = "black", label = "Nu target")  
+                
+                ax.grid(which="both")
+                ax2.plot(range(len(h_NeSource[case])), 
+                        h_NeSource[case], 
+                        linewidth = 2, color = "red", alpha = 1, label = "Particle source")
+                ax.set_ylabel("Upstream density (m-3)")
+                ax2.set_ylabel("Upstream particle source (s-1)")
+                ax.set_xlabel("Timestep")
+                fig.legend(loc="upper right", bbox_to_anchor=(1,1), bbox_transform=ax.transAxes, fontsize = 12)
+            
+        else:  
+            fig, ax = plt.subplots(1,2, figsize = [12,6])
+            for case in plot_cases:   
+                if error_plot == True: 
+                    ax[0].set_title("Upstream density error")
+                    ax[0].plot(range(len(error_Ne[case])), 
+                            error_Ne[case], label = f"{labels[case]}", 
+                            linewidth = 1, color = colors[case])
+
+                else:
+                    ax[0].set_title("Upstream density & target")
+                    ax[0].plot(range(len(h_Ne[case])), 
+                            h_Ne[case], label = f"{labels[case]}", 
+                            linewidth = 2, color = colors[case], linestyle = "-")
+
+                    ax[0].hlines(intended_Ne[case], 0, num_timesteps[case], linewidth = 2,
+                            linestyle = "--", color = colors[case])     
+                try:
+                    if absolute_source == True:
+                        ax[1].plot(range(len(h_NeSource[case])), 
+                                abs(np.array(h_NeSource[case])), 
+                                label = f"{labels[case]}", 
+                                linewidth = 2, color = colors[case])
+                    else:
+                        ax[1].plot(range(len(h_NeSource[case])), 
+                                h_NeSource[case], label = f"{labels[case]}", 
+                                linewidth = 2, color = colors[case])
+                except:
+                    pass
+
     def get_htransfer(self):
         
         self.data["pos_boundary"], self.data["convect_ke"] = ke_convection(self.pos, self.data["Ne"], self.data["Vi"])
@@ -437,7 +572,7 @@ class Case:
         else:
 
             self.sheath_gamma = self.options["sd1d"]["sheath_gamma"]
-            self.flux_sheath = self.data["NVi"][-1]
+            self.flux_sheath = self.data["NVi"][-1] # Not correct in Hermes
             self.Tt = self.data["Te"][-1]
             
             self.hflux_source = np.nansum(self.data["ESource"] * self.dV) * 1e-6
@@ -647,12 +782,17 @@ class Case:
         # Final domain grid centre is therefore index [-3].
         # J/sqrt(g_22) = cross-sectional area of cell
 
-        d = BoutData(self.casepath, yguards = True, info = False, strict = True, DataFileCaching=False)["outputs"]
+        boutdata = BoutData(self.casepath, yguards = True, info = False, strict = True, DataFileCaching=False)
+        d = boutdata["outputs"]
+        o = boutdata["options"]
         tind = -1
         J = d["J"].squeeze()
         dy = d["dy"].squeeze()
         dV = J * dy
         g_22 = d["g_22"].squeeze()
+
+        mass_p = constants("mass_p")
+        mass_i = mass_p * 2
 
         # Reconstruct grid position from dy
         n = len(dy)
@@ -663,50 +803,150 @@ class Case:
         for i in range(2,n):
             pos[i] = pos[i-1] + 0.5*dy[i-1] + 0.5*dy[i]
 
+        def get_boundary_time(x):
+            return (x[:,-2] + x[:,-3])/2
+
         def get_boundary(x):
             return (x[-2] + x[-3])/2
 
+        # ----- Recycling
+        recycle_multiplier = float(o["d+"]["recycle_multiplier"])
+
         # ----- Boundary flux
         sheath_area = get_boundary(J) / np.sqrt(get_boundary(g_22))
-        sheath_ion_flux = get_boundary(d["NVd+"].squeeze()[tind, :])
-        sheath_ion_flux *= sheath_area * d["Cs0"] * d["Nnorm"]
+        sheath_ion_flux = get_boundary_time(d["NVd+"].squeeze())
+        sheath_ion_flux *= sheath_area * d["Cs0"] * d["Nnorm"] * mass_p / mass_i
 
-        sheath_neutral_flux = get_boundary(d["NVd"].squeeze()[tind, :])
-        sheath_neutral_flux *= sheath_area * d["Cs0"] * d["Nnorm"]
+        sheath_neutral_flux = get_boundary_time(d["NVd"].squeeze())
+        sheath_neutral_flux *= sheath_area * d["Cs0"] * d["Nnorm"] * mass_p / mass_i
 
-        # Still not quite sure why doing a sum instead of an integral is the correct way to go, but it is.
+        intended_recycle_flux = sheath_ion_flux * recycle_multiplier
 
         # ----- Density input source
-        input_source = d["Sd+_src"].squeeze()[tind, :][2:-2]
-        input_source = np.trapz(x = pos[2:-2], y = input_source * J[2:-2] * d["Cs0"] * d["Nnorm"])
+        if "Sd+_src" in d.keys():
+            input_source = np.trapz(x = pos[2:-2], y = d["Sd+_src"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"] * d["Nnorm"])
+        else:
+            input_source = np.zeros_like(sheath_ion_flux)
+
+        if "Sd_src" in d.keys():
+            input_n_source = np.trapz(x = pos[2:-2], y = d["Sd_src"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"] * d["Nnorm"])
+        else:
+            input_n_source = np.zeros_like(sheath_ion_flux)
 
         # ----- Ionisation source
-        iz_source = d["Sd+_iz"].squeeze()[tind, :][2:-2]
-        iz_source = np.trapz(x = pos[2:-2], y = iz_source * J[2:-2] * d["Cs0"] * d["Nnorm"])
+        if "Sd+_iz" in d.keys():
+            iz_source = np.trapz(x = pos[2:-2], y = d["Sd+_iz"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"] * d["Nnorm"])
+        else:
+            iz_source = np.zeros_like(sheath_ion_flux)
 
         # ----- Recombination source
-        rec_source = d["Sd+_rec"].squeeze()[tind, :][2:-2]
-        rec_source = np.trapz(x = pos[2:-2], y = rec_source * J[2:-2] * d["Cs0"] * d["Nnorm"])
+        if "Sd+_rec" in d.keys():
+            rec_source = np.trapz(x = pos[2:-2], y = d["Sd+_rec"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"] * d["Nnorm"])
+        else:
+            rec_source = np.zeros_like(sheath_ion_flux)
+
+        # ----- Total SNd+
+        if "SNd+" in d.keys():
+            alt_source = np.trapz(x = pos[2:-2], y = d["SNd+"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"] * d["Nnorm"])
+        else:
+            alt_source = np.zeros_like(sheath_ion_flux)
+
+        # ----- Total ddt(Nd+)
+        if "ddt(Nd+)" in d.keys():
+            ddt_int = np.trapz(x = pos[2:-2], y = d["ddt(Nd+)"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"] * d["Nnorm"])
+            ddt_last = d["ddt(Nd+)"].squeeze()[:,2:-2] * d["Cs0"] * d["Nnorm"]
+        else:
+            ddt_int = np.zeros_like(sheath_ion_flux)
+
+
         # ----- Totals
-        total_in = input_source + iz_source
+        total_ions = np.trapz(x = pos[2:-2], y = d["Nd+"].squeeze()[:,2:-2] * J[2:-2] * d["Nnorm"])
+        total_neutrals = np.trapz(x = pos[2:-2], y = d["Nd"].squeeze()[:,2:-2] * J[2:-2] * d["Nnorm"])
+        total_particles = total_ions + total_neutrals
+
+        case_ion_source = np.trapz(x = pos[2:-2], y = d["SNd+"].squeeze()[:,2:-2] * J[2:-2] * d["Cs0"]  * d["Nnorm"])
+
+        avg_dens = np.trapz(x = pos[2:-2], y = d["Nd+"].squeeze()[:,2:-2] * J[2:-2] * d["Nnorm"]) / sum(dy[2:-2])
+
+        total_in = input_source + iz_source 
         total_out = sheath_ion_flux + abs(rec_source)
         total_balance = total_in - total_out
+        frac_balance = total_balance / total_in
 
         neutral_in = rec_source
         neutral_out = iz_source
 
-        print("\System mass balance")
+        fig, axes = plt.subplots(1,3, figsize=(18,4), dpi = 100)
+        fig.suptitle(self.casename)
+        fig.subplots_adjust(wspace=0.4)
+        t = range(len(iz_source))
+
+
+        ax = axes[0]
+        ax.set_title("Domain particle sources/sinks")
+        ax.plot(t, input_source, label = "Input plasma source")
+        ax.plot(t, input_n_source, label = "Input neutral source", c = "k", zorder = 100)
+        ax.plot(t, iz_source, label = "Ionisation source")
+        ax.plot(t, rec_source, label = "Recombination sink")
+        ax.plot(t, sheath_ion_flux, ls = "-", c = "grey", label = "Ion sheath sink")
+        ax.set_ylabel("Particle flux [s-1]")
+
+
+        ax = axes[1]
+        ax.set_title("Total in/out, mass imbalance")
+        ax.plot(t, total_in, lw = 2, ls = "-", c = "k", label = "Total in")
+        ax.plot(t, total_out, lw = 2, ls = "-", c = "r", label = "Total out")
+        ax.set_ylabel("Particle flux [s-1]")
+
+        ax2 = ax.twinx()
+        ax2.plot(t, frac_balance, lw = 2, alpha = 0.3, ls = "-", c = "magenta", label = "Imbalance")
+        ax2.set_ylim(-1,1)
+        ax2.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.0%}"))
+        ax2.set_ylabel("Mass imbalance [%]", c = "magenta")
+        ax2.spines["right"].set_color("magenta")
+        ax2.yaxis.label.set_color("magenta")
+        ax2.tick_params(axis="y", colors = "magenta")
+
+
+        ax = axes[2]
+        ax.set_title("Total particle count, upstream density")
+        ax.plot(t, total_particles, label = "Total domain particle count")
+        ax.plot(t, total_ions, label = "Total domain ion count")
+        ax.plot(t, total_neutrals, label = "Total domain neutral count")
+        ax.set_ylabel("Particle count")
+
+        ax2 = ax.twinx()
+        ax2.plot(t, avg_dens, c = "r", ls = "-")
+        ax2.set_ylabel("Upstream plasma density")
+        ax2.spines["right"].set_color("red")
+        ax2.yaxis.label.set_color("red")
+        ax2.tick_params(axis="y", colors = "red")
+
+        for ax in axes:
+            ax.grid(which = "both")
+            ax.set_xlabel("Timestep")
+
+
+        axes[0].legend(loc="upper left", bbox_to_anchor = (-0.11,-0.15), ncol = 3)
+        axes[1].legend(loc="upper left", bbox_to_anchor = (0.15,-0.15), ncol = 1)
+        axes[2].legend(loc="upper left", bbox_to_anchor = (0.15,-0.15), ncol = 1)
+
+        print(">>> System mass balance")
         print("- Total in ---------------")
-        print(f"- Input source = {input_source:.3E} [s-1]")
-        print(f"- Ionisation source = {iz_source:.3E} [s-1]")
-        print(f"- Total = {total_in:.3E} [s-1]")
+        print(f"- Input ion source = {input_source[-1]:.3E} [s-1]")
+        print(f"- Input neutral source = {input_n_source[-1]:.3E} [s-1]")
+        print(f"- Ionisation source = {iz_source[-1]:.3E} [s-1]")
+        print(f"- Intended recycling source = {iz_source[-1]:.3E} [s-1]")
+        print(f"- Total = {total_in[-1]:.3E} [s-1]")
         print("\n- Total out ---------------")
-        print(f"- Sheath ion flux = {sheath_ion_flux:.3E} [s-1]")
-        print(f"- Sheath neutral flux = {sheath_neutral_flux:.3E} [s-1]")
-        print(f"- Recombination source = {rec_source:.3E} [s-1]")
-        print(f"- Total = {total_out:.3E} [s-1]")
+        print(f"- Sheath ion flux = {sheath_ion_flux[-1]:.3E} [s-1]")
+        print(f"- Sheath neutral flux = {sheath_neutral_flux[-1]:.3E} [s-1]")
+        print(f"- Recombination source = {rec_source[-1]:.3E} [s-1]")
+        print(f"- Total = {total_out[-1]:.3E} [s-1]")
         print(f"\n- Difference:")
-        print(f"---> {total_balance:.3E} [s-1] ({total_balance/total_in:.3%})")
+        print(f"---> {total_balance[-1]:.3E} [s-1] ({total_balance[-1]/total_in[-1]:.3%})")
+
+
 
     def mass_balance(self,          
         verbosity = False, 
@@ -763,7 +1003,10 @@ class Case:
             h["NVi_original"] = collect("NVi", path = path_case, yguards = True, info = False, strict = True)[:,0,1:-1,0]
             nloss = self.options["sd1d"]["nloss"]
             frecycle_intended = self.options["sd1d"]["frecycle"]
-            Nu_target = self.options["sd1d"]["density_upstream"]
+            if "density_upstream" in self.options["sd1d"].keys():
+                Nu_target = self.options["sd1d"]["density_upstream"]
+            else:
+                Nu_target = np.nan
 
         if flux_input == True:
             flux_intended = self.options["Ne"]["flux"]
@@ -1320,7 +1563,7 @@ class Case:
                 zoomlims = (max(data["pos"])*0.91, max(data["pos"])*1.005)
                 if trim and param in ["NVi", "P", "M", "Ne", "Nn",  "Fcx", 
                 "Frec", "E", "F", "R", "Rex", "Rrec", "Riz", 
-                "Siz", "S", "Eiz", "Vi", "Pn", "NVn"]:
+                "Siz", "S", "Eiz", "Vi", "Pn", "NVn", "Srec"]:
                     ax.set_xlim(zoomlims)
 
                 if xlims != (0,0):
