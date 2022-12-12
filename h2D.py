@@ -477,7 +477,7 @@ class Case:
         ax.set_ylabel("Normalised residual")
         ax.set_title(f"Residual plot: {self.name}")
         
-    def plot_ddt(self, smoothing = 50, volume_weighted = True):
+    def plot_ddt(self, smoothing = 50, volume_weighted = True, dpi = 100):
         """
         RMS of all the ddt parameters, which are convergence metrics.
         Inputs:
@@ -508,7 +508,7 @@ class Case:
             res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))    # Root mean square
             res[param] = np.convolve(res[param], np.ones(smoothing), "same")    # Moving average with window = smoothing
 
-        fig, ax = plt.subplots(figsize = (8,6), dpi = 100)
+        fig, ax = plt.subplots(figsize = (6,4), dpi = dpi)
 
         for param in list_params:
             ax.plot(res[param], label = param, lw = 1)
@@ -521,7 +521,7 @@ class Case:
         ax.set_ylabel("Normalised residual")
         ax.set_title(f"Residual plot: {self.name}")
 
-    def plot_monitors(self, to_plot, what = ["mean", "max", "min"], ignore = []):
+    def plot_monitors(self, to_plot, what = ["mean", "max", "min"], ignore = [], dpi = 100):
         """
         Plot time histories of parameters (density, pressure, or momentum)
         In each plot the solid line is the mean and dashed lines 
@@ -565,7 +565,7 @@ class Case:
                     data[param][key] = np.abs(data[param][key])
 
         colors = ["teal", "darkorange", "firebrick",  "limegreen", "magenta", "cyan", "navy"]
-        fig, ax = plt.subplots(dpi = 100)
+        fig, ax = plt.subplots(figsize = (6,4), dpi = dpi)
 
         for i, param in enumerate(list_params):
             if "mean" in what:
