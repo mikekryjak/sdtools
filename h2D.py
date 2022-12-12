@@ -85,6 +85,7 @@ class Case:
             self.extract_2d_tokamak_geometry()
         else:
             self.extract_1d_tokamak_geometry()
+            self.guard_replace()
 
 
     def unnormalise(self):
@@ -672,7 +673,8 @@ class Case:
 
         ax = axes[0]
         ax.set_title("Domain particle sources/sinks")
-        ax.plot(t, integrals["Sd+_src"], label = "Input plasma source")
+        ax.plot(t, integrals["Sd+_src"], label = "Input plasma source", marker = "o", markersize = 3, markevery = 20)
+
         ax.plot(t, integrals["Sd_src"], label = "Input neutral source", c = "k", zorder = 100)
         ax.plot(t, integrals["Sd+_iz"], label = "Ionisation source")
         ax.plot(t, integrals["Sd+_rec"], label = "Recombination sink")
@@ -695,7 +697,7 @@ class Case:
         ax2.tick_params(axis="y", colors = "magenta")
 
         ax = axes[2]
-        ax.set_title("Total particle count, upstream density")
+        ax.set_title("Total particle count, upstream density", fontsize = 10)
         ax.plot(t, integrals["Nd"] + integrals["Nd+"], label = "Total domain particle count")
         ax.plot(t, integrals["Nd+"], label = "Total domain ion count")
         ax.plot(t, integrals["Nd"], label = "Total domain neutral count")
@@ -713,9 +715,9 @@ class Case:
             ax.set_xlabel("Timestep")
 
 
-        axes[0].legend(loc="upper left", bbox_to_anchor = (-0.11,-0.15), ncol = 3)
-        axes[1].legend(loc="upper left", bbox_to_anchor = (0.15,-0.15), ncol = 1)
-        axes[2].legend(loc="upper left", bbox_to_anchor = (0.15,-0.15), ncol = 1)
+        axes[0].legend(loc="upper center", bbox_to_anchor = (0.5,-0.15), ncol = 2)
+        axes[1].legend(loc="upper center", bbox_to_anchor = (0.5,-0.15), ncol = 1)
+        axes[2].legend(loc="upper center", bbox_to_anchor = (0.5,-0.15), ncol = 1)
         
     def collect_boundaries(self):
         self.boundaries = dict()
