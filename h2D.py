@@ -77,11 +77,13 @@ class Case:
 
         self.colors = ["cyan", "lime", "crimson", "magenta", "black", "red"]
 
+        self.guard_replaced = False
         self.unnormalise()
         self.derive_vars()
-        self.extract_geometry()
+        
+        if self.is_2d:
+            self.extract_2d_tokamak_geometry()
 
-    
 
     def unnormalise(self):
         self.calc_norms()
@@ -138,12 +140,37 @@ class Case:
     def guard_replace(self):
 
         if self.is_2d == False:
-            for data_var in self.ds.data_vars:
-                if "x" in self.ds[data_var].dims:
-                    pass
+            if self.ds.metadata["keep_yboundaries"] == 1:
+                # Replace inner guard cells with values at cell boundaries
+                # Hardcoded dimension order: t, y
+                # Cell order at target:
+                # ... | last | guard | second guard
+                #            ^target   ^not used
+                #     |  -3  |  -2   |      -1
 
+                if self.guard_replaced == False:
+                    for var_name in self.ds.data_vars:
+                        var = self.ds[var_name]
+                        
+                        if "y" in var.dims:
+                            
+                            if "t" in var.dims:
+                                var[:, -2] = (var[:,-3] + var[:,-2])/2
+                                var[:, 1] = (var[:, 1] + var[:, 2])/2
+                            else:
+                                var[-2] = (var[-3] + var[-2])/2
+                                var[1] = (var[1] + var[2])/2 
+                            
+                else:
+                    raise Exception("Guards already replaced!")
+                        
+                self.guard_replaced = True
+            else:
+                raise Exception("Y guards are missing from file!")
         else:
-            print("2D guard replacement not done yet")
+            raise Exception("2D guard replacement not done yet!")
+                    
+
 
 
     def calc_norms(self):
@@ -461,7 +488,7 @@ class Case:
 
 
 
-    def extract_geometry(self):
+    def extract_2d_tokamak_geometry(self):
         """
         Perpare geometry variables
         """
