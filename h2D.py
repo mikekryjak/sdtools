@@ -77,11 +77,16 @@ class Case:
 
         self.colors = ["cyan", "lime", "crimson", "magenta", "black", "red"]
 
+        self.guard_replaced = False
         self.unnormalise()
         self.derive_vars()
-        self.extract_geometry()
+        
+        if self.is_2d:
+            self.extract_2d_tokamak_geometry()
+        else:
+            self.extract_1d_tokamak_geometry()
+            self.guard_replace()
 
-    
 
     def unnormalise(self):
         self.calc_norms()
@@ -138,12 +143,37 @@ class Case:
     def guard_replace(self):
 
         if self.is_2d == False:
-            for data_var in self.ds.data_vars:
-                if "x" in self.ds[data_var].dims:
-                    pass
+            if self.ds.metadata["keep_yboundaries"] == 1:
+                # Replace inner guard cells with values at cell boundaries
+                # Hardcoded dimension order: t, y
+                # Cell order at target:
+                # ... | last | guard | second guard
+                #            ^target   ^not used
+                #     |  -3  |  -2   |      -1
 
+                if self.guard_replaced == False:
+                    for var_name in self.ds.data_vars:
+                        var = self.ds[var_name]
+                        
+                        if "y" in var.dims:
+                            
+                            if "t" in var.dims:
+                                var[:, -2] = (var[:,-3] + var[:,-2])/2
+                                var[:, 1] = (var[:, 1] + var[:, 2])/2
+                            else:
+                                var[-2] = (var[-3] + var[-2])/2
+                                var[1] = (var[1] + var[2])/2 
+                            
+                else:
+                    raise Exception("Guards already replaced!")
+                        
+                self.guard_replaced = True
+            else:
+                raise Exception("Y guards are missing from file!")
         else:
-            print("2D guard replacement not done yet")
+            raise Exception("2D guard replacement not done yet!")
+                    
+
 
 
     def calc_norms(self):
@@ -459,9 +489,50 @@ class Case:
             ax.set_ylim(ylim)
     
 
+    def extract_1d_tokamak_geometry(self):
+        ds = self.ds
+        meta = self.ds.metadata
 
+        # Reconstruct grid position from dy
+        dy = ds.coords["dy"].values
+        n = len(dy)
+        pos = np.zeros(n)
+        pos[0] = -0.5*dy[1]
+        pos[1] = 0.5*dy[1]
 
-    def extract_geometry(self):
+        for i in range(2,n):
+            pos[i] = pos[i-1] + 0.5*dy[i-1] + 0.5*dy[i]
+            
+        # pos = ds.coords["y"].values.copy()
+
+        # Guard replace to get position at boundaries
+        pos[-2] = (pos[-3] + pos[-2])/2
+        pos[1] = (pos[1] + pos[2])/2 
+
+        # Set 0 to be at first cell boundary in domain
+        pos = pos - pos[1]
+
+        # Replace y in dataset with the new one
+        ds.coords["y"] = pos
+        
+        self.ds["da"] = self.ds.J / np.sqrt(ds.g_22)
+        
+        self.ds["da"].attrs.update({
+            "conversion" : 1,
+            "units" : "m2",
+            "standard_name" : "cross-sectional area",
+            "long_name" : "Cell parallel cross-sectional area"})
+        
+        self.ds["dV"] = self.ds.J * self.ds.dy
+        self.ds["dV"].attrs.update({
+            "conversion" : 1,
+            "units" : "m3",
+            "standard_name" : "cell volume",
+            "long_name" : "Cell Volume"})
+        
+        
+
+    def extract_2d_tokamak_geometry(self):
         """
         Perpare geometry variables
         """
@@ -538,6 +609,115 @@ class Case:
             "units" : "m",
             "standard_name" : "poloidal arc length",
             "long_name" : "Poloidal arc length"})
+        
+    def mass_balance_1d(self):
+        """
+        Perform mass balance on 1D case with atomics
+        Species names are hardcoded for now
+        May not work with MYG != 2
+        """
+        o = self.ds.options
+        ds = self.ds
+        meta = self.ds.metadata
+        MYG = meta["MYG"]
+        mass_i = constants("mass_p") * 2
+        
+        # ----- Recycling
+        recycle_multiplier = float(o["d+"]["recycle_multiplier"])
+
+        # ----- Boundary flux
+        sheath_area = ds.da[-2]
+        sheath_ion_flux = ds["NVd+"].isel(y=-MYG) * sheath_area / mass_i
+        sheath_neutral_flux = ds["NVd"].isel(y=-MYG) * sheath_area / mass_i
+        intended_recycle_flux = sheath_ion_flux * recycle_multiplier
+
+        # ----- Domain integrals
+        integrals = dict()
+        for param in ["Sd+_src", "Sd_src", "Sd+_iz", "Sd+_rec", "SNd+", "Nd+", "Nd"]:
+            if param in ds.data_vars:
+                integrals[param] = (ds[param].isel(y = slice(MYG,-MYG)) * ds["dV"].isel(y = slice(MYG,-MYG))).sum("y")
+            else:
+                integrals[param] = np.zeros_like(sheath_ion_flux)
+
+        # ----- Total fluxes
+        total_in = integrals["Sd+_src"] + integrals["Sd_src"] + integrals["Sd+_iz"]
+        total_out = sheath_ion_flux + sheath_neutral_flux + (integrals["Sd+_rec"] * -1)
+        total_balance = total_in - total_out
+        frac_balance = total_balance / total_in
+        total_ions = integrals["Nd+"]
+        total_neutrals = integrals["Nd"]
+        total_particles = total_ions + total_neutrals
+        avg_plasma_dens = integrals["Nd+"] / ds["dV"].sum()
+        upstream_dens = ds["Nd+"].isel(y = MYG-1)
+
+        print(">>> System mass balance")
+        print("- Total in ---------------")
+        print(f"- Input ion source = {integrals['Sd+_src'][-1]:.3E} [s-1]")
+        print(f"- Input neutral source = {integrals['Sd_src'][-1]:.3E} [s-1]")
+        print(f"- Ionisation source = {integrals['Sd+_iz'][-1]:.3E} [s-1]")
+        print(f"- Intended recycling source = {intended_recycle_flux[-1]:.3E} [s-1]")
+        print(f"- Total = {total_in[-1]:.3E} [s-1]")
+        print("\n- Total out ---------------")
+        print(f"- Sheath ion flux = {sheath_ion_flux[-1]:.3E} [s-1]")
+        print(f"- Sheath neutral flux = {sheath_neutral_flux[-1]:.3E} [s-1]")
+        print(f"- Recombination source = {integrals['Sd+_rec'][-1]:.3E} [s-1]")
+        print(f"- Total = {total_out[-1]:.3E} [s-1]")
+        print(f"\n- Difference:")
+        print(f"---> {total_balance[-1]:.3E} [s-1] ({total_balance[-1]/total_in[-1]:.3%})")
+
+        fig, axes = plt.subplots(1,3, figsize=(18,4), dpi = 100)
+        fig.suptitle(self.name)
+        fig.subplots_adjust(wspace=0.4)
+        t = ds.coords["t"]
+
+
+        ax = axes[0]
+        ax.set_title("Domain particle sources/sinks")
+        ax.plot(t, integrals["Sd+_src"], label = "Input plasma source", marker = "o", markersize = 3, markevery = 20)
+
+        ax.plot(t, integrals["Sd_src"], label = "Input neutral source", c = "k", zorder = 100)
+        ax.plot(t, integrals["Sd+_iz"], label = "Ionisation source")
+        ax.plot(t, integrals["Sd+_rec"], label = "Recombination sink")
+        ax.plot(t, sheath_ion_flux, ls = "-", c = "grey", label = "Ion sheath sink")
+        ax.set_ylabel("Particle flux [s-1]")
+
+        ax = axes[1]
+        ax.set_title("Total in/out, mass imbalance")
+        ax.plot(t, total_in, lw = 2, ls = "-", c = "k", label = "Total in")
+        ax.plot(t, total_out, lw = 2, ls = "-", c = "r", label = "Total out")
+        ax.set_ylabel("Particle flux [s-1]")
+
+        ax2 = ax.twinx()
+        ax2.plot(t, frac_balance, lw = 2, alpha = 0.3, ls = "-", c = "magenta", label = "Imbalance")
+        ax2.set_ylim(-1,1)
+        ax2.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.0%}"))
+        ax2.set_ylabel("Mass imbalance [%]", c = "magenta")
+        ax2.spines["right"].set_color("magenta")
+        ax2.yaxis.label.set_color("magenta")
+        ax2.tick_params(axis="y", colors = "magenta")
+
+        ax = axes[2]
+        ax.set_title("Total particle count, upstream density", fontsize = 10)
+        ax.plot(t, integrals["Nd"] + integrals["Nd+"], label = "Total domain particle count")
+        ax.plot(t, integrals["Nd+"], label = "Total domain ion count")
+        ax.plot(t, integrals["Nd"], label = "Total domain neutral count")
+        ax.set_ylabel("Particle count")
+
+        ax2 = ax.twinx()
+        ax2.plot(t, upstream_dens, c = "r", ls = "-")
+        ax2.set_ylabel("Upstream plasma density")
+        ax2.spines["right"].set_color("red")
+        ax2.yaxis.label.set_color("red")
+        ax2.tick_params(axis="y", colors = "red")
+
+        for ax in axes:
+            ax.grid(which = "both")
+            ax.set_xlabel("Timestep")
+
+
+        axes[0].legend(loc="upper center", bbox_to_anchor = (0.5,-0.15), ncol = 2)
+        axes[1].legend(loc="upper center", bbox_to_anchor = (0.5,-0.15), ncol = 1)
+        axes[2].legend(loc="upper center", bbox_to_anchor = (0.5,-0.15), ncol = 1)
         
     def collect_boundaries(self):
         self.boundaries = dict()
@@ -629,7 +809,7 @@ class Case:
         ax.set_ylabel("Normalised residual")
         ax.set_title(f"Residual plot: {self.name}")
         
-    def plot_ddt(self, smoothing = 50, volume_weighted = True):
+    def plot_ddt(self, smoothing = 50, volume_weighted = True, dpi = 100):
         """
         RMS of all the ddt parameters, which are convergence metrics.
         Inputs:
@@ -660,7 +840,7 @@ class Case:
             res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))    # Root mean square
             res[param] = np.convolve(res[param], np.ones(smoothing), "same")    # Moving average with window = smoothing
 
-        fig, ax = plt.subplots(figsize = (8,6), dpi = 100)
+        fig, ax = plt.subplots(figsize = (6,4), dpi = dpi)
 
         for param in list_params:
             ax.plot(res[param], label = param, lw = 1)
@@ -673,7 +853,7 @@ class Case:
         ax.set_ylabel("Normalised residual")
         ax.set_title(f"Residual plot: {self.name}")
 
-    def plot_monitors(self, to_plot, what = ["mean", "max", "min"], ignore = []):
+    def plot_monitors(self, to_plot, what = ["mean", "max", "min"], ignore = [], dpi = 100):
         """
         Plot time histories of parameters (density, pressure, or momentum)
         In each plot the solid line is the mean and dashed lines 
@@ -717,7 +897,7 @@ class Case:
                     data[param][key] = np.abs(data[param][key])
 
         colors = ["teal", "darkorange", "firebrick",  "limegreen", "magenta", "cyan", "navy"]
-        fig, ax = plt.subplots(dpi = 100)
+        fig, ax = plt.subplots(figsize = (6,4), dpi = dpi)
 
         for i, param in enumerate(list_params):
             if "mean" in what:
