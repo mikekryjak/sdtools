@@ -75,12 +75,15 @@ class Case:
         else:
             self.is_2d = False
 
+        self.colors = ["cyan", "lime", "crimson", "magenta", "black", "red"]
 
+        self.guard_replaced = False
         self.unnormalise()
         self.derive_vars()
-        self.extract_geometry()
+        
+        if self.is_2d:
+            self.extract_2d_tokamak_geometry()
 
-    
 
     def unnormalise(self):
         self.calc_norms()
@@ -137,12 +140,37 @@ class Case:
     def guard_replace(self):
 
         if self.is_2d == False:
-            for data_var in self.ds.data_vars:
-                if "x" in self.ds[data_var].dims:
-                    pass
+            if self.ds.metadata["keep_yboundaries"] == 1:
+                # Replace inner guard cells with values at cell boundaries
+                # Hardcoded dimension order: t, y
+                # Cell order at target:
+                # ... | last | guard | second guard
+                #            ^target   ^not used
+                #     |  -3  |  -2   |      -1
 
+                if self.guard_replaced == False:
+                    for var_name in self.ds.data_vars:
+                        var = self.ds[var_name]
+                        
+                        if "y" in var.dims:
+                            
+                            if "t" in var.dims:
+                                var[:, -2] = (var[:,-3] + var[:,-2])/2
+                                var[:, 1] = (var[:, 1] + var[:, 2])/2
+                            else:
+                                var[-2] = (var[-3] + var[-2])/2
+                                var[1] = (var[1] + var[2])/2 
+                            
+                else:
+                    raise Exception("Guards already replaced!")
+                        
+                self.guard_replaced = True
+            else:
+                raise Exception("Y guards are missing from file!")
         else:
-            print("2D guard replacement not done yet")
+            raise Exception("2D guard replacement not done yet!")
+                    
+
 
 
     def calc_norms(self):
@@ -292,6 +320,46 @@ class Case:
         Use it as: selected_array = array[slice] where slice = (x selection, y selection) = output from this method.
         """
 
+        def custom_core_ring(i):
+            """
+            Creates custom SOL ring slice within the core.
+            i = 0 is at first domain cell.
+            i = -2 is at first inner guard cell.
+            i = ixseps - MXG is the separatrix.
+            """
+            if i > self.ixseps1 - self.MXG:
+                raise Exception("i is too large!")
+            
+            return (slice(0+self.MXG+i,1+self.MXG+i), np.r_[slice(self.j1_2g + 1, self.j2_2g + 1), slice(self.j1_1g + 1, self.j2_1g + 1)])
+            
+        def custom_sol_ring(i, region  = "all"):
+            """
+            Creates custom SOL ring slice beyond the separatrix.
+            i = index of SOL ring (0 is separatrix, 1 is first SOL ring)
+            region = all, inner, inner_lower, inner_upper, outer, outer_lower, outer_upper
+            """
+            
+            i = i + self.ixseps1 - 1
+            if i > self.nx - self.MXG*2 :
+                raise Exception("i is too large!")
+            
+            if region == "all":
+                return (slice(i+1,i+2), np.r_[slice(0+self.MYG, self.j2_2g + 1), slice(self.j1_1g + 1, self.nyg - self.MYG)])
+            
+            if region == "inner":
+                return (slice(i+1,i+2), slice(0+self.MYG, self.ny_inner + self.MYG))
+            if region == "inner_lower":
+                return (slice(i+1,i+2), slice(0+self.MYG, int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g +2))
+            if region == "inner_upper":
+                return (slice(i+1,i+2), slice(int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g, self.ny_inner + self.MYG))
+            
+            if region == "outer":
+                return (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, self.nyg - self.MYG))
+            if region == "outer_lower":
+                return (slice(i+1,i+2), slice(int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g, self.nyg - self.MYG))
+            if region == "outer_upper":
+                return (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 2))
+
         slices = dict()
 
         slices["all"] = (slice(None,None), slice(None,None))
@@ -308,6 +376,8 @@ class Case:
         
         slices["sol_edge"] = (slice(-1 - self.MXG,- self.MXG), np.r_[slice(self.j1_1g + 1, self.j2_1g + 1), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
         
+        slices["custom_core_ring"] = custom_core_ring
+        slices["custom_sol_ring"] = custom_sol_ring
         
         slices["inner_lower_target"] = (slice(None,None), slice(self.MYG, self.MYG + 1))
         slices["inner_upper_target"] = (slice(None,None), slice(self.ny_inner+self.MYG -1, self.ny_inner+self.MYG))
@@ -340,10 +410,85 @@ class Case:
         slices["inner_midplane_a"] = (slice(None, None), int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g + 1)
         slices["inner_midplane_b"] = (slice(None, None), int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g)
 
+
         return slices[name]
+    
+    def plot_slice(self, slicer, dpi = 100):
+        """
+        Indicates region of cells in X, Y and R, Z space for implementing Hermes-3 sources
+        You must provide a slice() object for the X and Y dimensions which is a tuple in the form (X,Y)
+        X is the radial coordinate (excl guards) and Y the poloidal coordinate (incl guards)
+        WARNING: only developed for a connected double null. Someone can adapt this to a single null or DDN.
+        """
+        
+        meta = self.ds.metadata
+        xslice = slicer[0]
+        yslice = slicer[1]
+
+        # Region boundaries
+        ny = meta["ny"]     # Total ny cells (incl guard cells)
+        nx = meta["nx"]     # Total nx cells (excl guard cells)
+        Rxy = self.ds["R"].values    # R coordinate array
+        Zxy = self.ds["Z"].values    # Z coordinate array
+        MYG = meta["MYG"]
+
+        # Array of radial (x) indices and of poloidal (y) indices in the style of Rxy, Zxy
+        x_idx = np.array([np.array(range(nx))] * int(ny + MYG * 4)).transpose()
+        y_idx = np.array([np.array(range(ny + MYG*4))] * int(nx))
+
+        # Slice the X, Y and R, Z arrays and vectorise them for plotting
+        xselect = x_idx[xslice,yslice].flatten()
+        yselect = y_idx[xslice,yslice].flatten()
+        rselect = Rxy[xslice,yslice].flatten()
+        zselect = Zxy[xslice,yslice].flatten()
+
+        # Plot
+        fig, axes = plt.subplots(1,3, figsize=(12,5), dpi = dpi, gridspec_kw={'width_ratios': [2.5, 1, 2]})
+        fig.subplots_adjust(wspace=0.3)
+
+        self.plot_xy_grid(axes[0])
+        axes[0].scatter(yselect, xselect, s = 4, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 0.5)
+
+        self.plot_rz_grid(axes[1])
+        axes[1].scatter(rselect, zselect, s = 20, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 1, zorder = 100)
+
+        self.plot_rz_grid(axes[2], ylim=(-1,-0.25))
+        axes[2].scatter(rselect, zselect, s = 20, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 1, zorder = 100)
+    
+    def plot_xy_grid(self, ax):
+        ax.set_title("X, Y index space")
+        ax.scatter(self.yflat, self.xflat, s = 1, c = "grey")
+        ax.plot([self.yflat[self.j1_1g]]*np.ones_like(self.xflat), self.xflat, label = "j1_1g",   color = self.colors[0])
+        ax.plot([self.yflat[self.j1_2g]]*np.ones_like(self.xflat), self.xflat, label = "j1_2g", color = self.colors[1])
+        ax.plot([self.yflat[self.j2_1g]]*np.ones_like(self.xflat), self.xflat, label = "j2_1g",   color = self.colors[2])
+        ax.plot([self.yflat[self.j2_2g]]*np.ones_like(self.xflat), self.xflat, label = "j2_2g", color = self.colors[3])
+        ax.plot(self.yflat, [self.yflat[self.ixseps1]]*np.ones_like(self.yflat), label = "ixseps1", color = self.colors[4])
+        ax.plot(self.yflat, [self.yflat[self.ixseps2]]*np.ones_like(self.yflat), label = "ixseps1", color = self.colors[5], ls=":")
+        ax.legend(loc = "upper center", bbox_to_anchor = (0.5,-0.1), ncol = 3)
+        ax.set_xlabel("Y index (incl. guards)")
+        ax.set_ylabel("X index (excl. guards)")
+
+    def plot_rz_grid(self, ax, xlim = (None,None), ylim = (None,None)):
+        ax.set_title("R, Z space")
+        ax.scatter(self.rflat, self.zflat, s = 0.1, c = "black")
+        ax.set_axisbelow(True)
+        ax.grid()
+        ax.plot(self.Rxy[:,self.j1_1g], self.Zxy[:,self.j1_1g], label = "j1_1g",     color = self.colors[0], alpha = 0.7)
+        ax.plot(self.Rxy[:,self.j1_2g], self.Zxy[:,self.j1_2g], label = "j1_2g", color = self.colors[1], alpha = 0.7)
+        ax.plot(self.Rxy[:,self.j2_1g], self.Zxy[:,self.j2_1g], label = "j2_1g",     color = self.colors[2], alpha = 0.7)
+        ax.plot(self.Rxy[:,self.j2_2g], self.Zxy[:,self.j2_2g], label = "j2_2g", color = self.colors[3], alpha = 0.7)
+        ax.plot(self.Rxy[self.ixseps1,:], self.Zxy[self.ixseps1,:], label = "ixseps1", color = self.colors[4], alpha = 0.7, lw = 2)
+        ax.plot(self.Rxy[self.ixseps2,:], self.Zxy[self.ixseps2,:], label = "ixseps2", color = self.colors[5], alpha = 0.7, lw = 2, ls=":")
+
+        if xlim != (None,None):
+            ax.set_xlim(xlim)
+        if ylim != (None,None):
+            ax.set_ylim(ylim)
+    
 
 
-    def extract_geometry(self):
+
+    def extract_2d_tokamak_geometry(self):
         """
         Perpare geometry variables
         """
@@ -360,11 +505,24 @@ class Case:
         self.ny = meta["ny"]
         self.nyg = self.ny + self.MYG * 4 # with guard cells
         self.nx = meta["nx"]
+        
+        # Array of radial (x) indices and of poloidal (y) indices in the style of Rxy, Zxy
+        self.x_idx = np.array([np.array(range(self.nx))] * int(self.nyg)).transpose()
+        self.y_idx = np.array([np.array(range(self.nyg))] * int(self.nx))
+        
+        self.yflat = self.y_idx.flatten()
+        self.xflat = self.x_idx.flatten()
+        self.rflat = self.ds.coords["R"].values.flatten()
+        self.zflat = self.ds.coords["Z"].values.flatten()
 
         self.j1_1 = meta["jyseps1_1"]
         self.j1_2 = meta["jyseps1_2"]
         self.j2_1 = meta["jyseps2_1"]
         self.j2_2 = meta["jyseps2_2"]
+        self.ixseps2 = meta["ixseps2"]
+        self.ixseps1 = meta["ixseps1"]
+        self.Rxy = self.ds.coords["R"]
+        self.Zxy = self.ds.coords["Z"]
 
         self.j1_1g = self.j1_1 + self.MYG
         self.j1_2g = self.j1_2 + self.MYG * 3
@@ -384,8 +542,29 @@ class Case:
         # TODO: Check these against dx/dy to ensure volume is the same
         # dV = (hthe/Bpol) * (R*Bpol*dr) * dy*2pi = hthe * dy * dr * 2pi * R
         self.dr = self.dx / (self.ds.R * self.ds.Bpxy)    # Length of cell in radial direction
-        self.hthe = self.J * self.ds["Bpxy"]    # h_theta
+        self.hthe = self.J * self.ds["Bpxy"]    # poloidal arc length per radian
         self.dl = self.dy * self.hthe    # poloidal arc length
+        
+        self.ds["dr"] = self.ds.dx / (self.ds.R * self.ds.Bpxy)
+        self.ds["dr"].attrs.update({
+            "conversion" : 1,
+            "units" : "m",
+            "standard_name" : "radial length",
+            "long_name" : "Length of cell in the radial direction"})
+        
+        self.ds["hthe"] = self.ds.J * self.ds["Bpxy"]    # h_theta
+        self.ds["hthe"].attrs.update({
+            "conversion" : 1,
+            "units" : "m/radian",
+            "standard_name" : "h_theta: poloidal arc length per radian",
+            "long_name" : "h_theta: poloidal arc length per radian"})
+        
+        self.ds["dl"] = self.ds.dy * self.ds["hthe"]    # poloidal arc length
+        self.ds["dl"].attrs.update({
+            "conversion" : 1,
+            "units" : "m",
+            "standard_name" : "poloidal arc length",
+            "long_name" : "Poloidal arc length"})
         
     def collect_boundaries(self):
         self.boundaries = dict()
@@ -627,6 +806,179 @@ class Target():
             ax.set_title(f"{self.case.name}: total heat flux integral: {self.total_heat_flux:,.3f}[MW]")
             ax.plot(self.r, self.heat_flux, c = "k", marker = "o")
             ax.set_ylabel("Target heat flux [MW/m2]")
+            
+class CoreRing():
+    """
+    Object defining a SOL ring within the core
+    For the purposes of calculating fluxes through it
+    
+    Returns dictionaries of xarray objects per species
+    with history of the following parameters
+    
+    particle_flux
+    convective_heat_flux
+    diffusive_heat_flux
+    total_heat_flux
+    ring_temperature
+    ring_density
+    """
+    def __init__(self, case, ring_index = 0):
+        self.ds = case.ds
+        self.case = case
+        self.ring_index = ring_index
+
+        # Hardcoded species list
+        self.list_species = ["d+", "e"]
+        
+        # Hardcoded anomalous coefficients
+        self.D = {"d+" : 0.3, "e" : 0.3}
+        self.Chi = {"d+" : 0.45, "e" : 0.45}
+        
+        self.extract_rings()
+        self.calculate_fluxes()
+        self.sum_fluxes()
+        self.update_attributes()
+
+    def extract_rings(self):
+        """
+        Slice the dataset into the two rings between which we are 
+        calculating flux. Also calculate geometry properties
+        """
+        # Define ring for flux calculation
+        self.a_slice = self.case.slices("custom_core_ring")(self.ring_index)    # First ring
+        self.b_slice = self.case.slices("custom_core_ring")(self.ring_index+1)    # Second ring
+
+        # Datasets for each ring
+        self.a = self.ds.isel(t = -1, x = self.a_slice[0], theta = self.a_slice[1])
+        self.b = self.ds.isel(t = -1, x = self.b_slice[0], theta = self.b_slice[1])
+
+        # Geometry properties
+        self.dr = self.a["dr"].values/2 + self.b["dr"].values/2    # Distance between cell centres of rings 
+        self.R = (self.a["R"].values + self.b["R"].values)/2    # Major radius of the edge in-between rings 
+        self.A = (self.a["dl"].values + self.b["dl"].values)/2 * 2*np.pi*self.R    # Surface area of the edge in-between rings
+        self.diff = self.ds.diff(dim = "x")    # Difference the entire dataset for dN/dT calculations
+        
+    def calculate_fluxes(self):
+        """
+        Calculate heat and particle fluxes
+        """
+
+        dN = dict()
+        dT = dict()
+        grad_N = dict()
+        grad_T = dict()
+        self.particle_flux = dict()
+        self.convective_heat_flux = dict()
+        self.diffusive_heat_flux = dict()
+        self.total_heat_flux = dict()
+        self.ring_temperature = dict()
+        self.ring_density = dict()
+        
+        for species in self.list_species:
+
+            # Use xarray's diff to preserve dimensions when doing a difference, then slice to extract ring
+            dN[species] = self.ds[f"N{species}"].diff("x").isel(x = self.a_slice[0], theta = self.a_slice[1])    
+            dT[species] = self.ds[f"T{species}"].diff("x").isel(x = self.a_slice[0], theta = self.a_slice[1])    
+            grad_N[species] = dN[species] / self.dr
+            grad_T[species] = dT[species] / self.dr
+
+            # At edge in-between rings:
+            self.ring_temperature[species] = (self.a[f"T{species}"].values + self.b[f"T{species}"].values) / 2     # Temperature [eV]
+            self.ring_density[species] = (self.a[f"N{species}"].values + self.b[f"N{species}"].values) / 2     # Density [m-3]
+
+            # Calculate flux (D*-dN/dx) in each cell and multiply by its surface area, then sum along the ring
+            self.particle_flux[species] = ((self.D[species] * - grad_N[species]) * self.A).sum("theta")    # s-1
+
+            # Convective: D*-dN/dx * T
+            # Diffusive: Chi*-dT/dx * N
+            self.convective_heat_flux[species] = ((self.D[species] * - grad_N[species]) * self.A * self.ring_temperature[species]).sum("theta") * 3/2 * constants("q_e") * 1e-6    # Heat flux [MW]
+            self.diffusive_heat_flux[species] = ((self.Chi[species] * - grad_T[species]) * self.A * self.ring_density[species]).sum("theta") * 3/2 * constants("q_e") * 1e-6    # Heat flux [MW]
+            self.total_heat_flux[species] = self.convective_heat_flux[species] + self.diffusive_heat_flux[species]
+        
+    def update_attributes(self):
+
+        for species in self.list_species:
+            self.particle_flux[species].attrs.update({
+                "conversion":1,
+                "units":"s-1",
+                "standard_name":f"{species} particle flux",
+                "long_name":f"{species} particle flux",
+            })
+
+            self.convective_heat_flux[species].attrs.update({
+                "conversion":1,
+                "units":"MW",
+                "standard_name":f"{species} convective heat flux",
+                "long_name":f"{species} convective heat flux",
+            })
+
+            self.diffusive_heat_flux[species].attrs.update({
+                "conversion":1,
+                "units":"MW",
+                "standard_name":f"{species} diffusive heat flux",
+                "long_name":f"{species} diffusive heat flux",
+            })
+
+            self.total_heat_flux[species].attrs.update({
+                "conversion":1,
+                "units":"MW",
+                "standard_name":f"{species} total heat flux",
+                "long_name":f"{species} total heat flux (convective + diffusive)",
+            })
+            
+            self.total_heat_flux_all.attrs.update({
+                "standard_name":f"Total plasma heat flux",
+                "long_name":f"Total plasma heat flux (convective + diffusive)",
+            })
+            self.particle_flux_all.attrs.update({
+                    "standard_name":f"Particle flux",
+                    "long_name":f"Plasma particle flux",
+                })
+            
+    def sum_fluxes(self):
+        
+        first_species = self.list_species[0]
+        
+        self.total_heat_flux_all = self.total_heat_flux[first_species].copy()
+        self.particle_flux_all = self.particle_flux[first_species].copy()
+        
+        list_species = self.list_species.copy()
+        list_species.remove(first_species)
+        
+        for species in list_species:
+            self.total_heat_flux_all += self.total_heat_flux[species]
+            self.particle_flux_all += self.particle_flux[species]
+            
+        
+            
+    def plot_location(self):
+        self.case.plot_slice(self.case.slices("custom_core_ring")(self.ring_index))
+        
+    def plot_particle_flux_history(self, dpi = 100):
+        fig, ax = plt.subplots(figsize = (5,4), dpi = dpi)
+        
+        
+        for species in self.list_species:
+            self.particle_flux[species].plot(ax = ax, label = species)
+            
+        ax.grid()
+        ax.set_ylabel("Particle flux [s-1]")
+        ax.set_title(f"Flux for domain core ring {self.ring_index}")
+        ax.legend()
+        
+    def plot_heat_flux_history(self, dpi = 100):
+        fig, ax = plt.subplots(figsize = (5,4), dpi = dpi)
+        
+        
+        for species in self.list_species:
+            self.total_heat_flux[species].plot(ax = ax, label = species)
+            
+        ax.grid()
+        ax.set_ylabel("Heat flux [MW]")
+        ax.set_title(f"Total heat flux for domain core ring {self.ring_index}")
+        ax.legend()
+
+    
 
 
 def constants(name):

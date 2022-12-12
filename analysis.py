@@ -1563,7 +1563,7 @@ class Case:
                 zoomlims = (max(data["pos"])*0.91, max(data["pos"])*1.005)
                 if trim and param in ["NVi", "P", "M", "Ne", "Nn",  "Fcx", 
                 "Frec", "E", "F", "R", "Rex", "Rrec", "Riz", 
-                "Siz", "S", "Eiz", "Vi", "Pn", "NVn"]:
+                "Siz", "S", "Eiz", "Vi", "Pn", "NVn", "Srec"]:
                     ax.set_xlim(zoomlims)
 
                 if xlims != (0,0):

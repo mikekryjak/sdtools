@@ -24,6 +24,7 @@ class Mesh():
         self.Zxy = self.mesh["Zxy"]    # Z coordinate array
         
         self.ixseps1 = self.mesh["ixseps1"]
+        self.ixseps2 = self.mesh["ixseps2"]
         self.MYG = self.mesh["y_boundary_guards"]
         self.MXG = 2
         self.ny_inner = self.mesh["ny_inner"]
@@ -58,7 +59,7 @@ class Mesh():
         self.zflat = self.Zxy.flatten()
         
 
-        self.colors = ["cyan", "lime", "crimson", "magenta"]
+        self.colors = ["cyan", "lime", "crimson", "magenta", "black", "red"]
 
     def slices(self, name):
         """
@@ -68,6 +69,19 @@ class Mesh():
         Each slice is a tuple: (x slice, y slice)
         Use it as: selected_array = array[slice] where slice = (x selection, y selection) = output from this method.
         """
+        
+        def custom_core_ring(i):
+            """
+            Creates custom SOL ring slice within the core.
+            i = 0 is at first domain cell.
+            i = -2 is at first inner guard cell.
+            i = ixseps - MXG is the separatrix.
+            """
+            if i > self.ixseps1 - self.MXG:
+                raise Exception("i is too large!")
+            
+            return (slice(0+self.MXG+i,1+self.MXG+i), np.r_[slice(self.j1_2g + 1, self.j2_2g + 1), slice(self.j1_1g + 1, self.j2_1g + 1)])
+            
 
         slices = dict()
 
@@ -85,6 +99,7 @@ class Mesh():
         
         slices["sol_edge"] = (slice(-1 - self.MXG,- self.MXG), np.r_[slice(self.j1_1g + 1, self.j2_1g + 1), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
         
+        slices["custom_core_ring"] = custom_core_ring
         
         slices["inner_lower_target"] = (slice(None,None), slice(self.MYG, self.MYG + 1))
         slices["inner_upper_target"] = (slice(None,None), slice(self.ny_inner+self.MYG -1, self.ny_inner+self.MYG))
@@ -120,7 +135,7 @@ class Mesh():
         return slices[name]
 
 
-    def plot_slice(self, slice):
+    def plot_slice(self, slice, dpi = 100):
         """
         Indicates region of cells in X, Y and R, Z space for implementing Hermes-3 sources
         You must provide a slice() object for the X and Y dimensions which is a tuple in the form (X,Y)
@@ -150,7 +165,7 @@ class Mesh():
         zselect = Zxy[xslice,yslice].flatten()
 
         # Plot
-        fig, axes = plt.subplots(1,3, figsize=(12,5), dpi = 120, gridspec_kw={'width_ratios': [2.5, 1, 2]})
+        fig, axes = plt.subplots(1,3, figsize=(12,5), dpi = dpi, gridspec_kw={'width_ratios': [2.5, 1, 2]})
         fig.subplots_adjust(wspace=0.3)
 
         self.plot_xy_grid(axes[0])
@@ -169,6 +184,8 @@ class Mesh():
         ax.plot([self.yflat[self.j1_2g]]*np.ones_like(self.xflat), self.xflat, label = "j1_2g", color = self.colors[1])
         ax.plot([self.yflat[self.j2_1g]]*np.ones_like(self.xflat), self.xflat, label = "j2_1g",   color = self.colors[2])
         ax.plot([self.yflat[self.j2_2g]]*np.ones_like(self.xflat), self.xflat, label = "j2_2g", color = self.colors[3])
+        ax.plot(self.yflat, [self.yflat[self.ixseps1]]*np.ones_like(self.yflat), label = "ixseps1", color = self.colors[4])
+        ax.plot(self.yflat, [self.yflat[self.ixseps2]]*np.ones_like(self.yflat), label = "ixseps1", color = self.colors[5], ls=":")
         ax.legend(loc = "upper center", bbox_to_anchor = (0.5,-0.1), ncol = 4)
         ax.set_xlabel("Y index (incl. guards)")
         ax.set_ylabel("X index (excl. guards)")
@@ -182,6 +199,8 @@ class Mesh():
         ax.plot(self.Rxy[:,self.j1_2g], self.Zxy[:,self.j1_2g], label = "j1_2g", color = self.colors[1], alpha = 0.7)
         ax.plot(self.Rxy[:,self.j2_1g], self.Zxy[:,self.j2_1g], label = "j2_1g",     color = self.colors[2], alpha = 0.7)
         ax.plot(self.Rxy[:,self.j2_2g], self.Zxy[:,self.j2_2g], label = "j2_2g", color = self.colors[3], alpha = 0.7)
+        ax.plot(self.Rxy[self.ixseps1,:], self.Zxy[self.ixseps1,:], label = "ixseps1", color = self.colors[4], alpha = 0.7, lw = 2)
+        ax.plot(self.Rxy[self.ixseps2,:], self.Zxy[self.ixseps2,:], label = "ixseps2", color = self.colors[5], alpha = 0.7, lw = 2, ls=":")
 
         if xlim != (None,None):
             ax.set_xlim(xlim)
