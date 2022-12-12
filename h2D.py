@@ -502,7 +502,7 @@ class Case:
         for i in range(2,n):
             pos[i] = pos[i-1] + 0.5*dy[i-1] + 0.5*dy[i]
             
-        pos = ds.coords["y"].values.copy()
+        # pos = ds.coords["y"].values.copy()
 
         # Guard replace to get position at boundaries
         pos[-2] = (pos[-3] + pos[-2])/2
@@ -513,6 +513,21 @@ class Case:
 
         # Replace y in dataset with the new one
         ds.coords["y"] = pos
+        
+        self.ds["da"] = self.ds.J / np.sqrt(ds.g_22)
+        
+        self.ds["da"].attrs.update({
+            "conversion" : 1,
+            "units" : "m2",
+            "standard_name" : "cross-sectional area",
+            "long_name" : "Cell parallel cross-sectional area"})
+        
+        self.ds["dV"] = self.ds.J * self.ds.dy
+        self.ds["dV"].attrs.update({
+            "conversion" : 1,
+            "units" : "m3",
+            "standard_name" : "cell volume",
+            "long_name" : "Cell Volume"})
         
         
 
@@ -593,6 +608,114 @@ class Case:
             "units" : "m",
             "standard_name" : "poloidal arc length",
             "long_name" : "Poloidal arc length"})
+        
+    def mass_balance_1d(self):
+        """
+        Perform mass balance on 1D case with atomics
+        Species names are hardcoded for now
+        May not work with MYG != 2
+        """
+        o = self.ds.options
+        ds = self.ds
+        meta = self.ds.metadata
+        MYG = meta["MYG"]
+        mass_i = constants("mass_p") * 2
+        
+        # ----- Recycling
+        recycle_multiplier = float(o["d+"]["recycle_multiplier"])
+
+        # ----- Boundary flux
+        sheath_area = ds.da[-2]
+        sheath_ion_flux = ds["NVd+"].isel(y=-MYG) * sheath_area / mass_i
+        sheath_neutral_flux = ds["NVd"].isel(y=-MYG) * sheath_area / mass_i
+        intended_recycle_flux = sheath_ion_flux * recycle_multiplier
+
+        # ----- Domain integrals
+        integrals = dict()
+        for param in ["Sd+_src", "Sd_src", "Sd+_iz", "Sd+_rec", "SNd+", "Nd+", "Nd"]:
+            if param in ds.data_vars:
+                integrals[param] = (ds[param].isel(y = slice(MYG,-MYG)) * ds["dV"].isel(y = slice(MYG,-MYG))).sum("y")
+            else:
+                integrals[param] = np.zeros_like(sheath_ion_flux)
+
+        # ----- Total fluxes
+        total_in = integrals["Sd+_src"] + integrals["Sd_src"] + integrals["Sd+_iz"]
+        total_out = sheath_ion_flux + sheath_neutral_flux + (integrals["Sd+_rec"] * -1)
+        total_balance = total_in - total_out
+        frac_balance = total_balance / total_in
+        total_ions = integrals["Nd+"]
+        total_neutrals = integrals["Nd"]
+        total_particles = total_ions + total_neutrals
+        avg_plasma_dens = integrals["Nd+"] / ds["dV"].sum()
+        upstream_dens = ds["Nd+"].isel(y = MYG-1)
+
+        print(">>> System mass balance")
+        print("- Total in ---------------")
+        print(f"- Input ion source = {integrals['Sd+_src'][-1]:.3E} [s-1]")
+        print(f"- Input neutral source = {integrals['Sd_src'][-1]:.3E} [s-1]")
+        print(f"- Ionisation source = {integrals['Sd+_iz'][-1]:.3E} [s-1]")
+        print(f"- Intended recycling source = {intended_recycle_flux[-1]:.3E} [s-1]")
+        print(f"- Total = {total_in[-1]:.3E} [s-1]")
+        print("\n- Total out ---------------")
+        print(f"- Sheath ion flux = {sheath_ion_flux[-1]:.3E} [s-1]")
+        print(f"- Sheath neutral flux = {sheath_neutral_flux[-1]:.3E} [s-1]")
+        print(f"- Recombination source = {integrals['Sd+_rec'][-1]:.3E} [s-1]")
+        print(f"- Total = {total_out[-1]:.3E} [s-1]")
+        print(f"\n- Difference:")
+        print(f"---> {total_balance[-1]:.3E} [s-1] ({total_balance[-1]/total_in[-1]:.3%})")
+
+        fig, axes = plt.subplots(1,3, figsize=(18,4), dpi = 100)
+        fig.suptitle(self.name)
+        fig.subplots_adjust(wspace=0.4)
+        t = ds.coords["t"]
+
+
+        ax = axes[0]
+        ax.set_title("Domain particle sources/sinks")
+        ax.plot(t, integrals["Sd+_src"], label = "Input plasma source")
+        ax.plot(t, integrals["Sd_src"], label = "Input neutral source", c = "k", zorder = 100)
+        ax.plot(t, integrals["Sd+_iz"], label = "Ionisation source")
+        ax.plot(t, integrals["Sd+_rec"], label = "Recombination sink")
+        ax.plot(t, sheath_ion_flux, ls = "-", c = "grey", label = "Ion sheath sink")
+        ax.set_ylabel("Particle flux [s-1]")
+
+        ax = axes[1]
+        ax.set_title("Total in/out, mass imbalance")
+        ax.plot(t, total_in, lw = 2, ls = "-", c = "k", label = "Total in")
+        ax.plot(t, total_out, lw = 2, ls = "-", c = "r", label = "Total out")
+        ax.set_ylabel("Particle flux [s-1]")
+
+        ax2 = ax.twinx()
+        ax2.plot(t, frac_balance, lw = 2, alpha = 0.3, ls = "-", c = "magenta", label = "Imbalance")
+        ax2.set_ylim(-1,1)
+        ax2.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.0%}"))
+        ax2.set_ylabel("Mass imbalance [%]", c = "magenta")
+        ax2.spines["right"].set_color("magenta")
+        ax2.yaxis.label.set_color("magenta")
+        ax2.tick_params(axis="y", colors = "magenta")
+
+        ax = axes[2]
+        ax.set_title("Total particle count, upstream density")
+        ax.plot(t, integrals["Nd"] + integrals["Nd+"], label = "Total domain particle count")
+        ax.plot(t, integrals["Nd+"], label = "Total domain ion count")
+        ax.plot(t, integrals["Nd"], label = "Total domain neutral count")
+        ax.set_ylabel("Particle count")
+
+        ax2 = ax.twinx()
+        ax2.plot(t, upstream_dens, c = "r", ls = "-")
+        ax2.set_ylabel("Upstream plasma density")
+        ax2.spines["right"].set_color("red")
+        ax2.yaxis.label.set_color("red")
+        ax2.tick_params(axis="y", colors = "red")
+
+        for ax in axes:
+            ax.grid(which = "both")
+            ax.set_xlabel("Timestep")
+
+
+        axes[0].legend(loc="upper left", bbox_to_anchor = (-0.11,-0.15), ncol = 3)
+        axes[1].legend(loc="upper left", bbox_to_anchor = (0.15,-0.15), ncol = 1)
+        axes[2].legend(loc="upper left", bbox_to_anchor = (0.15,-0.15), ncol = 1)
         
     def collect_boundaries(self):
         self.boundaries = dict()
