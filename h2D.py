@@ -83,6 +83,8 @@ class Case:
         
         if self.is_2d:
             self.extract_2d_tokamak_geometry()
+        else:
+            self.extract_1d_tokamak_geometry()
 
 
     def unnormalise(self):
@@ -486,7 +488,33 @@ class Case:
             ax.set_ylim(ylim)
     
 
+    def extract_1d_tokamak_geometry(self):
+        ds = self.ds
+        meta = self.ds.metadata
 
+        # Reconstruct grid position from dy
+        dy = ds.coords["dy"].values
+        n = len(dy)
+        pos = np.zeros(n)
+        pos[0] = -0.5*dy[1]
+        pos[1] = 0.5*dy[1]
+
+        for i in range(2,n):
+            pos[i] = pos[i-1] + 0.5*dy[i-1] + 0.5*dy[i]
+            
+        pos = ds.coords["y"].values.copy()
+
+        # Guard replace to get position at boundaries
+        pos[-2] = (pos[-3] + pos[-2])/2
+        pos[1] = (pos[1] + pos[2])/2 
+
+        # Set 0 to be at first cell boundary in domain
+        pos = pos - pos[1]
+
+        # Replace y in dataset with the new one
+        ds.coords["y"] = pos
+        
+        
 
     def extract_2d_tokamak_geometry(self):
         """
