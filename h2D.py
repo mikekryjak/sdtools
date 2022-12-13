@@ -929,11 +929,7 @@ class Target():
         self.case = case
         data = case.ds
         mass_i = constants("mass_p") * 2
-
-        data["dr"] = data["dx"] / (data["R"] * data["Bpxy"])
-        self.last = data.isel(t=-1, x = case.slices(f"{target_name}")[0], theta = case.slices(f"{target_name}")[1])
-        self.guard = data.isel(t=-1, x = case.slices(f"{target_name}_guard")[0], theta = case.slices(f"{target_name}_guard")[1])
-
+        
         def bndry_val(param):
             return (self.last[param].values + self.guard[param].values)/2
 
@@ -946,19 +942,27 @@ class Target():
             gamma_e = self.ds.options["sheath_boundary_simple"]["gamma_e"]
         except:
             gamma_e = 3.5
-            
-        self.parallel_particle_flux = abs(bndry_val("NVd+")).squeeze() / mass_i    
-        self.particle_flux = self.parallel_particle_flux * (bndry_val("Bxy") / bndry_val("Bpxy"))    # Now poloidal
-        self.heat_flux_ion = gamma_i * bndry_val("Td+") * constants("q_e") * self.particle_flux * 1e-6    # MW
-        self.r = np.cumsum(bndry_val("dr"))    # Poloidal length along divertor
-        self.width = np.sum(bndry_val("dr"))
-        self.area = self.width * 2*np.pi    # Poloidal area
-        # width = np.insert(0,0,width)
 
-        # TODO: Trapz or not?
-        # self.total_heat_flux = np.trapz(x = self.r, y = self.heat_flux.squeeze()) * 2*np.pi
-        # self.total_heat_flux = self.heat_flux_ion.squeeze() * self.area
-        # self.total_particle_flux = np.trapz(x = self.r, y = self.particle_flux.squeeze()) * 2*np.pi
+        data["dr"] = data["dx"] / (data["R"] * data["Bpxy"])
+        self.last = data.isel(t=-1, x = case.slices(f"{target_name}")[0], theta = case.slices(f"{target_name}")[1])
+        self.guard = data.isel(t=-1, x = case.slices(f"{target_name}_guard")[0], theta = case.slices(f"{target_name}_guard")[1])
+
+        self.dr = bndry_val("dr")
+        self.r = np.cumsum(self.dr)    # Poloidal length along divertor
+        self.length = np.sum(self.dr)    # Total divertor poloidal length
+        self.area = self.length * 2*np.pi    # Poloidal area
+
+        # TODO trapz or not?
+        self.parallel_specific_particle_flux = abs(bndry_val("NVd+")) / mass_i    # Parallel, m-2s-1
+        self.particle_flux = self.parallel_specific_particle_flux * (bndry_val("Bxy") / bndry_val("Bpxy")) * self.dr    # Poloidal, s-1
+        self.heat_flux_i = gamma_i * bndry_val("Td+") * constants("q_e") * self.particle_flux   # W
+        self.heat_flux_e = gamma_e * bndry_val("Te") * constants("q_e") * self.particle_flux    # W
+
+        self.total_heat_flux = dict()
+        self.total_heat_flux["d+"] = np.sum(self.heat_flux_i)    # W
+        self.total_heat_flux["e"] = np.sum(self.heat_flux_e)    # W
+        self.total_heat_flux_all = self.total_heat_flux["d+"] + self.total_heat_flux["e"]    # W
+        self.total_particle_flux = np.sum(self.particle_flux)    # s-1
         
     def plot(self, what):
         
@@ -1151,7 +1155,7 @@ class Region():
         self.ds = self.case.ds.isel(x = slicer[0], theta = slicer[1])
         self.integrals = dict()
 
-        for param in ["Pd+_src", "Pe_src", "Rd+_ex", "Rd+_rec", "Sd+_iz", "Sd+_rec"]:
+        for param in ["Pd+_src", "Pe_src", "Sd+_src", "Rd+_ex", "Rd+_rec", "Sd+_iz", "Sd+_rec"]:
             self.integrals[param] = (self.ds[param] * self.ds["dv"]).sum("x").sum("theta")    # Wm-3
         
 
