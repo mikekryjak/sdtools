@@ -726,6 +726,65 @@ class Case:
         axes[0].legend(loc="upper center", bbox_to_anchor = (0.5,-0.15), ncol = 2)
         axes[1].legend(loc="upper center", bbox_to_anchor = (0.5,-0.15), ncol = 1)
         axes[2].legend(loc="upper center", bbox_to_anchor = (0.5,-0.15), ncol = 1)
+
+    def heat_balance_2d(self):
+        case = self        
+        domain = Region(case, case.slices("all"))
+        core_ring = CoreRing(case, ring_index = 0)
+        targets = {
+                "outer_lower" : Target(case, "outer_lower_target"),
+                "outer_upper" : Target(case, "outer_upper_target"),
+                "inner_lower" : Target(case, "inner_lower_target"),
+                "inner_upper" : Target(case, "inner_upper_target"),
+        }
+        list_targets = list(targets.values())
+
+        core_i_source = domain.integrals["Pd+_src"] * 1e-6 
+        core_e_source = domain.integrals["Pe_src"] * 1e-6
+        rad_iz = domain.integrals["Rd+_ex"] * 1e-6 * -1    # MW
+        rad_rec = domain.integrals["Rd+_rec"] * 1e-6 * -1  # MW
+        core_i_power = core_ring.total_heat_flux["d+"].squeeze() * 1e-6    # MW
+        core_e_power = core_ring.total_heat_flux["e"].squeeze() * 1e-6    # MW
+        outer_target_flux = np.sum([x.total_heat_flux_all for x in [targets["outer_lower"], targets["outer_upper"]]]) * 1e-6
+        inner_target_flux = np.sum([x.total_heat_flux_all for x in [targets["inner_lower"], targets["inner_upper"]]]) * 1e-6
+
+
+        print(f"- Ion power source: {core_i_source[-1]:,.1f}MW")
+        print(f"- Electron power source: {core_e_source[-1]:,.1f}MW")
+        print(f"- Ion power leaving core: {core_i_power[-1]:,.1f}MW")
+        print(f"- Electron power leaving core: {core_e_power[-1]:,.1f}MW")
+        print(f"- Total ionisation radiation: {rad_iz[-1]:,.1f}MW")
+        print(f"- Total recombination radiation: {rad_rec[-1]:,.1f}MW")
+        print(f"- Total outer target heat flux: {outer_target_flux:,.1f}MW")
+        print(f"- Total inner target heat flux: {inner_target_flux:,.1f}MW")
+        
+    def mass_balance_2d(self):
+        case = self
+        domain = Region(case, case.slices("all"))
+        core_ring = CoreRing(case, ring_index = 0)
+        targets = {
+                "outer_lower" : Target(case, "outer_lower_target"),
+                "outer_upper" : Target(case, "outer_upper_target"),
+                "inner_lower" : Target(case, "inner_lower_target"),
+                "inner_upper" : Target(case, "inner_upper_target"),
+        }
+        list_targets = list(targets.values())
+
+        core_source = domain.integrals["Sd+_src"] * 1e-6 
+        s_iz = domain.integrals["Sd+_iz"]   
+        s_rec = domain.integrals["Sd+_rec"] * -1  
+        core_flux = core_ring.particle_flux["d+"].squeeze()
+
+        outer_target_flux = np.sum([x.particle_flux for x in [targets["outer_lower"], targets["outer_upper"]]]) * 1e-6
+        inner_target_flux = np.sum([x.particle_flux for x in [targets["inner_lower"], targets["inner_upper"]]]) * 1e-6
+
+
+        print(f"- Total particle source [s-1]: {core_source[-1]:,.3E} ")
+        print(f"- Particles leaving core [s-1]: {core_flux[-1]:,.3E} ")
+        print(f"- Total ionisation source [s-1]: {s_iz[-1]:,.3E} ")
+        print(f"- Total recombination source [s-1]: {s_rec[-1]:,.3E} ")
+        print(f"- Total outer target flux [s-1]: {outer_target_flux:,.3E} ")
+        print(f"- Total inner target flux [s-1]: {inner_target_flux:,.3E} ")
         
     def collect_boundaries(self):
         self.boundaries = dict()
