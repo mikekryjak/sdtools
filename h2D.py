@@ -382,15 +382,15 @@ class Case:
         slices["custom_core_ring"] = custom_core_ring
         slices["custom_sol_ring"] = custom_sol_ring
         
-        slices["inner_lower_target"] = (slice(None,None), slice(self.MYG, self.MYG + 1))
-        slices["inner_upper_target"] = (slice(None,None), slice(self.ny_inner+self.MYG -1, self.ny_inner+self.MYG))
-        slices["outer_upper_target"] = (slice(None,None), slice(self.ny_inner+self.MYG*3, self.ny_inner+self.MYG*3+1))
-        slices["outer_lower_target"] = (slice(None,None), slice(self.nyg-self.MYG-1, self.nyg - self.MYG))
+        slices["inner_lower_target"] = (slice(self.MXG,-self.MXG), slice(self.MYG, self.MYG + 1))
+        slices["inner_upper_target"] = (slice(self.MXG,-self.MXG), slice(self.ny_inner+self.MYG -1, self.ny_inner+self.MYG))
+        slices["outer_upper_target"] = (slice(self.MXG,-self.MXG), slice(self.ny_inner+self.MYG*3, self.ny_inner+self.MYG*3+1))
+        slices["outer_lower_target"] = (slice(self.MXG,-self.MXG), slice(self.nyg-self.MYG-1, self.nyg - self.MYG))
         
-        slices["inner_lower_target_guard"] = (slice(None,None), slice(self.MYG -1, self.MYG))
-        slices["inner_upper_target_guard"] = (slice(None,None), slice(self.ny_inner+self.MYG , self.ny_inner+self.MYG+1))
-        slices["outer_upper_target_guard"] = (slice(None,None), slice(self.ny_inner+self.MYG*3-1, self.ny_inner+self.MYG*3))
-        slices["outer_lower_target_guard"] = (slice(None,None), slice(self.nyg-self.MYG, self.nyg - self.MYG+1))
+        slices["inner_lower_target_guard"] = (slice(self.MXG,-self.MXG), slice(self.MYG -1, self.MYG))
+        slices["inner_upper_target_guard"] = (slice(self.MXG,-self.MXG), slice(self.ny_inner+self.MYG , self.ny_inner+self.MYG+1))
+        slices["outer_upper_target_guard"] = (slice(self.MXG,-self.MXG), slice(self.ny_inner+self.MYG*3-1, self.ny_inner+self.MYG*3))
+        slices["outer_lower_target_guard"] = (slice(self.MXG,-self.MXG), slice(self.nyg-self.MYG, self.nyg - self.MYG+1))
         
         slices["inner_lower_pfr"] = (slice(0, self.ixseps1), slice(None, self.j1_1g))
         slices["outer_lower_pfr"] = (slice(0, self.ixseps1), slice(self.j2_2g+1, self.nyg))
@@ -407,11 +407,11 @@ class Case:
                                                                     np.r_[slice(None, self.j1_1g+1), slice(self.j2_2g+1, self.nyg)],
                                                                     slice(self.j2_1g+1, self.j1_2g+1)])
         
-        slices["outer_midplane_a"] = (slice(None, None), int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g)
-        slices["outer_midplane_b"] = (slice(None, None), int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1)
+        slices["outer_midplane_a"] = (slice(self.MXG,-self.MXG), int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g)
+        slices["outer_midplane_b"] = (slice(self.MXG,-self.MXG), int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1)
 
-        slices["inner_midplane_a"] = (slice(None, None), int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g + 1)
-        slices["inner_midplane_b"] = (slice(None, None), int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g)
+        slices["inner_midplane_a"] = (slice(self.MXG,-self.MXG), int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g + 1)
+        slices["inner_midplane_b"] = (slice(self.MXG,-self.MXG), int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g)
 
 
         return slices[name]
@@ -947,13 +947,18 @@ class Target():
         except:
             gamma_e = 3.5
             
-        self.particle_flux = abs(bndry_val("NVd+")) / mass_i    
-        self.heat_flux = gamma_i * bndry_val("Td+") * constants("q_e") * self.particle_flux * 1e-6    # MW
-        self.r = np.cumsum(bndry_val("dr"))    # Length along divertor
+        self.parallel_particle_flux = abs(bndry_val("NVd+")).squeeze() / mass_i    
+        self.particle_flux = self.parallel_particle_flux * (bndry_val("Bxy") / bndry_val("Bpxy"))    # Now poloidal
+        self.heat_flux_ion = gamma_i * bndry_val("Td+") * constants("q_e") * self.particle_flux * 1e-6    # MW
+        self.r = np.cumsum(bndry_val("dr"))    # Poloidal length along divertor
+        self.width = np.sum(bndry_val("dr"))
+        self.area = self.width * 2*np.pi    # Poloidal area
         # width = np.insert(0,0,width)
 
-        self.total_heat_flux = np.trapz(x = self.r, y = self.heat_flux.squeeze()) * 2*np.pi
-        self.total_particle_flux = np.trapz(x = self.r, y = self.particle_flux.squeeze()) * 2*np.pi
+        # TODO: Trapz or not?
+        # self.total_heat_flux = np.trapz(x = self.r, y = self.heat_flux.squeeze()) * 2*np.pi
+        # self.total_heat_flux = self.heat_flux_ion.squeeze() * self.area
+        # self.total_particle_flux = np.trapz(x = self.r, y = self.particle_flux.squeeze()) * 2*np.pi
         
     def plot(self, what):
         
