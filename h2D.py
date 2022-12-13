@@ -107,38 +107,34 @@ class Case:
         if "Ph+" in ds.data_vars:
             ds["Th+"] = ds["Ph+"] / (ds["Nh+"] * q_e)
             ds["Th+"].attrs.update({
-                "Th+": {
                 "units": "eV",
                 "standard_name": "ion temperature (h+)",
                 "long_name": "Ion temperature (h+)",
-                }})
+                })
 
         if "Ph" in ds.data_vars:
             ds["Th"] = ds["Ph"] / (ds["Nh"] * q_e)
             ds["Th"].attrs.update({
-                "Th": {
                 "units": "eV",
-                "standard_name": "neutra; temperature (h)",
+                "standard_name": "neutral temperature (h)",
                 "long_name": "Neutral temperature (h)",
-                }})
+                })
 
         if "Pd" in ds.data_vars:
             ds["Td"] = ds["Pd"] / (ds["Nd"] * q_e)
             ds["Td"].attrs.update({
-                "Td": {
                 "units": "eV",
                 "standard_name": "neutral temperature (d)",
                 "long_name": "Neutral temperature (d)",
-                }})
+                })
 
         if "Pd+" in ds.data_vars:
             ds["Td+"] = ds["Pd+"] / (ds["Nd+"] * q_e)
             ds["Td+"].attrs.update({
-                "Td+": {
                 "units": "eV",
                 "standard_name": "ion temperature (d+)",
                 "long_name": "Ion temperature (d+)",
-                }})
+                })
 
     def guard_replace(self):
 
