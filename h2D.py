@@ -182,26 +182,29 @@ class Case:
         q_e = constants("q_e")
         d = {
 
-        "dx": {
-            "conversion": m["rho_s0"]**2 * m["Bnorm"],
-            "units": "Wb",
-            "standard_name": "radial cell width",
-            "long_name": "Radial cell width in flux space",
-        },
+        # Is the geometry normalised or not???
+        # Results seem to suggest that these come in SI already!!
         
-        "dy": {
-            "conversion": 1,
-            "units": "radian",
-            "standard_name": "poloidal cell angular width",
-            "long_name": "Poloidal cell angular width",
-        },
+        # "dx": {
+        #     "conversion": m["rho_s0"]**2 * m["Bnorm"],
+        #     "units": "Wb",
+        #     "standard_name": "radial cell width",
+        #     "long_name": "Radial cell width in flux space",
+        # },
         
-        "J": {
-            "conversion": m["rho_s0"] / m["Bnorm"],
-            "units": "m/radianT",
-            "standard_name": "Jacobian",
-            "long_name": "Jacobian to translate from flux to cylindrical coordinates in real space",
-        },
+        # "dy": {
+        #     "conversion": 1,
+        #     "units": "radian",
+        #     "standard_name": "poloidal cell angular width",
+        #     "long_name": "Poloidal cell angular width",
+        # },
+        
+        # "J": {
+        #     "conversion": m["rho_s0"] / m["Bnorm"],
+        #     "units": "m/radianT",
+        #     "standard_name": "Jacobian",
+        #     "long_name": "Jacobian to translate from flux to cylindrical coordinates in real space",
+        # },
         
         "Th+": {
             "conversion": m["Tnorm"],
@@ -365,7 +368,8 @@ class Case:
 
         slices = dict()
 
-        slices["all"] = (slice(None,None), slice(None,None))
+        slices["all"] = (slice(self.MXG,-self.MXG), slice(self.MYG,-self.MYG))
+        # slices["all"] = (slice(None,None), slice(self.MYG,-self.MYG))
 
         slices["inner_core"] = (slice(0,self.ixseps1), np.r_[slice(self.j1_1g + 1, self.j2_1g+1), slice(self.j1_2g + 1, self.j2_2g + 1)])
         slices["outer_core"] = (slice(self.ixseps1, None), slice(0, self.nyg))
@@ -609,6 +613,14 @@ class Case:
             "units" : "m",
             "standard_name" : "poloidal arc length",
             "long_name" : "Poloidal arc length"})
+        
+        self.ds["dv"] = self.dydx * dz * data["J"]    # Cell volume
+        self.ds["dv"].attrs.update({
+            "conversion" : 1,
+            "units" : "m3",
+            "standard_name" : "cell volume",
+            "long_name" : "Cell volume"})
+        
         
     def mass_balance_1d(self):
         """
@@ -1044,8 +1056,8 @@ class CoreRing():
 
             # Convective: D*-dN/dx * T
             # Diffusive: Chi*-dT/dx * N
-            self.convective_heat_flux[species] = ((self.D[species] * - grad_N[species]) * self.A * self.ring_temperature[species]).sum("theta") * 3/2 * constants("q_e") * 1e-6    # Heat flux [MW]
-            self.diffusive_heat_flux[species] = ((self.Chi[species] * - grad_T[species]) * self.A * self.ring_density[species]).sum("theta") * 3/2 * constants("q_e") * 1e-6    # Heat flux [MW]
+            self.convective_heat_flux[species] = ((self.D[species] * - grad_N[species]) * self.A * self.ring_temperature[species]).sum("theta") * 3/2 * constants("q_e")    # Heat flux [W]
+            self.diffusive_heat_flux[species] = ((self.Chi[species] * - grad_T[species]) * self.A * self.ring_density[species]).sum("theta") * 3/2 * constants("q_e")    # Heat flux [W]
             self.total_heat_flux[species] = self.convective_heat_flux[species] + self.diffusive_heat_flux[species]
         
     def update_attributes(self):
@@ -1130,6 +1142,17 @@ class CoreRing():
         ax.set_ylabel("Heat flux [MW]")
         ax.set_title(f"Total heat flux for domain core ring {self.ring_index}")
         ax.legend()
+        
+    
+class Region():
+    def __init__(self, case, slicer):
+        self.case = case
+        self.ds = self.case.ds.isel(x = slicer[0], theta = slicer[1])
+        self.integrals = dict()
+
+        for param in ["Pd+_src", "Pe_src", "Rd+_ex", "Rd+_rec", "Sd+_iz", "Sd+_rec"]:
+            self.integrals[param] = (self.ds[param] * self.ds["dv"]).sum("x").sum("theta")    # Wm-3
+        
 
     
 
