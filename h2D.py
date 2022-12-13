@@ -364,7 +364,7 @@ class Case:
 
         slices = dict()
 
-        slices["all"] = (slice(self.MXG,-self.MXG), slice(self.MYG,-self.MYG))
+        slices["all"] = (slice(self.MXG,-self.MXG), np.r_[slice(self.MYG, self.ny_inner+self.MYG), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
         # slices["all"] = (slice(None,None), slice(self.MYG,-self.MYG))
 
         slices["inner_core"] = (slice(0,self.ixseps1), np.r_[slice(self.j1_1g + 1, self.j2_1g+1), slice(self.j1_2g + 1, self.j2_2g + 1)])
@@ -1077,21 +1077,21 @@ class CoreRing():
 
             self.convective_heat_flux[species].attrs.update({
                 "conversion":1,
-                "units":"MW",
+                "units":"W",
                 "standard_name":f"{species} convective heat flux",
                 "long_name":f"{species} convective heat flux",
             })
 
             self.diffusive_heat_flux[species].attrs.update({
                 "conversion":1,
-                "units":"MW",
+                "units":"W",
                 "standard_name":f"{species} diffusive heat flux",
                 "long_name":f"{species} diffusive heat flux",
             })
 
             self.total_heat_flux[species].attrs.update({
                 "conversion":1,
-                "units":"MW",
+                "units":"W",
                 "standard_name":f"{species} total heat flux",
                 "long_name":f"{species} total heat flux (convective + diffusive)",
             })
