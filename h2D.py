@@ -943,12 +943,14 @@ class Case:
         ax.set_ylabel("Normalised residual")
         ax.set_title(f"Residual plot: {self.name}")
 
-    def plot_monitors(self, to_plot, what = ["mean", "max", "min"], ignore = [], dpi = 100):
+    def plot_monitors(self, to_plot, what = ["integral", "mean", "max", "min"], ignore = [], dpi = 100):
         """
         Plot time histories of parameters (density, pressure, or momentum)
         In each plot the solid line is the mean and dashed lines 
         represent the min/max at each timestep.
         Momentum is shown as an absolute value
+        
+        TODO: make this interrogate an object such as Region just like Fluent does
         """
 
         list_params = []
@@ -975,6 +977,15 @@ class Case:
 
         for param in list_params:
             data[param] = dict()
+            
+            # if self.collect_boundaries == 
+            
+            if "integral" in what:
+                if self.ds.metadata["keep_xboundaries"] == 1 and self.ds.metadata["keep_xboundaries"] == 1:
+                    slicer = self.slices("all")
+                    domain = self.ds.isel(x = slicer[0], theta = slicer[1])
+                    data[param]["integral"] = (domain[param] * domain["dv"]).sum("x").sum("theta")    # Wm-3
+                    
             if "mean" in what:
                 data[param]["mean"] = np.mean(self.ds[param], axis = (1,2))
             if "max" in what:
@@ -990,13 +1001,22 @@ class Case:
         fig, ax = plt.subplots(figsize = (6,4), dpi = dpi)
 
         for i, param in enumerate(list_params):
+            
+           
+                    
+            if "integral" in what:
+                ax.plot(data[param]["integral"], ls = "-", label = f"{param} integral", color = colors[i])
+                ax.set_title("Volume weighted integral")
             if "mean" in what:
-                ax.plot(data[param]["mean"], ls = "-", label = f"{param}", color = colors[i])
+                ax.plot(data[param]["mean"], ls = "-", label = f"{param} mean", color = colors[i])
+                ax.set_title("Domain mean")
             if "max" in what:
-                ax.plot(data[param]["max"], ls = ":",  color = colors[i])
+                ax.plot(data[param]["max"], ls = ":",  color = colors[i], label = f"{param} max")
+                ax.set_title("Domain max")
             if "min" in what:
-                ax.plot(data[param]["min"], ls = ":",  color = colors[i])
-
+                ax.plot(data[param]["min"], ls = ":",  color = colors[i], label = f"{param} min")
+                ax.set_title("Domain min")
+        
         ax.set_yscale("log")
         ax.grid(which = "major", lw = 1)
         ax.grid(which = "minor", lw = 1, alpha = 0.3)
@@ -1004,6 +1024,8 @@ class Case:
         ax.set_xlabel("Timestep")
         ax.set_ylabel("Value")
         ax.set_title(f"{to_plot}: {self.name}")
+        
+        
 
 
 class Target():
