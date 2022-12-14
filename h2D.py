@@ -36,7 +36,9 @@ class Load:
 
         return Case(ds, casepath)
 
-    def case_2D(casepath, gridfilepath = None, verbose = False, keep_boundaries = True, squeeze = True):
+    def case_2D(casepath, gridfilepath = None, 
+                verbose = False, keep_boundaries = True, squeeze = True,
+                unnormalise_geom = True):
 
         datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
@@ -57,12 +59,12 @@ class Load:
 
         if squeeze:
             ds = ds.squeeze(drop = True)
-        return Case(ds, casepath)
+        return Case(ds, casepath, unnormalise_geom)
 
 
 class Case:
 
-    def __init__(self, ds, casepath):
+    def __init__(self, ds, casepath, unnormalise_geom):
 
         self.ds = ds
         self.name = os.path.split(casepath)[-1]
@@ -78,7 +80,7 @@ class Case:
         self.colors = ["cyan", "lime", "crimson", "magenta", "black", "red"]
 
         self.guard_replaced = False
-        self.unnormalise()
+        self.unnormalise(unnormalise_geom = unnormalise_geom)
         self.derive_vars()
         
         if self.is_2d:
@@ -87,17 +89,22 @@ class Case:
             self.extract_1d_tokamak_geometry()
             self.guard_replace()
             
-        print(f"CHECK: Total domain volume is {self.ds.dv.values.sum():.3f} [m3]")
+        print(f"CHECK: Total domain volume is {self.ds.dv.values.sum():.3E} [m3]")
 
 
-    def unnormalise(self):
+    def unnormalise(self, unnormalise_geom):
         self.calc_norms()
         
+        if unnormalise_geom == False:
+            list_skip = ["dx", "dy", "J"]
+            print("--> dx, dy and J will not be unnormalised")
+        else:
+            list_skip = []
 
         for data_var in self.norms.keys():
             # Unnormalise variables and coordinates
             if data_var in self.ds.variables or data_var in self.ds.coords:
-                if data_var not in self.normalised_vars:
+                if data_var not in self.normalised_vars and data_var not in list_skip:
                     self.ds[data_var] = self.ds[data_var] * self.norms[data_var]["conversion"]
                     self.normalised_vars.append(data_var)
                 self.ds[data_var].attrs.update(self.norms[data_var])
@@ -279,6 +286,20 @@ class Case:
             "units": "Wm-3",
             "standard_name": "ion energy source (d+)",
             "long_name": "Ion energy source (d+)"
+        },
+        
+        "Pe_src": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "electron energy source (d+)",
+            "long_name": "Electron energy source (d+)"
+        },
+        
+        "Sd+_src": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units": "m-3s-1",
+            "standard_name": "ion density source (d+)",
+            "long_name": "Ion density source (d+)"
         },
 
         "Rd+_ex": {
