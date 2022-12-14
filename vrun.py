@@ -15,6 +15,7 @@ parser = argparse.ArgumentParser(description = "Run case")
 parser.add_argument("casepath", type=str, help = "Case to run")
 parser.add_argument("--b", type=str, help = "Branch (build folder name)")
 parser.add_argument("--c", type=str, help = "Number of cores")
+parser.add_argument("--t", type=str, help = "Time in hh:mm:ss")
 parser.add_argument("--restart", action="store_true", help = "Restart?")
 parser.add_argument("--append", action="store_true", help = "Append?")
 
@@ -46,7 +47,7 @@ jobname = casename
 nodes = 1
 cores = args.c
 partition = "nodes"
-time = "48:00:00"
+time = args.t
 
 slurmcommand = \
 f"""#!/bin/bash 
