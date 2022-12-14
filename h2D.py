@@ -86,6 +86,8 @@ class Case:
         else:
             self.extract_1d_tokamak_geometry()
             self.guard_replace()
+            
+        print(f"CHECK: Total domain volume is {self.ds.dv.values.sum():.3f} [m3]")
 
 
     def unnormalise(self):
@@ -181,26 +183,26 @@ class Case:
         # Is the geometry normalised or not???
         # Results seem to suggest that these come in SI already!!
         
-        # "dx": {
-        #     "conversion": m["rho_s0"]**2 * m["Bnorm"],
-        #     "units": "Wb",
-        #     "standard_name": "radial cell width",
-        #     "long_name": "Radial cell width in flux space",
-        # },
+        "dx": {
+            "conversion": m["rho_s0"]**2 * m["Bnorm"],
+            "units": "Wb",
+            "standard_name": "radial cell width",
+            "long_name": "Radial cell width in flux space",
+        },
         
-        # "dy": {
-        #     "conversion": 1,
-        #     "units": "radian",
-        #     "standard_name": "poloidal cell angular width",
-        #     "long_name": "Poloidal cell angular width",
-        # },
+        "dy": {
+            "conversion": 1,
+            "units": "radian",
+            "standard_name": "poloidal cell angular width",
+            "long_name": "Poloidal cell angular width",
+        },
         
-        # "J": {
-        #     "conversion": m["rho_s0"] / m["Bnorm"],
-        #     "units": "m/radianT",
-        #     "standard_name": "Jacobian",
-        #     "long_name": "Jacobian to translate from flux to cylindrical coordinates in real space",
-        # },
+        "J": {
+            "conversion": m["rho_s0"] / m["Bnorm"],
+            "units": "m/radianT",
+            "standard_name": "Jacobian",
+            "long_name": "Jacobian to translate from flux to cylindrical coordinates in real space",
+        },
         
         "Th+": {
             "conversion": m["Tnorm"],
