@@ -933,7 +933,7 @@ class Case:
         fig, ax = plt.subplots(figsize = (6,4), dpi = dpi)
 
         for param in list_params:
-            ax.plot(res[param], label = param, lw = 1)
+            ax.plot(self.ds["t"], res[param], label = param, lw = 1)
             
         ax.set_yscale("log")
         ax.grid(which = "major", lw = 1)
