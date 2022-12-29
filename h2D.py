@@ -1005,16 +1005,16 @@ class Case:
            
                     
             if "integral" in what:
-                ax.plot(data[param]["integral"], ls = "-", label = f"{param} integral", color = colors[i])
+                ax.plot(self.ds["t"], data[param]["integral"], ls = "-", label = f"{param} integral", color = colors[i])
                 ax.set_title("Volume weighted integral")
             if "mean" in what:
-                ax.plot(data[param]["mean"], ls = "-", label = f"{param} mean", color = colors[i])
+                ax.plot(self.ds["t"], data[param]["mean"], ls = "-", label = f"{param} mean", color = colors[i])
                 ax.set_title("Domain mean")
             if "max" in what:
-                ax.plot(data[param]["max"], ls = ":",  color = colors[i], label = f"{param} max")
+                ax.plot(self.ds["t"], data[param]["max"], ls = ":",  color = colors[i], label = f"{param} max")
                 ax.set_title("Domain max")
             if "min" in what:
-                ax.plot(data[param]["min"], ls = ":",  color = colors[i], label = f"{param} min")
+                ax.plot(self.ds["t"], data[param]["min"], ls = ":",  color = colors[i], label = f"{param} min")
                 ax.set_title("Domain min")
         
         ax.set_yscale("log")
@@ -1034,8 +1034,7 @@ class Target():
         data = case.ds
         mass_i = constants("mass_p") * 2
         
-        def bndry_val(param):
-            return (self.last[param].values + self.guard[param].values)/2
+        
 
         try:
             gamma_i = self.ds.options["sheath_boundary_simple"]["gamma_i"]
@@ -1051,22 +1050,25 @@ class Target():
         self.last = data.isel(t=-1, x = case.slices(f"{target_name}")[0], theta = case.slices(f"{target_name}")[1])
         self.guard = data.isel(t=-1, x = case.slices(f"{target_name}_guard")[0], theta = case.slices(f"{target_name}_guard")[1])
 
-        self.dr = bndry_val("dr")
+        self.dr = self.bndry_val("dr")
         self.r = np.cumsum(self.dr)    # Poloidal length along divertor
         self.length = np.sum(self.dr)    # Total divertor poloidal length
         self.area = self.length * 2*np.pi    # Poloidal area
 
         # TODO trapz or not?
-        self.parallel_specific_particle_flux = abs(bndry_val("NVd+")) / mass_i    # Parallel, m-2s-1
-        self.particle_flux = self.parallel_specific_particle_flux * (bndry_val("Bxy") / bndry_val("Bpxy")) * self.dr    # Poloidal, s-1
-        self.heat_flux_i = gamma_i * bndry_val("Td+") * constants("q_e") * self.particle_flux   # W
-        self.heat_flux_e = gamma_e * bndry_val("Te") * constants("q_e") * self.particle_flux    # W
+        self.parallel_specific_particle_flux = abs(self.bndry_val("NVd+")) / mass_i    # Parallel, m-2s-1
+        self.particle_flux = self.parallel_specific_particle_flux * (self.bndry_val("Bxy") / self.bndry_val("Bpxy")) * self.dr    # Poloidal, s-1
+        self.heat_flux_i = gamma_i * self.bndry_val("Td+") * constants("q_e") * self.particle_flux   # W
+        self.heat_flux_e = gamma_e * self.bndry_val("Te") * constants("q_e") * self.particle_flux    # W
 
         self.total_heat_flux = dict()
         self.total_heat_flux["d+"] = np.sum(self.heat_flux_i)    # W
         self.total_heat_flux["e"] = np.sum(self.heat_flux_e)    # W
         self.total_heat_flux_all = self.total_heat_flux["d+"] + self.total_heat_flux["e"]    # W
         self.total_particle_flux = np.sum(self.particle_flux)    # s-1
+        
+    def bndry_val(self, param):
+            return (self.last[param].values + self.guard[param].values)/2
         
     def plot(self, what):
         
@@ -1256,11 +1258,13 @@ class CoreRing():
 class Region():
     def __init__(self, case, slicer):
         self.case = case
-        self.ds = self.case.ds.isel(x = slicer[0], theta = slicer[1])
+        self.ds = self.case.ds.isel(x = slicer[0], theta = slicer[1]).copy()
         self.integrals = dict()
 
         for param in ["Pd+_src", "Pe_src", "Sd+_src", "Rd+_ex", "Rd+_rec", "Sd+_iz", "Sd+_rec"]:
             self.integrals[param] = (self.ds[param] * self.ds["dv"]).sum("x").sum("theta")    # Wm-3
+            
+            
         
 
     
