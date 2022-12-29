@@ -58,6 +58,9 @@ f"""#!/bin/bash
 #SBATCH --time={time}
 #SBATCH -o /mnt/lustre/users/mjk557/cases/slurmlogs/{jobname}.out
 #SBATCH -e /mnt/lustre/users/mjk557/cases/slurmlogs/{jobname}.err
+#SBATCH --account=phys-bout-2019         # Project account
+#SBATCH --mail-type=BEGIN,END,FAIL               # Mail events (NONE, BEGIN, END, FAIL, ALL)
+#SBATCH --mail-user=mike.kryjak@york.ac.uk        # Where to send mail
 
 mpirun -n {nodes*cores} /mnt/lustre/users/mjk557/hermes-3/{args.b}/hermes-3 -d {abscasepath} {restartappend}
 
