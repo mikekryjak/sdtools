@@ -899,7 +899,7 @@ class Case:
         ax.set_ylabel("Normalised residual")
         ax.set_title(f"Residual plot: {self.name}")
         
-    def plot_ddt(self, smoothing = 50, volume_weighted = True, dpi = 100):
+    def plot_ddt(self, smoothing = 50, volume_weighted = True, dpi = 100, plot_from=None):
         """
         RMS of all the ddt parameters, which are convergence metrics.
         Inputs:
@@ -942,6 +942,9 @@ class Case:
         ax.set_xlabel("Timestep")
         ax.set_ylabel("Normalised residual")
         ax.set_title(f"Residual plot: {self.name}")
+        
+        if plot_from is not None:
+            ax.set_xlim(plot_from, self.ds["t"][-1])
 
     def plot_monitors(self, to_plot, what = ["integral", "mean", "max", "min"], ignore = [], dpi = 100):
         """
@@ -993,9 +996,9 @@ class Case:
             if "min" in what:
                 data[param]["min"] = np.min(self.ds[param], axis = (1,2))
 
-            if to_plot == "momentum":
-                for key in data[param]:
-                    data[param][key] = np.abs(data[param][key])
+            # if to_plot == "momentum":
+            for key in data[param].keys():
+                data[param][key] = np.abs(data[param][key])
 
         colors = ["teal", "darkorange", "firebrick",  "limegreen", "magenta", "cyan", "navy"]
         fig, ax = plt.subplots(figsize = (6,4), dpi = dpi)
