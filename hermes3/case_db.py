@@ -15,4 +15,4 @@ class CaseDB():
             self.casepaths[input_file.parent.name] = input_file.parent
 
         for grid_file in Path(grid_dir).rglob('*.nc'):
-            self.gridpaths[grid_file.name] = grid_file.parent
+            self.gridpaths[grid_file.name] = grid_file

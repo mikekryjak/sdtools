@@ -1,3 +1,6 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
 def plot_residuals(self):
     """
     Scaled residual calculation based on ANSYS Fluent
@@ -143,3 +146,108 @@ def plot_monitors(self, to_plot, what = ["mean", "max", "min"], ignore = []):
     ax.set_xlabel("Timestep")
     ax.set_ylabel("Value")
     ax.set_title(f"{to_plot}: {self.name}")
+    
+    
+def diagnose_cvode(self, lims = (0,0), scale = "log"):
+    ds = self.ds
+
+    fig, axes = plt.subplots(2,2, figsize = (8,6))
+
+    ax = axes[0,0];  ax.set_yscale(scale)
+    ax.plot(ds.coords["t"], ds.data_vars["cvode_nsteps"].values, label = "nsteps")
+    ax.plot(ds.coords["t"], ds.data_vars["cvode_nfevals"].values, label = "nfevals")
+    ax.plot(ds.coords["t"], ds.data_vars["cvode_npevals"].values, label = "npevals")
+    ax.plot(ds.coords["t"], ds.data_vars["cvode_nliters"].values, label = "nliters")
+
+    ax = axes[0,1]
+    ax.plot(ds.coords["t"], ds.data_vars["cvode_last_order"].values, label = "last_order", lw = 1)
+
+    ax = axes[1,0]; ax.set_yscale(scale)
+    ax.plot(ds.coords["t"], ds.data_vars["cvode_num_fails"].values, label = "num_fails")
+    ax.plot(ds.coords["t"], ds.data_vars["cvode_nonlin_fails"].values, label = "nonlin_fails")
+
+    ax = axes[1,1]; ax.set_yscale(scale)
+    ax.plot(ds.coords["t"], ds.data_vars["cvode_stab_lims"].values, label = "stab_lims")
+    ax.plot(ds.coords["t"], ds.data_vars["cvode_stab_lims"].values, label = "last_step")
+
+    for i in range(2):
+        for j in range(2): 
+            axes[i,j].grid()
+            axes[i,j].legend()
+            if lims != (0,0):
+                axes[i,j].set_xlim(lims)
+                
+    
+def plot_selection(case, selection):
+    """ 
+    Plot selected points on a R,Z grid
+    X,Y grid doesn't work - need to fix it
+    It originally generated a 2D array of X and Y indices so that you could
+    easily get the coordinates of each point, and then sliced it by a slice object.
+    Now I changed it to plot a ds's points over the base dataset, and need to regenerate
+    the points somehow. Perhaps need to use something like meshgrid or something
+    """
+    self = case
+    meta = self.ds.metadata
+
+    # Region boundaries
+    # ny = meta["ny"]     # Total ny cells (incl guard cells)
+    # nx = meta["nx"]     # Total nx cells (excl guard cells)
+    # Rxy = self.ds["R"].values    # R coordinate array
+    # Zxy = self.ds["Z"].values    # Z coordinate array
+    # MYG = meta["MYG"]
+
+    # Array of radial (x) indices and of poloidal (y) indices in the style of Rxy, Zxy
+    # x_idx = np.array([np.array(range(nx))] * int(ny + MYG * 4)).transpose()
+    # y_idx = np.array([np.array(range(ny + MYG*4))] * int(nx))
+
+    # Slice the X, Y and R, Z arrays and vectorise them for plotting
+    # xselect = selection["x"].values.flatten()
+    # yselect = np.where(ds["theta"].values == selection["theta"].values)    # Theta converted to index space
+    rselect = selection["R"].values.flatten()
+    zselect = selection["Z"].values.flatten()
+
+    # Plot
+    fig, axes = plt.subplots(1,3, figsize=(12,5), dpi = 100, gridspec_kw={'width_ratios': [2.5, 1, 2]})
+    fig.subplots_adjust(wspace=0.3)
+
+    plot_xy_grid(case, axes[0])
+    # axes[0].scatter(yselect, xselect, s = 4, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 0.5)
+
+    plot_rz_grid(case, axes[1])
+    axes[1].scatter(rselect, zselect, s = 20, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 1, zorder = 100)
+
+    plot_rz_grid(case, axes[2], ylim=(-1,-0.25))
+    axes[2].scatter(rselect, zselect, s = 20, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 1, zorder = 100)
+    
+def plot_xy_grid(case, ax):
+    self = case
+    ax.set_title("X, Y index space")
+    ax.scatter(self.yflat, self.xflat, s = 1, c = "grey")
+    ax.plot([self.yflat[self.j1_1g]]*np.ones_like(self.xflat), self.xflat, label = "j1_1g",   color = self.colors[0])
+    ax.plot([self.yflat[self.j1_2g]]*np.ones_like(self.xflat), self.xflat, label = "j1_2g", color = self.colors[1])
+    ax.plot([self.yflat[self.j2_1g]]*np.ones_like(self.xflat), self.xflat, label = "j2_1g",   color = self.colors[2])
+    ax.plot([self.yflat[self.j2_2g]]*np.ones_like(self.xflat), self.xflat, label = "j2_2g", color = self.colors[3])
+    ax.plot(self.yflat, [self.yflat[self.ixseps1]]*np.ones_like(self.yflat), label = "ixseps1", color = self.colors[4])
+    ax.plot(self.yflat, [self.yflat[self.ixseps2]]*np.ones_like(self.yflat), label = "ixseps1", color = self.colors[5], ls=":")
+    ax.legend(loc = "upper center", bbox_to_anchor = (0.5,-0.1), ncol = 3)
+    ax.set_xlabel("Y index (incl. guards)")
+    ax.set_ylabel("X index (excl. guards)")
+
+def plot_rz_grid(case, ax, xlim = (None,None), ylim = (None,None)):
+    self = case
+    ax.set_title("R, Z space")
+    ax.scatter(self.rflat, self.zflat, s = 0.1, c = "black")
+    ax.set_axisbelow(True)
+    ax.grid()
+    ax.plot(self.Rxy[:,self.j1_1g], self.Zxy[:,self.j1_1g], label = "j1_1g",     color = self.colors[0], alpha = 0.7)
+    ax.plot(self.Rxy[:,self.j1_2g], self.Zxy[:,self.j1_2g], label = "j1_2g", color = self.colors[1], alpha = 0.7)
+    ax.plot(self.Rxy[:,self.j2_1g], self.Zxy[:,self.j2_1g], label = "j2_1g",     color = self.colors[2], alpha = 0.7)
+    ax.plot(self.Rxy[:,self.j2_2g], self.Zxy[:,self.j2_2g], label = "j2_2g", color = self.colors[3], alpha = 0.7)
+    ax.plot(self.Rxy[self.ixseps1,:], self.Zxy[self.ixseps1,:], label = "ixseps1", color = self.colors[4], alpha = 0.7, lw = 2)
+    ax.plot(self.Rxy[self.ixseps2,:], self.Zxy[self.ixseps2,:], label = "ixseps2", color = self.colors[5], alpha = 0.7, lw = 2, ls=":")
+
+    if xlim != (None,None):
+        ax.set_xlim(xlim)
+    if ylim != (None,None):
+        ax.set_ylim(ylim)
