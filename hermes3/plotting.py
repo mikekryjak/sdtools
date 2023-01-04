@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from hermes3.utils import *
 
 def plot_residuals(self):
     """
@@ -220,6 +221,7 @@ def plot_selection(case, selection):
     plot_rz_grid(case, axes[2], ylim=(-1,-0.25))
     axes[2].scatter(rselect, zselect, s = 20, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 1, zorder = 100)
     
+    
 def plot_xy_grid(case, ax):
     self = case
     ax.set_title("X, Y index space")
@@ -233,6 +235,7 @@ def plot_xy_grid(case, ax):
     ax.legend(loc = "upper center", bbox_to_anchor = (0.5,-0.1), ncol = 3)
     ax.set_xlabel("Y index (incl. guards)")
     ax.set_ylabel("X index (excl. guards)")
+
 
 def plot_rz_grid(case, ax, xlim = (None,None), ylim = (None,None)):
     self = case

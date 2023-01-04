@@ -1,109 +1,5 @@
 import numpy as np
-
-def select(self, ds, name, *args):
-    """
-    DOUBLE NULL ONLY
-    Pass this touple to a field of any parameter spanning the grid
-    to select points of the appropriate region.
-    Each slice is a tuple: (x slice, y slice)
-    Use it as: selected_array = array[slice] where slice = (x selection, y selection) = output from this method.
-    """
-    self = ds
-
-    def custom_core_ring(args, self):
-        """
-        Creates custom SOL ring slice within the core.
-        i = 0 is at first domain cell.
-        i = -2 is at first inner guard cell.
-        i = ixseps - MXG is the separatrix.
-        """
-        i = args[0]
-        if i > self.ixseps1 - self.MXG:
-            raise Exception("i is too large!")
-        
-        return (slice(0+self.MXG+i,1+self.MXG+i), np.r_[slice(self.j1_2g + 1, self.j2_2g + 1), slice(self.j1_1g + 1, self.j2_1g + 1)])
-        
-    def custom_sol_ring(i, region  = "all"):
-        """
-        Creates custom SOL ring slice beyond the separatrix.
-        i = index of SOL ring (0 is separatrix, 1 is first SOL ring)
-        region = all, inner, inner_lower, inner_upper, outer, outer_lower, outer_upper
-        """
-        
-        i = i + self.ixseps1 - 1
-        if i > self.nx - self.MXG*2 :
-            raise Exception("i is too large!")
-        
-        if region == "all":
-            return (slice(i+1,i+2), np.r_[slice(0+self.MYG, self.j2_2g + 1), slice(self.j1_1g + 1, self.nyg - self.MYG)])
-        
-        if region == "inner":
-            return (slice(i+1,i+2), slice(0+self.MYG, self.ny_inner + self.MYG))
-        if region == "inner_lower":
-            return (slice(i+1,i+2), slice(0+self.MYG, int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g +2))
-        if region == "inner_upper":
-            return (slice(i+1,i+2), slice(int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g, self.ny_inner + self.MYG))
-        
-        if region == "outer":
-            return (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, self.nyg - self.MYG))
-        if region == "outer_lower":
-            return (slice(i+1,i+2), slice(int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g, self.nyg - self.MYG))
-        if region == "outer_upper":
-            return (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 2))
-
-    slices = dict()
-
-    slices["all"] = (slice(None,None), slice(None,None))
-
-    slices["inner_core"] = (slice(0,self.ixseps1), np.r_[slice(self.j1_1g + 1, self.j2_1g+1), slice(self.j1_2g + 1, self.j2_2g + 1)])
-    slices["outer_core"] = (slice(self.ixseps1, None), slice(0, self.nyg))
-
-    slices["outer_core_edge"] = (slice(0+self.MXG,1+self.MXG), slice(self.j1_2g + 1, self.j2_2g + 1))
-    slices["inner_core_edge"] = (slice(0+self.MXG,1+self.MXG), slice(self.j1_1g + 1, self.j2_1g + 1))
-    slices["core_edge"] = (slice(0+self.MXG,1+self.MXG), np.r_[slice(self.j1_2g + 1, self.j2_2g + 1), slice(self.j1_1g + 1, self.j2_1g + 1)])
-    
-    slices["outer_sol_edge"] = (slice(-1 - self.MXG,- self.MXG), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG))
-    slices["inner_sol_edge"] = (slice(-1 - self.MXG,- self.MXG), slice(self.MYG, self.ny_inner+self.MYG))
-    
-    slices["sol_edge"] = (slice(-1 - self.MXG,- self.MXG), np.r_[slice(self.j1_1g + 1, self.j2_1g + 1), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
-    
-    slices["custom_core_ring"] = custom_core_ring
-    slices["custom_sol_ring"] = custom_sol_ring
-    
-    slices["inner_lower_target"] = (slice(None,None), slice(self.MYG, self.MYG + 1))
-    slices["inner_upper_target"] = (slice(None,None), slice(self.ny_inner+self.MYG -1, self.ny_inner+self.MYG))
-    slices["outer_upper_target"] = (slice(None,None), slice(self.ny_inner+self.MYG*3, self.ny_inner+self.MYG*3+1))
-    slices["outer_lower_target"] = (slice(None,None), slice(self.nyg-self.MYG-1, self.nyg - self.MYG))
-    
-    slices["inner_lower_target_guard"] = (slice(None,None), slice(self.MYG -1, self.MYG))
-    slices["inner_upper_target_guard"] = (slice(None,None), slice(self.ny_inner+self.MYG , self.ny_inner+self.MYG+1))
-    slices["outer_upper_target_guard"] = (slice(None,None), slice(self.ny_inner+self.MYG*3-1, self.ny_inner+self.MYG*3))
-    slices["outer_lower_target_guard"] = (slice(None,None), slice(self.nyg-self.MYG, self.nyg - self.MYG+1))
-    
-    slices["inner_lower_pfr"] = (slice(0, self.ixseps1), slice(None, self.j1_1g))
-    slices["outer_lower_pfr"] = (slice(0, self.ixseps1), slice(self.j2_2g+1, self.nyg))
-
-    slices["lower_pfr"] = (slice(0, self.ixseps1), np.r_[slice(None, self.j1_1g+1), slice(self.j2_2g+1, self.nyg)])
-    slices["upper_pfr"] = (slice(0, self.ixseps1), slice(self.j2_1g+1, self.j1_2g+1))
-    slices["pfr"] = (slice(0, self.ixseps1), np.r_[ 
-                                                    np.r_[slice(None, self.j1_1g+1), slice(self.j2_2g+1, self.nyg)], 
-                                                    slice(self.j2_1g+1, self.j1_2g+1)])
-    
-    slices["lower_pfr_edge"] = (slice(self.MXG, self.MXG+1), np.r_[slice(None, self.j1_1g+1), slice(self.j2_2g+1, self.nyg)])
-    slices["upper_pfr_edge"] = (slice(self.MXG, self.MXG+1), slice(self.j2_1g+1, self.j1_2g+1))
-    slices["pfr_edge"] = (slice(self.MXG, self.MXG+1), np.r_[
-                                                                np.r_[slice(None, self.j1_1g+1), slice(self.j2_2g+1, self.nyg)],
-                                                                slice(self.j2_1g+1, self.j1_2g+1)])
-    
-    slices["outer_midplane_a"] = (slice(None, None), int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g)
-    slices["outer_midplane_b"] = (slice(None, None), int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1)
-
-    slices["inner_midplane_a"] = (slice(None, None), int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g + 1)
-    slices["inner_midplane_b"] = (slice(None, None), int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g)
-    
-    
-
-    return slices[name]
+from hermes3.utils import *
 
 
 class Target():
@@ -113,8 +9,8 @@ class Target():
         mass_i = constants("mass_p") * 2
 
         data["dr"] = data["dx"] / (data["R"] * data["Bpxy"])
-        self.last = data.isel(t=-1, x = case.slices(f"{target_name}")[0], theta = case.slices(f"{target_name}")[1])
-        self.guard = data.isel(t=-1, x = case.slices(f"{target_name}_guard")[0], theta = case.slices(f"{target_name}_guard")[1])
+        self.last = case.select_region(f"{target_name}_target")
+        self.guard = case.select_region(f"{target_name}_target_guard")
 
         def bndry_val(param):
             return (self.last[param].values + self.guard[param].values)/2
@@ -129,13 +25,17 @@ class Target():
         except:
             gamma_e = 3.5
             
-        self.particle_flux = abs(bndry_val("NVd+")) / mass_i    
-        self.heat_flux = gamma_i * bndry_val("Td+") * constants("q_e") * self.particle_flux * 1e-6    # MW
+        self.temperature = bndry_val("Td+").squeeze()
+        self.density = bndry_val("Ne").squeeze()
+        self.ion_flux = (abs(bndry_val("NVd+")) / mass_i).squeeze()
+        self.heat_flux = (gamma_i * self.temperature * constants("q_e") * self.ion_flux * 1e-6)    # MW
         self.r = np.cumsum(bndry_val("dr"))    # Length along divertor
         # width = np.insert(0,0,width)
 
-        self.total_heat_flux = np.trapz(x = self.r, y = self.heat_flux.squeeze()) * 2*np.pi
-        self.total_particle_flux = np.trapz(x = self.r, y = self.particle_flux.squeeze()) * 2*np.pi
+        self.peak_temperature = self.temperature.max(axis=1)
+        self.peak_density = self.density.max(axis=1)
+        self.total_heat_flux = self.heat_flux.sum(axis=1) * 2*np.pi
+        self.total_particle_flux = self.heat_flux.sum(axis=1) * 2*np.pi
         
     def plot(self, what):
         
