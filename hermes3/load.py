@@ -72,8 +72,8 @@ class Load:
                 gridfilepath = gridfilepath,
                 info = False,
                 geometry = "toroidal",
-                keep_xboundaries=False,
-                keep_yboundaries=False,
+                keep_xboundaries=True,
+                keep_yboundaries=True,
                 )
             
             ds_ng = xbout.load.open_boutdataset(
@@ -82,8 +82,8 @@ class Load:
                 gridfilepath = gridfilepath,
                 info = False,
                 geometry = "toroidal",
-                keep_xboundaries=True,
-                keep_yboundaries=True,
+                keep_xboundaries=False,
+                keep_yboundaries=False,
                 )
             
             if squeeze:
@@ -152,39 +152,39 @@ class Case:
 
         if "Ph+" in ds.data_vars:
             ds["Th+"] = ds["Ph+"] / (ds["Nh+"] * q_e)
-            ds["Th+"].attrs.update({
-                "Th+": {
+            ds["Th+"].attrs.update(
+                {
                 "units": "eV",
                 "standard_name": "ion temperature (h+)",
                 "long_name": "Ion temperature (h+)",
-                }})
+                })
 
         if "Ph" in ds.data_vars:
             ds["Th"] = ds["Ph"] / (ds["Nh"] * q_e)
-            ds["Th"].attrs.update({
-                "Th": {
+            ds["Th"].attrs.update(
+                {
                 "units": "eV",
                 "standard_name": "neutra; temperature (h)",
                 "long_name": "Neutral temperature (h)",
-                }})
+                })
 
         if "Pd" in ds.data_vars:
             ds["Td"] = ds["Pd"] / (ds["Nd"] * q_e)
-            ds["Td"].attrs.update({
-                "Td": {
+            ds["Td"].attrs.update(
+                {
                 "units": "eV",
                 "standard_name": "neutral temperature (d)",
                 "long_name": "Neutral temperature (d)",
-                }})
+                })
 
         if "Pd+" in ds.data_vars:
             ds["Td+"] = ds["Pd+"] / (ds["Nd+"] * q_e)
-            ds["Td+"].attrs.update({
-                "Td+": {
+            ds["Td+"].attrs.update(
+               {
                 "units": "eV",
                 "standard_name": "ion temperature (d+)",
                 "long_name": "Ion temperature (d+)",
-                }})
+                })
 
     def guard_replace(self):
 
