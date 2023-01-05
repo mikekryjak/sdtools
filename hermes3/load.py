@@ -343,14 +343,18 @@ class Case:
         Each slice is a tuple: (x slice, y slice)
         Use it as: selected_array = array[slice] where slice = (x selection, y selection) = output from this method.
         Returns sliced xarray dataset
+        NOTE: Everything is optimised for reading the case with guard cells 
         """
 
         slices = dict()
 
         slices["all"] = (slice(None,None), slice(None,None))
+        slices["all_noguards"] = (slice(self.MXG,-self.MXG), np.r_[slice(self.MYG,self.ny_inner-self.MYG*2), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
 
-        slices["inner_core"] = (slice(0,self.ixseps1), np.r_[slice(self.j1_1g + 1, self.j2_1g+1), slice(self.j1_2g + 1, self.j2_2g + 1)])
-        slices["outer_core"] = (slice(self.ixseps1, None), slice(0, self.nyg))
+        slices["core"] = (slice(0,self.ixseps1), np.r_[slice(self.j1_1g + 1, self.j2_1g+1), slice(self.j1_2g + 1, self.j2_2g + 1)])
+        slices["core_noguards"] = (slice(self.MXG,self.ixseps1), np.r_[slice(self.j1_1g + 1, self.j2_1g+1), slice(self.j1_2g + 1, self.j2_2g + 1)])
+        slices["sol"] = (slice(self.ixseps1, None), slice(0, self.nyg))
+        slices["sol_noguards"] = (slice(self.ixseps1, -self.MYG), np.r_[slice(self.MYG,self.ny_inner-self.MYG*2), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
 
         slices["outer_core_edge"] = (slice(0+self.MXG,1+self.MXG), slice(self.j1_2g + 1, self.j2_2g + 1))
         slices["inner_core_edge"] = (slice(0+self.MXG,1+self.MXG), slice(self.j1_1g + 1, self.j2_1g + 1))
