@@ -116,10 +116,6 @@ class Monitor2D():
         self.windows = windows
         num_rows = len(self.windows)
         
-        self.noguards = case.select_region("all_noguards")
-        self.core = case.select_region("core_noguards")
-        self.sol = case.select_region("sol_noguards")
-        
         self.c = ["navy", "deeppink", "teal", "darkorange"]
         
         for row_id in range(num_rows):
