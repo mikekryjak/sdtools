@@ -1,46 +1,100 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from hermes3.utils import *
+from hermes3.named_selections import *
 
-def plot_residuals(self):
-    """
-    Scaled residual calculation based on ANSYS Fluent
-    From 26.13-19 in https://www.afs.enea.it/project/neptunius/docs/fluent/html/ug/node812.htm       
-    - Take RMS of rate of change in each parameter over whole domain
-    - Normalise by maximum value of this parameter within first 5 iterations
-    - Plots parameters corresponding to equations solved (density, momentum, pressure)
-    """
-    # Find parameters (species dependent)
-    list_params = ["Ne", "Pe"]
 
-    for var in self.ds.data_vars:
-        if "NV" in var and not any([x in var for x in ["S", ")", "_"]]):
-            list_params.append(var)
-        if "P" in var and not any([x in var for x in ["S", ")", "_", "e"]]):
-            list_params.append(var)
-    list_params.sort()
+class Monitor():
+    def __init__(self, case, windows):
+        self.fig_size = 3
+        
+        self.case = case
+        self.ds = self.case.ds
+        # self.windows = np.array(windows)
+        self.windows = windows
+        num_rows = len(self.windows)
+        
+        self.noguards = case.select_region("all_noguards")
+        self.core = case.select_region("core_noguards")
+        self.sol = case.select_region("sol_noguards")
+        
+        self.c = ["navy", "deeppink", "teal", "darkorange"]
+        
+        for row_id in range(num_rows):
+        
+            row_windows = self.windows[row_id]
+            num_windows = len(row_windows)
+            fig, self.axes = plt.subplots(1, num_windows, figsize = (self.fig_size*num_windows, self.fig_size))
+            
+            if num_windows == 1:
+                self.add_plot(self.axes, row_windows[0])
+            else:
+                for i, name in enumerate(row_windows):
+                    print(name)
+                    self.add_plot(self.axes[i], name)
+        
+        
+    def add_plot(self, ax, name):
+        
+        
+        if name == "target_temp":
+            targets = dict()
+            for name in  ["inner_upper"]:
+                targets[name] = Target(self.case, name)
+                ax.plot(self.ds["t"], targets[name].peak_temperature, label = name) 
+                ax.set_ylabel("Target temp [eV]")
+                ax.set_title("Target temp")
 
+
+        elif name == "density":
+            self.core["Ne"].mean(["x", "theta"]).plot(ax = ax, label = "Ne core", ls = "--", c = self.c[0])
+            self.core["Nd"].mean(["x", "theta"]).plot(ax = ax, label = "neut core", ls = "--", c = self.c[1])
+            self.sol["Ne"].mean(["x", "theta"]).plot(ax = ax, label = "Ne sol", c = self.c[0])
+            self.sol["Nd"].mean(["x", "theta"]).plot(ax = ax, label = "neut sol", c = self.c[1])
+            ax.set_title("density")
+            
+        elif name == "temperature":
+            self.core["Td+"].mean(["x", "theta"]).plot(ax = ax, label = "Td+ core", ls = "--", c = self.c[0])
+            self.core["Te"].mean(["x", "theta"]).plot(ax = ax, label = "Te core", ls = "--", c = self.c[1])
+            self.sol["Td+"].mean(["x", "theta"]).plot(ax = ax, label = "Td+ sol", c = self.c[0])
+            self.sol["Te"].mean(["x", "theta"]).plot(ax = ax, label = "Te sol", c = self.c[1])
+            ax.set_title("temperature")
+            
+        elif name == "radiation":
+            (self.core["Rd+_ex"].mean(["x", "theta"])*-1).plot(ax = ax, label = "core", c = self.c[0])
+            (self.sol["Rd+_ex"].mean(["x", "theta"])*-1).plot(ax = ax, label = "sol", c = self.c[1])
+            ax.set_title("avg rad")
+            
+        elif name == "ionisation":
+            self.core["Sd+_iz"].mean(["x", "theta"]).plot(ax = ax, label = "core", c = self.c[0])
+            self.sol["Sd+_iz"].mean(["x", "theta"]).plot(ax = ax, label = "sol", c = self.c[1])
+            ax.set_title("ionisation")
+            
+        elif name == "cvode_order":
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_last_order"].values, label = "last_order", lw = 1, c = self.c[0])
+            ax.set_title("cvode")
+            
+        elif name == "cvode_evals":
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nsteps"].values, label = "nsteps")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nfevals"].values, label = "nfevals")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_npevals"].values, label = "npevals")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nliters"].values, label = "nliters")
+            ax.set_title("cvode")
+            ax.set_yscale("log")
+
+        elif name == "cvode_fails":
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_num_fails"].values, label = "num_fails")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nonlin_fails"].values, label = "nonlin_fails")
+            ax.set_title("cvode")
+            ax.set_yscale("log")
     
-    res = dict()
-
-    for param in list_params:
-
-        res[param] = np.diff(self.ds[param], axis = 0) # Rate of change
-        res[param] = np.sqrt(res[param]**2) # RMS of rate of change
-        res[param] = np.mean(res[param], axis = (1,2))
-        res[param] = res[param] / np.max(res[param][:4]) # Normalise by max in first 5 iterations
-
-    fig, ax = plt.subplots(dpi = 100)
-
-    for param in list_params:
-        ax.plot(res[param], label = param)
-    ax.set_yscale("log")
-    ax.grid(which = "major", lw = 1)
-    ax.grid(which = "minor", lw = 1, alpha = 0.3)
-    ax.legend()
-    ax.set_xlabel("Timestep")
-    ax.set_ylabel("Normalised residual")
-    ax.set_title(f"Residual plot: {self.name}")
+    
+        ax.legend(fontsize=8, loc = "upper center", bbox_to_anchor = (0.5, 1.25), ncols = 2)
+        ax.set_ylabel("")
+        ax.xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
+        ax.tick_params(axis="x", labelrotation = 90)
+        ax.grid(which="both", alpha = 0.3)
     
 def plot_ddt(self, smoothing = 50, volume_weighted = True):
     """
