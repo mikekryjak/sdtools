@@ -31,12 +31,13 @@ class Monitor():
                 self.add_plot(self.axes, row_windows[0])
             else:
                 for i, name in enumerate(row_windows):
-                    print(name)
                     self.add_plot(self.axes[i], name)
         
         
     def add_plot(self, ax, name):
         
+        legend = True
+        xformat = True
         
         if name == "target_temp":
             targets = dict()
@@ -52,50 +53,124 @@ class Monitor():
             self.core["Nd"].mean(["x", "theta"]).plot(ax = ax, label = "neut core", ls = "--", c = self.c[1])
             self.sol["Ne"].mean(["x", "theta"]).plot(ax = ax, label = "Ne sol", c = self.c[0])
             self.sol["Nd"].mean(["x", "theta"]).plot(ax = ax, label = "neut sol", c = self.c[1])
-            ax.set_title("density")
             
         elif name == "temperature":
             self.core["Td+"].mean(["x", "theta"]).plot(ax = ax, label = "Td+ core", ls = "--", c = self.c[0])
             self.core["Te"].mean(["x", "theta"]).plot(ax = ax, label = "Te core", ls = "--", c = self.c[1])
             self.sol["Td+"].mean(["x", "theta"]).plot(ax = ax, label = "Td+ sol", c = self.c[0])
             self.sol["Te"].mean(["x", "theta"]).plot(ax = ax, label = "Te sol", c = self.c[1])
-            ax.set_title("temperature")
             
         elif name == "radiation":
             (self.core["Rd+_ex"].mean(["x", "theta"])*-1).plot(ax = ax, label = "core", c = self.c[0])
             (self.sol["Rd+_ex"].mean(["x", "theta"])*-1).plot(ax = ax, label = "sol", c = self.c[1])
-            ax.set_title("avg rad")
-            
+
         elif name == "ionisation":
             self.core["Sd+_iz"].mean(["x", "theta"]).plot(ax = ax, label = "core", c = self.c[0])
             self.sol["Sd+_iz"].mean(["x", "theta"]).plot(ax = ax, label = "sol", c = self.c[1])
-            ax.set_title("ionisation")
             
         elif name == "cvode_order":
             ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_last_order"].values, label = "last_order", lw = 1, c = self.c[0])
-            ax.set_title("cvode")
             
         elif name == "cvode_evals":
             ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nsteps"].values, label = "nsteps")
             ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nfevals"].values, label = "nfevals")
             ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_npevals"].values, label = "npevals")
             ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nliters"].values, label = "nliters")
-            ax.set_title("cvode")
             ax.set_yscale("log")
 
         elif name == "cvode_fails":
             ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_num_fails"].values, label = "num_fails")
             ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nonlin_fails"].values, label = "nonlin_fails")
-            ax.set_title("cvode")
             ax.set_yscale("log")
-    
-    
-        ax.legend(fontsize=8, loc = "upper center", bbox_to_anchor = (0.5, 1.25), ncols = 2)
+            
+        elif name == "2d_nd+":
+            self.noguards["Nd+"].isel(t=-1).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""})
+            plot2d = True
+            
+        elif name == "2d_Rd+_ex":
+            (self.noguards["Rd+_ex"].isel(t=-1)*-1).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"ticks":mpl.ticks.LogLocator(),"label":""})
+            plot2d = True
+            
+        elif name == "2d_Sd+_iz":
+            (self.noguards["Sd+_iz"].isel(t=-1)*-1).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""})
+            plot2d = True
+
+        ax.set_title(name)
+        if plot2d is False:
+            ax.legend(fontsize=8, loc = "upper center", bbox_to_anchor = (0.5, 1.3), ncols = 2)
+        
+            ax.xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
         ax.set_ylabel("")
-        ax.xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
-        ax.tick_params(axis="x", labelrotation = 90)
+        ax.tick_params(axis="x", labelrotation = 0)
         ax.grid(which="both", alpha = 0.3)
-    
+        
+        
+        
+class Monitor2D():
+    """ 
+    mode is grid or pcolor
+    """
+    def __init__(self, case, mode, windows):
+        self.fig_size = 3.5
+
+        self.mode = mode
+        self.case = case
+        self.ds = self.case.ds
+        
+        if mode == "grid":
+            self.fig_height = self.fig_size * 0.9
+            self.wspace = 0.25
+        else:
+            self.fig_height = 1.8 * self.fig_size
+            self.wspace = 0.4
+
+        self.windows = windows
+        num_rows = len(self.windows)
+        
+        self.noguards = case.select_region("all_noguards")
+        self.core = case.select_region("core_noguards")
+        self.sol = case.select_region("sol_noguards")
+        
+        self.c = ["navy", "deeppink", "teal", "darkorange"]
+        
+        for row_id in range(num_rows):
+        
+            row_windows = self.windows[row_id]
+            num_windows = len(row_windows)
+            fig, self.axes = plt.subplots(1, num_windows, figsize = (self.fig_size*num_windows, self.fig_height))
+            fig.subplots_adjust(wspace = self.wspace)
+            
+            if num_windows == 1:
+                self.add_plot(self.axes, row_windows[0])
+            else:
+                for i, name in enumerate(row_windows):
+                    self.add_plot(self.axes[i], name)
+        
+        
+    def add_plot(self, ax, name):
+        
+        meta = self.ds.metadata
+        
+        if self.mode == "grid":
+        
+            abs(self.noguards[name].isel(t=-1)).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""})
+            ax.set_title(name)
+
+            ax.set_ylabel(""); ax.set_xlabel("")
+            ax.tick_params(axis="x", labelrotation = 0)
+            ax.grid(which="both", alpha = 0.3)
+            
+            ax.hlines(meta["ixseps1"], self.ds["theta"][0], self.ds["theta"][-1], colors = "k", ls = "--", lw = 1)
+            
+        elif self.mode == "pcolor":
+            abs(self.ds[name].isel(t=-1)).bout.pcolormesh(ax = ax, cmap = "Spectral_r")#, cbar_kwargs={"label":""})
+            ax.set_title(name)
+
+            ax.set_ylabel(""); ax.set_xlabel("")
+            ax.tick_params(axis="x", labelrotation = 0)
+            ax.grid(which="both", alpha = 0.3)
+            # [ax.vlines(meta[x], self.ds["x"][0], self.ds["x"][-1], colors = "k") for x in ["jyseps1_1", "jyseps1_2", "jyseps2_1", "jyseps2_2"]]
+            
 def plot_ddt(self, smoothing = 50, volume_weighted = True):
     """
     RMS of all the ddt parameters, which are convergence metrics.
