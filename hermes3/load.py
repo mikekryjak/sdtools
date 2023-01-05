@@ -40,7 +40,15 @@ class Load:
 
         return Case(ds, casepath)
 
-    def case_2D(casepath, gridfilepath = None, verbose = False, keep_boundaries = False, squeeze = True):
+    def case_2D(casepath, 
+                gridfilepath = None, 
+                verbose = False, 
+                keep_boundaries = False, 
+                squeeze = True, 
+                double_load = False):
+        """ 
+        Double load returns a case with and without guards.
+        """
 
         datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
@@ -55,9 +63,52 @@ class Load:
                 keep_yboundaries=keep_boundaries,
                 )
 
-        if squeeze:
-            ds = ds.squeeze(drop = True)
-        return Case(ds, casepath)
+        # Load both a case with and without guards
+        if double_load is True:
+            
+            ds = xbout.load.open_boutdataset(
+                datapath = datapath, 
+                inputfilepath = inputfilepath, 
+                gridfilepath = gridfilepath,
+                info = False,
+                geometry = "toroidal",
+                keep_xboundaries=False,
+                keep_yboundaries=False,
+                )
+            
+            ds_ng = xbout.load.open_boutdataset(
+                datapath = datapath, 
+                inputfilepath = inputfilepath, 
+                gridfilepath = gridfilepath,
+                info = False,
+                geometry = "toroidal",
+                keep_xboundaries=True,
+                keep_yboundaries=True,
+                )
+            
+            if squeeze:
+                ds = ds.squeeze(drop = True)
+                ds_ng = ds_ng.squeeze(drop = True)
+                
+            return Case(ds, casepath), Case(ds_ng, casepath)
+                
+        else:
+            
+            # Load with guard settings as per inputs
+            ds = xbout.load.open_boutdataset(
+                datapath = datapath, 
+                inputfilepath = inputfilepath, 
+                gridfilepath = gridfilepath,
+                info = False,
+                geometry = "toroidal",
+                keep_xboundaries=keep_boundaries,
+                keep_yboundaries=keep_boundaries,
+                )
+            
+            if squeeze:
+                ds = ds.squeeze(drop = True)
+                
+            return Case(ds, casepath)
 
 
 class Case:

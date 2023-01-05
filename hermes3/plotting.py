@@ -82,24 +82,13 @@ class Monitor():
             ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_num_fails"].values, label = "num_fails")
             ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nonlin_fails"].values, label = "nonlin_fails")
             ax.set_yscale("log")
-            
-        elif name == "2d_nd+":
-            self.noguards["Nd+"].isel(t=-1).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""})
-            plot2d = True
-            
-        elif name == "2d_Rd+_ex":
-            (self.noguards["Rd+_ex"].isel(t=-1)*-1).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"ticks":mpl.ticks.LogLocator(),"label":""})
-            plot2d = True
-            
-        elif name == "2d_Sd+_iz":
-            (self.noguards["Sd+_iz"].isel(t=-1)*-1).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""})
-            plot2d = True
+
 
         ax.set_title(name)
-        if plot2d is False:
-            ax.legend(fontsize=8, loc = "upper center", bbox_to_anchor = (0.5, 1.3), ncols = 2)
-        
-            ax.xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
+
+        ax.legend(fontsize=8, loc = "upper center", bbox_to_anchor = (0.5, 1.3), ncols = 2)
+    
+        # ax.xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
         ax.set_ylabel("")
         ax.tick_params(axis="x", labelrotation = 0)
         ax.grid(which="both", alpha = 0.3)
