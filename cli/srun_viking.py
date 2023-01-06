@@ -43,7 +43,7 @@ if args.restart == False and args.append == False:
     restartappend = ""
 
 jobname = casename
-nodes = 1
+nodes = 2
 cores = args.c
 partition = "nodes"
 time = "48:00:00"
@@ -52,7 +52,7 @@ slurmcommand = \
 f"""#!/bin/bash 
 #SBATCH -J {jobname}
 #SBATCH -N {nodes}
-#SBATCH --tasks-per-node={cores}
+#SBATCH --tasks-per-node={cores/2}
 #SBATCH -p {partition}
 #SBATCH --time={time}
 #SBATCH -o /mnt/lustre/users/mjk557/cases/slurmlogs/{jobname}.out
