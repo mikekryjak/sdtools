@@ -44,8 +44,8 @@ if args.restart == False and args.append == False:
     restartappend = ""
 
 jobname = casename
-nodes = 2
-cores = args.c
+nodes = int(2)
+cores_per_node = int(int(args.c)/2)
 partition = "nodes"
 time = args.t
 
@@ -53,7 +53,7 @@ slurmcommand = \
 f"""#!/bin/bash 
 #SBATCH -J {jobname}
 #SBATCH -N {nodes}
-#SBATCH --tasks-per-node={cores/2}
+#SBATCH --tasks-per-node={cores_per_node}
 #SBATCH -p {partition}
 #SBATCH --time={time}
 #SBATCH -o /mnt/lustre/users/mjk557/cases/slurmlogs/{jobname}.out
@@ -62,7 +62,7 @@ f"""#!/bin/bash
 #SBATCH --mail-type=BEGIN,END,FAIL               # Mail events (NONE, BEGIN, END, FAIL, ALL)
 #SBATCH --mail-user=mike.kryjak@york.ac.uk        # Where to send mail
 
-mpirun -n {nodes*cores} /mnt/lustre/users/mjk557/hermes-3/{args.b}/hermes-3 -d {abscasepath} {restartappend}
+mpirun -n {nodes*cores_per_node} /mnt/lustre/users/mjk557/hermes-3/{args.b}/hermes-3 -d {abscasepath} {restartappend}
 
 """
 
