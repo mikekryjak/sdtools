@@ -103,12 +103,13 @@ class Monitor2D():
     """ 
     mode is grid or pcolor
     """
-    def __init__(self, case, mode, windows):
+    def __init__(self, case, mode, windows, settings = None):
         self.fig_size = 3.5
 
         self.mode = mode
         self.case = case
         self.ds = self.case.ds
+        self.settings = settings
         
         if mode == "grid":
             self.fig_height = self.fig_size * 0.9
@@ -138,11 +139,19 @@ class Monitor2D():
         
     def add_plot(self, ax, name):
         
+        
+        kwargs = {"log":True, "vmin":None, "vmax":None}
+        
+        if self.settings is not None:
+            if name in self.settings.keys():
+                for key in self.settings[name].keys():
+                    kwargs[key] = self.settings[name][key]
+        
         meta = self.ds.metadata
         
         if self.mode == "grid":
         
-            abs(self.ds[name].isel(t=-1)).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""})
+            abs(self.ds[name].isel(t=-1)).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""}, vmin=kwargs["vmin"], vmax=kwargs["vmax"])
             ax.set_title(name)
 
             ax.set_ylabel(""); ax.set_xlabel("")
@@ -152,7 +161,7 @@ class Monitor2D():
             ax.hlines(meta["ixseps1"], self.ds["theta"][0], self.ds["theta"][-1], colors = "k", ls = "--", lw = 1)
             
         elif self.mode == "pcolor":
-            abs(self.ds[name].isel(t=-1)).bout.pcolormesh(ax = ax, cmap = "Spectral_r")#, cbar_kwargs={"label":""})
+            abs(self.ds[name].isel(t=-1)).bout.pcolormesh(ax = ax, cmap = "Spectral_r", logscale=kwargs["log"], vmin=kwargs["vmin"], vmax=kwargs["vmax"])#, cbar_kwargs={"label":""})
             ax.set_title(name)
 
             ax.set_ylabel(""); ax.set_xlabel("")
