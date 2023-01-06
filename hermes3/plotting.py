@@ -41,9 +41,9 @@ class Monitor():
         
         if name == "target_temp":
             targets = dict()
-            for name in  ["inner_upper"]:
-                targets[name] = Target(self.case, name)
-                ax.plot(self.ds["t"], targets[name].peak_temperature, label = name) 
+            for target in  ["outer_lower"]:
+                targets[target] = Target(self.case, target)
+                ax.plot(self.ds["t"], targets[target].peak_temperature, label = target, color = self.c[0]) 
                 ax.set_ylabel("Target temp [eV]")
                 ax.set_title("Target temp")
 
@@ -68,6 +68,10 @@ class Monitor():
             self.core["Sd+_iz"].mean(["x", "theta"]).plot(ax = ax, label = "core", c = self.c[0])
             self.sol["Sd+_iz"].mean(["x", "theta"]).plot(ax = ax, label = "sol", c = self.c[1])
             
+        elif name == "recombination":
+            abs(self.core["Sd+_rec"].mean(["x", "theta"])).plot(ax = ax, label = "core", c = self.c[0])
+            abs(self.sol["Sd+_rec"].mean(["x", "theta"])).plot(ax = ax, label = "sol", c = self.c[1])
+            
         elif name == "cvode_order":
             ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_last_order"].values, label = "last_order", lw = 1, c = self.c[0])
             
@@ -86,7 +90,7 @@ class Monitor():
 
         ax.set_title(name)
 
-        ax.legend(fontsize=8, loc = "upper center", bbox_to_anchor = (0.5, 1.3), ncols = 2)
+        ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncols = 2)
     
         # ax.xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
         ax.set_ylabel("")
@@ -138,7 +142,7 @@ class Monitor2D():
         
         if self.mode == "grid":
         
-            abs(self.noguards[name].isel(t=-1)).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""})
+            abs(self.ds[name].isel(t=-1)).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""})
             ax.set_title(name)
 
             ax.set_ylabel(""); ax.set_xlabel("")
