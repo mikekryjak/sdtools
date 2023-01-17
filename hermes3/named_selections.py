@@ -26,6 +26,7 @@ class Target():
             gamma_e = 3.5
             
         self.temperature = bndry_val("Td+").squeeze()
+        self.electron_temperature = bndry_val("Te").squeeze()
         self.density = bndry_val("Ne").squeeze()
         self.ion_flux = (abs(bndry_val("NVd+")) / mass_i).squeeze()
         self.heat_flux = (gamma_i * self.temperature * constants("q_e") * self.ion_flux * 1e-6)    # MW
