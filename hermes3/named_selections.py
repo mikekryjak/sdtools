@@ -89,8 +89,8 @@ class CoreRing():
         calculating flux. Also calculate geometry properties
         """
         # Define ring for flux calculation
-        self.a_slice = self.case.slices("custom_core_ring")(self.ring_index)    # First ring
-        self.b_slice = self.case.slices("custom_core_ring")(self.ring_index+1)    # Second ring
+        self.a_slice = self.case.select_custom_core_ring(self.ring_index)    # First ring
+        self.b_slice = self.case.select_custom_core_ring(self.ring_index+1)    # Second ring
 
         # Datasets for each ring
         self.a = self.ds.isel(t = -1, x = self.a_slice[0], theta = self.a_slice[1])
@@ -222,4 +222,16 @@ class CoreRing():
         ax.set_title(f"Total heat flux for domain core ring {self.ring_index}")
         ax.legend()
 
+
+
+class DomainRegion():
+    
+    def __init__(self, case, region_name):
+        self.ds = case.select_region(region_name)
+        
+        self.integrals = dict()
+
+        for x in ["Sd+_src", "Sd+_iz", "Sd+_rec", "Rd+_ex", "Rd+_rec"]:
+            self.integrals[x] = self.ds[x].sum(["theta", "x"])
+        
     
