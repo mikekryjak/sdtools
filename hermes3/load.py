@@ -34,6 +34,7 @@ class Load:
                 inputfilepath = inputfilepath, 
                 info = False,
                 keep_yboundaries=True,
+                cache = False
                 )
 
         ds = ds.squeeze(drop = True)
@@ -59,6 +60,7 @@ class Load:
                 gridfilepath = gridfilepath,
                 info = False,
                 geometry = "toroidal",
+                cache = False,
                 keep_xboundaries=keep_boundaries,
                 keep_yboundaries=keep_boundaries,
                 )
@@ -71,6 +73,7 @@ class Load:
                 inputfilepath = inputfilepath, 
                 gridfilepath = gridfilepath,
                 info = False,
+                cache = False,
                 geometry = "toroidal",
                 keep_xboundaries=True,
                 keep_yboundaries=True,
@@ -81,6 +84,7 @@ class Load:
                 inputfilepath = inputfilepath, 
                 gridfilepath = gridfilepath,
                 info = False,
+                cache = False,
                 geometry = "toroidal",
                 keep_xboundaries=False,
                 keep_yboundaries=False,
