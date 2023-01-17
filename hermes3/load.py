@@ -453,9 +453,6 @@ class Case:
     
     
 
-    
-    
-    
     def extract_geometry(self):
         """
         Perpare geometry variables
@@ -466,9 +463,18 @@ class Case:
         # self.Rxy = meta["Rxy"]    # R coordinate array
         # self.Zxy = meta["Zxy"]    # Z coordinate array
         
+        
+        if meta["keep_xboundaries"] is True:
+            self.MXG = meta["MXG"]
+        else:
+            self.MXG = 0
+            
+        if meta["keep_yboundaries"] is True:
+            self.MYG = meta["MYG"]
+        else:
+            self.MYG = 0
+            
         self.ixseps1 = meta["ixseps1"]
-        self.MYG = meta["MYG"]
-        self.MXG = 2
         self.ny_inner = meta["ny_inner"]
         self.ny = meta["ny"]
         self.nyg = self.ny + self.MYG * 4 # with guard cells
