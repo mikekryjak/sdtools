@@ -55,6 +55,7 @@ class Monitor():
                 ax.plot(self.ds["t"], targets[target].peak_temperature, label = target, color = self.c[0]) 
                 ax.set_ylabel("Target temp [eV]")
                 ax.set_title("Target temp")
+                ax.set_yscale("log")
 
 
         elif name == "density":
@@ -62,12 +63,14 @@ class Monitor():
             self.core["Nd"].mean(["x", "theta"]).plot(ax = ax, label = "neut core", ls = "--", c = self.c[1])
             self.sol["Ne"].mean(["x", "theta"]).plot(ax = ax, label = "Ne sol", c = self.c[0])
             self.sol["Nd"].mean(["x", "theta"]).plot(ax = ax, label = "neut sol", c = self.c[1])
+            # ax.set_yscale("log")
             
         elif name == "temperature":
             self.core["Td+"].mean(["x", "theta"]).plot(ax = ax, label = "Td+ core", ls = "--", c = self.c[0])
             self.core["Te"].mean(["x", "theta"]).plot(ax = ax, label = "Te core", ls = "--", c = self.c[1])
             self.sol["Td+"].mean(["x", "theta"]).plot(ax = ax, label = "Td+ sol", c = self.c[0])
             self.sol["Te"].mean(["x", "theta"]).plot(ax = ax, label = "Te sol", c = self.c[1])
+            ax.set_yscale("log")
             
         elif name == "radiation":
             (self.core["Rd+_ex"].mean(["x", "theta"])*-1).plot(ax = ax, label = "core", c = self.c[0])
@@ -196,7 +199,7 @@ class Monitor2D():
             ax.grid(which="both", alpha = 0.3)
             # [ax.vlines(meta[x], self.ds["x"][0], self.ds["x"][-1], colors = "k") for x in ["jyseps1_1", "jyseps1_2", "jyseps2_1", "jyseps2_2"]]
             
-def plot_ddt(self, smoothing = 50, volume_weighted = True):
+def plot_ddt(case, smoothing = 1, volume_weighted = True):
     """
     RMS of all the ddt parameters, which are convergence metrics.
     Inputs:
@@ -206,14 +209,14 @@ def plot_ddt(self, smoothing = 50, volume_weighted = True):
     # Find parameters (species dependent)
     list_params = []
 
-    for var in self.ds.data_vars:
+    for var in case.ds.data_vars:
         if "ddt" in var and not any([x in var for x in []]):
             list_params.append(var)
     list_params.sort()
     
     # Account for case if not enough timesteps for smoothing
-    if len(self.ds.coords["t"]) < smoothing:
-        smoothing = len(self.ds.coords) / 10
+    if len(case.ds.coords["t"]) < smoothing:
+        smoothing = len(case.ds.coords) / 10
 
     res = dict()
     ma = dict()
@@ -221,24 +224,24 @@ def plot_ddt(self, smoothing = 50, volume_weighted = True):
     for param in list_params:
 
         if volume_weighted:
-            res[param] = (self.ds[param] * self.dv) / np.sum(self.dv)    # Cell volume weighted
+            res[param] = (case.ds[param] * case.dv) / np.sum(case.dv)    # Cell volume weighted
         else:
-            res[param] = self.ds[param]
+            res[param] = case.ds[param]
         res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))    # Root mean square
         res[param] = np.convolve(res[param], np.ones(smoothing), "same")    # Moving average with window = smoothing
 
     fig, ax = plt.subplots(figsize = (8,6), dpi = 100)
 
     for param in list_params:
-        ax.plot(res[param], label = param, lw = 1)
+        ax.plot(case.ds.coords["t"], res[param], label = param, lw = 1)
         
     ax.set_yscale("log")
     ax.grid(which = "major", lw = 1)
     ax.grid(which = "minor", lw = 1, alpha = 0.3)
     ax.legend(loc = "upper left", bbox_to_anchor=(1,1))
-    ax.set_xlabel("Timestep")
+    ax.set_xlabel("Time")
     ax.set_ylabel("Normalised residual")
-    ax.set_title(f"Residual plot: {self.name}")
+    ax.set_title(f"Residual plot: {case.name}")
 
 def plot_monitors(self, to_plot, what = ["mean", "max", "min"], ignore = []):
     """
