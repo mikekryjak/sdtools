@@ -6,7 +6,16 @@ from hermes3.named_selections import *
 
 
 class Monitor():
-    def __init__(self, case, windows):
+    def __init__(self, case, windows, settings = None):
+        
+        self.settings = settings
+        self.plot_settings = {"xmin":None, "xmax":None}
+        
+        if self.settings is not None:
+            if "plot" in self.settings.keys():
+                for key in self.settings["plot"].keys():
+                    self.plot_settings[key] = self.settings["plot"][key]
+        
         self.fig_size = 3
         
         self.case = case
@@ -89,6 +98,12 @@ class Monitor():
 
 
         ax.set_title(name)
+        if self.plot_settings["xmin"] is not None:
+            ax.set_xlim(left = self.plot_settings["xmin"])
+            
+        if self.plot_settings["xmax"] is not None:
+            ax.set_xlim(right = self.plot_settings["xmax"])
+        # ax.set_xlim((self.plot_settings["xmin"], self.plot_settings["xmax"]))
 
         ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncols = 2)
     
@@ -103,16 +118,24 @@ class Monitor2D():
     """ 
     mode is grid or pcolor
     """
-    def __init__(self, case, mode, windows, settings = None):
+    def __init__(self, case, mode, windows, inputs = None):
+        
+        self.inputs = inputs
+        self.settings = {"plot": {"xlim":(None, None), "ylim":(None, None), "figure_aspect":0.9}}
+        
+        if self.inputs is not None:
+            if "plot" in self.inputs.keys():
+                for key in self.inputs["plot"].keys():
+                    self.settings["plot"][key] = self.settings["plot"][key]
+        
         self.fig_size = 3.5
 
         self.mode = mode
         self.case = case
         self.ds = self.case.ds
-        self.settings = settings
-        
+#
         if mode == "grid":
-            self.fig_height = self.fig_size * 0.9
+            self.fig_height = self.fig_size * self.settings["plot"]["figure_aspect"]
             self.wspace = 0.25
         else:
             self.fig_height = 1.8 * self.fig_size
@@ -142,12 +165,15 @@ class Monitor2D():
         
         kwargs = {"log":True, "vmin":None, "vmax":None}
         
-        if self.settings is not None:
-            if name in self.settings.keys():
-                for key in self.settings[name].keys():
-                    kwargs[key] = self.settings[name][key]
+        if self.inputs is not None:
+            if name in self.inputs.keys():
+                for key in self.inputs[name].keys():
+                    kwargs[key] = self.inputs[name][key]
         
         meta = self.ds.metadata
+        print(self.settings)
+        ax.set_xlim(self.settings["plot"]["xlim"])
+        ax.set_ylim(self.settings["plot"]["ylim"])
         
         if self.mode == "grid":
         
@@ -159,6 +185,7 @@ class Monitor2D():
             ax.grid(which="both", alpha = 0.3)
             
             ax.hlines(meta["ixseps1"], self.ds["theta"][0], self.ds["theta"][-1], colors = "k", ls = "--", lw = 1)
+            
             
         elif self.mode == "pcolor":
             abs(self.ds[name].isel(t=-1)).bout.pcolormesh(ax = ax, cmap = "Spectral_r", logscale=kwargs["log"], vmin=kwargs["vmin"], vmax=kwargs["vmax"])#, cbar_kwargs={"label":""})
