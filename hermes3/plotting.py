@@ -129,7 +129,7 @@ class Monitor2D():
         if self.inputs is not None:
             if "plot" in self.inputs.keys():
                 for key in self.inputs["plot"].keys():
-                    self.settings["plot"][key] = self.settings["plot"][key]
+                    self.settings["plot"][key] = self.inputs["plot"][key]
         
         self.fig_size = 3.5
 
@@ -175,8 +175,12 @@ class Monitor2D():
         
         meta = self.ds.metadata
         print(self.settings)
-        ax.set_xlim(self.settings["plot"]["xlim"])
-        ax.set_ylim(self.settings["plot"]["ylim"])
+        
+        if self.settings["plot"]["xlim"] != (None,None):
+            ax.set_xlim(self.settings["plot"]["xlim"])
+        if self.settings["plot"]["ylim"] != (None,None):
+            ax.set_xlim(self.settings["plot"]["ylim"])
+        
         
         if self.mode == "grid":
         
