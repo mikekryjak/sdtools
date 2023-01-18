@@ -46,7 +46,8 @@ class Load:
                 verbose = False, 
                 keep_boundaries = False, 
                 squeeze = True, 
-                double_load = False):
+                double_load = False,
+                unnormalise_geom = False):
         """ 
         Double load returns a case with and without guards.
         """
@@ -94,7 +95,7 @@ class Load:
                 ds = ds.squeeze(drop = True)
                 ds_ng = ds_ng.squeeze(drop = True)
                 
-            return Case(ds, casepath), Case(ds_ng, casepath)
+            return Case(ds, casepath, unnormalise_geom), Case(ds_ng, casepath, unnormalise_geom)
                 
         else:
             
@@ -117,7 +118,7 @@ class Load:
 
 class Case:
 
-    def __init__(self, ds, casepath):
+    def __init__(self, ds, casepath, unnormalise_geom):
 
         self.ds = ds
         self.name = os.path.split(casepath)[-1]
@@ -135,17 +136,25 @@ class Case:
         self.unnormalise()
         self.derive_vars()
         self.extract_geometry()
+        
+        print(f"CHECK: Total domain volume is {self.ds.dv.values.sum():.3E} [m3]")
 
     
 
-    def unnormalise(self):
+    def unnormalise(self, unnormalise_geom):
         self.calc_norms()
         
+
+        if unnormalise_geom == False:
+            list_skip = ["dx", "dy", "J"]
+            print("--> dx, dy and J will not be unnormalised")
+        else:
+            list_skip = []
 
         for data_var in self.norms.keys():
             # Unnormalise variables and coordinates
             if data_var in self.ds.variables or data_var in self.ds.coords:
-                if data_var not in self.normalised_vars:
+                if data_var not in self.normalised_vars and data_var not in list_skip:
                     self.ds[data_var] = self.ds[data_var] * self.norms[data_var]["conversion"]
                     self.normalised_vars.append(data_var)
                 self.ds[data_var].attrs.update(self.norms[data_var])
@@ -456,6 +465,49 @@ class Case:
         return self.ds.isel(x = selection[0], theta = selection[1])
     
     
+    
+    def extract_1d_tokamak_geometry(self):
+        ds = self.ds
+        meta = self.ds.metadata
+
+        # Reconstruct grid position from dy
+        dy = ds.coords["dy"].values
+        n = len(dy)
+        pos = np.zeros(n)
+        pos[0] = -0.5*dy[1]
+        pos[1] = 0.5*dy[1]
+
+        for i in range(2,n):
+            pos[i] = pos[i-1] + 0.5*dy[i-1] + 0.5*dy[i]
+            
+        # pos = ds.coords["y"].values.copy()
+
+        # Guard replace to get position at boundaries
+        pos[-2] = (pos[-3] + pos[-2])/2
+        pos[1] = (pos[1] + pos[2])/2 
+
+        # Set 0 to be at first cell boundary in domain
+        pos = pos - pos[1]
+
+        # Replace y in dataset with the new one
+        ds.coords["y"] = pos
+        
+        self.ds["da"] = self.ds.J / np.sqrt(ds.g_22)
+        
+        self.ds["da"].attrs.update({
+            "conversion" : 1,
+            "units" : "m2",
+            "standard_name" : "cross-sectional area",
+            "long_name" : "Cell parallel cross-sectional area"})
+        
+        self.ds["dV"] = self.ds.J * self.ds.dy
+        self.ds["dV"].attrs.update({
+            "conversion" : 1,
+            "units" : "m3",
+            "standard_name" : "cell volume",
+            "long_name" : "Cell Volume"})
+
+
 
     def extract_geometry(self):
         """
@@ -543,6 +595,13 @@ class Case:
             "units" : "m",
             "standard_name" : "poloidal arc length",
             "long_name" : "Poloidal arc length"})
+        
+        self.ds["dv"] = self.dydx * dz * data["J"]    # Cell volume
+        self.ds["dv"].attrs.update({
+            "conversion" : 1,
+            "units" : "m3",
+            "standard_name" : "cell volume",
+            "long_name" : "Cell volume"})
         
     def collect_boundaries(self):
         self.boundaries = dict()
