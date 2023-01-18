@@ -133,7 +133,7 @@ class Case:
 
         self.colors = ["cyan", "lime", "crimson", "magenta", "black", "red"]
 
-        self.unnormalise()
+        self.unnormalise(unnormalise_geom)
         self.derive_vars()
         self.extract_geometry()
         
