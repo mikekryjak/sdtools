@@ -520,12 +520,12 @@ class Case:
         # self.Zxy = meta["Zxy"]    # Z coordinate array
         
         
-        if meta["keep_xboundaries"] is True:
+        if meta["keep_xboundaries"] == 1:
             self.MXG = meta["MXG"]
         else:
             self.MXG = 0
             
-        if meta["keep_yboundaries"] is True:
+        if meta["keep_yboundaries"] == 1:
             self.MYG = meta["MYG"]
         else:
             self.MYG = 0
