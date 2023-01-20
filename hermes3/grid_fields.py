@@ -86,6 +86,7 @@ class Mesh():
         slices = dict()
 
         slices["all"] = (slice(None,None), slice(None,None))
+        slices["all_noguards"] = (slice(self.MXG,-self.MXG), np.r_[slice(self.MYG,self.ny_inner-self.MYG*2), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
 
         slices["inner_core"] = (slice(0,self.ixseps1), np.r_[slice(self.j1_1g + 1, self.j2_1g+1), slice(self.j1_2g + 1, self.j2_2g + 1)])
         slices["outer_core"] = (slice(self.ixseps1, None), slice(0, self.nyg))
@@ -212,11 +213,17 @@ class Mesh():
         if ylim != (None,None):
             ax.set_ylim(ylim)
 
-    def write_field(self, field):
+    def write_field(self, field, dtype = "Field3D"):
 
         data = field.data
-        data = np.expand_dims(data, -1)    # Add Z dimension of 1
-        data.attributes["bout_type"] = "Field3D"
+        
+        if dtype == "Field3D":
+            data = np.expand_dims(data, -1)    # Add Z dimension of 1
+            data.attributes["bout_type"] = "Field3D"
+            
+        elif dtype == "Field2D":
+            data.attributes["bout_type"] = "Field2D"
+            
         self.mesh.write(field.name, data, info = True)
 
         if field.name in self.mesh.list():
