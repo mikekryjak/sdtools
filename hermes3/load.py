@@ -341,6 +341,36 @@ class Case:
             "standard_name": "neutral momentum",
             "long_name": "Neutral momentum (d+)"
         },
+        
+        "anomalous_D_e": {
+            "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
+            "units": "m2s-1",
+            "standard_name": "anomalous density diffusion (e)",
+            "long_name": "anomalous density diffusion (e)"
+        },
+        
+        "anomalous_D_d+": {
+            "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
+            "units": "m2s-1",
+            "standard_name": "anomalous density diffusion (d+)",
+            "long_name": "anomalous density diffusion (d+)"
+        },
+        
+        "anomalous_Chi_e": {
+            "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
+            "units": "m2s-1",
+            "standard_name": "anomalous thermal diffusion (e)",
+            "long_name": "anomalous thermal diffusion (e)"
+        },
+        
+        "anomalous_Chi_d+": {
+            "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
+            "units": "m2s-1",
+            "standard_name": "anomalous thermal diffusion (d+)",
+            "long_name": "anomalous thermal diffusion (d+)"
+        },
+        
+        
 
         
         
