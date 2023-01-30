@@ -113,7 +113,7 @@ class Load:
             if squeeze:
                 ds = ds.squeeze(drop = True)
                 
-            return Case(ds, casepath)
+            return Case(ds, casepath, unnormalise_geom)
 
 
 class Case:
