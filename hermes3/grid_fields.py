@@ -212,6 +212,32 @@ class Mesh():
             ax.set_xlim(xlim)
         if ylim != (None,None):
             ax.set_ylim(ylim)
+            
+    def plot_field(self, name):
+        """
+        Plot a field saved in the grid file
+        """
+        
+        plt.style.use("default")
+
+        field = self.mesh[name]
+        cmap = plt.get_cmap("jet")
+
+        fieldnorm = field / np.max(field) * 1
+        colors = [cmap(x) for x in fieldnorm.flatten()]
+        norm = mpl.colors.Normalize(vmin=0, vmax=np.max(field))
+
+        fig, axes = plt.subplots(1,3, figsize = (10,6), gridspec_kw={'width_ratios': [5,2.0, 0.3]}, dpi = 110)
+        fig.subplots_adjust(wspace=0.3)
+        fig.suptitle(name)
+
+        self.plot_xy_grid(axes[0])
+        axes[0].scatter(self.yflat, self.xflat, c = colors, s = 1)
+
+        self.plot_rz_grid(axes[1])
+        axes[1].scatter(self.rflat, self.zflat, c = colors, s = 5)
+
+        cbar = mpl.colorbar.ColorbarBase(ax=axes[2], cmap = cmap, norm = norm)
 
     def write_field(self, field, dtype = "Field3D"):
 
