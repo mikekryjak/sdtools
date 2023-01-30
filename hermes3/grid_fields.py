@@ -9,6 +9,14 @@ from boututils.boutarray import BoutArray
 
 
 class Mesh():
+    """ 
+    Wrapper for the Mesh DataFile
+    Opens a mesh .nc datafile and performs operations on it, such as writing
+    custom fields and plotting them.
+    NOTE after you're done with operations, you must manually close the datafile
+    using Mesh.close(). This prevents unexpected behaviour such as the inability
+    to reload mesh files after changes.
+    """
     # TODO identify guard cells in plots
     # TODO add separatrices to plots
     
@@ -60,6 +68,13 @@ class Mesh():
         
 
         self.colors = ["cyan", "lime", "crimson", "magenta", "black", "red"]
+        
+    def close(self):
+        """
+        Close the opened mesh datafile.
+        """
+        self.mesh.close()
+        print(f"Mesh file {self.filepath} closed")
 
     def slices(self, name):
         """
