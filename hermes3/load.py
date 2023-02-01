@@ -279,6 +279,13 @@ class Case:
             "standard_name": "ion temperature (d+)",
             "long_name": "Ion temperature (d+)",
         },
+        
+        "Td": {
+            "conversion": m["Tnorm"],
+            "units": "eV",
+            "standard_name": "neutral temperature (d)",
+            "long_name": "Neutral temperature (d)",
+        },
 
         "Te": {
             "conversion": m["Tnorm"],
@@ -327,6 +334,13 @@ class Case:
             "units": "Pa",
             "standard_name": "ion pressure (h+)",
             "long_name": "Ion pressure (h+)"
+        },
+        
+        "Pd": {
+            "conversion": m["Nnorm"] * m["Tnorm"] * q_e,
+            "units": "Pa",
+            "standard_name": "ion pressure (d+)",
+            "long_name": "Ion pressure (d+)"
         },
 
         "Pd+": {
@@ -547,9 +561,13 @@ class Case:
 
         # Set 0 to be at first cell boundary in domain
         pos = pos - pos[1]
+        self.pos = pos
+        self.ds["pos"] = (["y"], pos)
+        self.ds = self.ds.swap_dims({"y":"pos"})
+        self.ds.coords["pos"].attrs = self.ds.coords["y"].attrs
 
         # Replace y in dataset with the new one
-        ds.coords["y"] = pos
+        # ds.coords["y"] = pos
         
         self.ds["da"] = self.ds.J / np.sqrt(ds.g_22)
         
