@@ -119,17 +119,20 @@ class Monitor():
         
 class Monitor2D():
     """ 
+    Plot monitor windows in the pattern [[1, 2, 3], [4, 5, 6]] or [[1]]
     mode is grid or pcolor
     """
-    def __init__(self, case, mode, windows, inputs = None):
+    def __init__(self, case, mode, windows, settings = None):
         
-        self.inputs = inputs
-        self.settings = {"plot": {"xlim":(None, None), "ylim":(None, None), "figure_aspect":0.9}}
+        # Catch if user supplies just a [param] instead of [[param]]
+        if len(windows)==1 and isinstance(["Ne"], list):
+            windows = [windows]
+            
+        self.input_settings = settings
+        self.settings = {"all": {"xlim":(None, None), "ylim":(None, None), "figure_aspect":0.9}}
+        self.capture_setting_inputs("all")
         
-        if self.inputs is not None:
-            if "plot" in self.inputs.keys():
-                for key in self.inputs["plot"].keys():
-                    self.settings["plot"][key] = self.inputs["plot"][key]
+        
         
         self.fig_size = 3.5
 
@@ -162,7 +165,15 @@ class Monitor2D():
                 for i, name in enumerate(row_windows):
                     self.add_plot(self.axes[i], name)
         
-        
+    def capture_setting_inputs(self, plot):
+        """
+        Take settings from inputs and pass them to the correct plot
+        """
+        if self.input_settings is not None:
+            if plot in self.inputs.keys():
+                for setting in self.inputs[plot].keys():
+                    self.settings[plot][setting] = self.input_settings[plot][setting]
+                        
     def add_plot(self, ax, name):
         
         
