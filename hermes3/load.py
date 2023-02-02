@@ -39,7 +39,7 @@ class Load:
 
         ds = ds.squeeze(drop = True)
 
-        return Case(ds, casepath)
+        return Case(ds, casepath, unnormalise_geom = True)
 
     def case_2D(casepath, 
                 gridfilepath = None, 
@@ -135,9 +135,15 @@ class Case:
 
         self.unnormalise(unnormalise_geom)
         self.derive_vars()
-        self.extract_geometry()
+        self.guard_replaced = False
         
-        print(f"CHECK: Total domain volume is {self.ds.dv.values.sum():.3E} [m3]")
+        if self.is_2d is True:
+            self.extract_2d_tokamak_geometry()
+        
+            print(f"CHECK: Total domain volume is {self.ds.dv.values.sum():.3E} [m3]")
+        else:
+            self.extract_1d_tokamak_geometry()
+            self.guard_replace()
 
     
 
@@ -202,12 +208,35 @@ class Case:
     def guard_replace(self):
 
         if self.is_2d == False:
-            for data_var in self.ds.data_vars:
-                if "x" in self.ds[data_var].dims:
-                    pass
+            if self.ds.metadata["keep_yboundaries"] == 1:
+                # Replace inner guard cells with values at cell boundaries
+                # Hardcoded dimension order: t, y
+                # Cell order at target:
+                # ... | last | guard | second guard
+                #            ^target   ^not used
+                #     |  -3  |  -2   |      -1
 
+                if self.guard_replaced == False:
+                    for var_name in self.ds.data_vars:
+                        var = self.ds[var_name]
+                        
+                        if "y" in var.dims:
+                            
+                            if "t" in var.dims:
+                                var[:, -2] = (var[:,-3] + var[:,-2])/2
+                                var[:, 1] = (var[:, 1] + var[:, 2])/2
+                            else:
+                                var[-2] = (var[-3] + var[-2])/2
+                                var[1] = (var[1] + var[2])/2 
+                            
+                else:
+                    raise Exception("Guards already replaced!")
+                        
+                self.guard_replaced = True
+            else:
+                raise Exception("Y guards are missing from file!")
         else:
-            print("2D guard replacement not done yet")
+            raise Exception("2D guard replacement not done yet!")
 
 
     def calc_norms(self):
@@ -249,6 +278,13 @@ class Case:
             "units": "eV",
             "standard_name": "ion temperature (d+)",
             "long_name": "Ion temperature (d+)",
+        },
+        
+        "Td": {
+            "conversion": m["Tnorm"],
+            "units": "eV",
+            "standard_name": "neutral temperature (d)",
+            "long_name": "Neutral temperature (d)",
         },
 
         "Te": {
@@ -298,6 +334,13 @@ class Case:
             "units": "Pa",
             "standard_name": "ion pressure (h+)",
             "long_name": "Ion pressure (h+)"
+        },
+        
+        "Pd": {
+            "conversion": m["Nnorm"] * m["Tnorm"] * q_e,
+            "units": "Pa",
+            "standard_name": "ion pressure (d+)",
+            "long_name": "Ion pressure (d+)"
         },
 
         "Pd+": {
@@ -518,9 +561,13 @@ class Case:
 
         # Set 0 to be at first cell boundary in domain
         pos = pos - pos[1]
+        self.pos = pos
+        self.ds["pos"] = (["y"], pos)
+        self.ds = self.ds.swap_dims({"y":"pos"})
+        self.ds.coords["pos"].attrs = self.ds.coords["y"].attrs
 
         # Replace y in dataset with the new one
-        ds.coords["y"] = pos
+        # ds.coords["y"] = pos
         
         self.ds["da"] = self.ds.J / np.sqrt(ds.g_22)
         
@@ -539,7 +586,7 @@ class Case:
 
 
 
-    def extract_geometry(self):
+    def extract_2d_tokamak_geometry(self):
         """
         Perpare geometry variables
         """
