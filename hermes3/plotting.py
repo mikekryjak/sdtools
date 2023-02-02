@@ -84,21 +84,52 @@ class Monitor():
             abs(self.core["Sd+_rec"].mean(["x", "theta"])).plot(ax = ax, label = "core", c = self.c[0])
             abs(self.sol["Sd+_rec"].mean(["x", "theta"])).plot(ax = ax, label = "sol", c = self.c[1])
             
+        elif name == "core_temp_gradient":
+            """ 
+            Difference in temp on OMP between x indices a and b
+            """
+            omp = self.case.select_region("outer_midplane_a").sel(t=slice(None,None))
+
+            a = 2
+            b = 15
+            
+            (omp["Td+"].isel(x=a) - omp["Td+"].isel(x=b)).plot.line(ax = ax, x="t", label = "Ions", c = self.c[0])
+            (omp["Te"].isel(x=a) - omp["Te"].isel(x=b)).plot.line(ax = ax, x="t", label = "Electrons", c = self.c[1])
+            
+            ax.set_ylabel("Temperature [eV]")
+            ax.set_title(f"OMP Core temperature gradient between x={a} and {b}")
+            
+        elif name == "core_dens_gradient":
+            """ 
+            Difference in dens on OMP between x indices a and b
+            """
+            omp = self.case.select_region("outer_midplane_a").sel(t=slice(None,None))
+
+            a = 2
+            b = 15
+            
+            (omp["Ne"].isel(x=a) - omp["Ne"].isel(x=b)).plot.line(ax = ax, x="t", c = self.c[0], label = "Ne")
+            
+            ax.set_title(f"OMP Core plasma density gradient between x={a} and {b}")
+            
         elif name == "cvode_order":
             ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_last_order"].values, label = "last_order", lw = 1, c = self.c[0])
             
         elif name == "cvode_evals":
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nsteps"].values, label = "nsteps")
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nfevals"].values, label = "nfevals")
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_npevals"].values, label = "npevals")
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nliters"].values, label = "nliters")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nsteps"].values, c = self.c[0], label = "nsteps")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nfevals"].values, c = self.c[1], label = "nfevals")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_npevals"].values, c = self.c[2], label = "npevals")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nliters"].values, c = self.c[3], label = "nliters")
             ax.set_yscale("log")
 
         elif name == "cvode_fails":
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_num_fails"].values, label = "num_fails")
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nonlin_fails"].values, label = "nonlin_fails")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_num_fails"].values, c = self.c[0], label = "num_fails")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nonlin_fails"].values, c = self.c[1], label = "nonlin_fails")
             ax.set_yscale("log")
-
+            
+        elif name == "ncalls_per_timestep":
+            ncalls_per_timestep = (self.ds["ncalls"].data[0:-1]/self.ds.coords["t"].diff("t"))
+            ax.plot(self.ds.coords["t"][0:-1], ncalls_per_timestep, c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
 
         ax.set_title(name)
         if self.plot_settings["xmin"] is not None:
