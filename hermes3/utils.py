@@ -10,3 +10,7 @@ def constants(name):
     d["k_b"] = 1.3806488e-23 # Boltzmann self.ant [JK^-1]
     
     return d[name]
+
+
+def mike_cmap():
+    return ["navy", "deeppink", "teal", "darkorange", "limegreen", "crimson"]

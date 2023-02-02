@@ -27,11 +27,12 @@ casepath = cwd + sep + args.case
 sd1dpath = "/ssd_scratch/hermes3/"
 runscriptpath = os.path.join(casepath,"run.sh")
 
+build_folder = "master"
 
-if args.b2 == True:
-    build_folder = "build2"
-else:
-    build_folder = "build"
+# if args.b2 == True:
+#     build_folder = "build2"
+# else:
+#     build_folder = "build"
 
 print(casepath)
 
