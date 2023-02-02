@@ -182,7 +182,7 @@ class Monitor2D():
             self.fig_height = self.fig_size * self.settings["all"]["figure_aspect"]
             self.wspace = 0.25
             
-        elif mode == "omp_history":
+        elif mode == "omp_history" or mode == "target_history":
             self.fig_height = 0.8 * self.fig_size * self.settings["all"]["figure_aspect"]
             self.wspace = 0.3
             
@@ -286,6 +286,11 @@ class Monitor2D():
             norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
             self.case.select_region("outer_midplane_a")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
             ax.set_title(f"OMP {name}")
+            
+        if self.mode == "target_history":
+            norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
+            self.case.select_region("outer_lower_target")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
+            ax.set_title(f"Target {name}")
 
             
             
