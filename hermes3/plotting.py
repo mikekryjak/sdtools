@@ -182,6 +182,10 @@ class Monitor2D():
             self.fig_height = self.fig_size * self.settings["all"]["figure_aspect"]
             self.wspace = 0.25
             
+        elif mode == "omp_history":
+            self.fig_height = 0.8 * self.fig_size * self.settings["all"]["figure_aspect"]
+            self.wspace = 0.3
+            
         elif mode == "pcolor":
             
             if self.settings["all"]["view"] == "lower_divertor":
@@ -195,6 +199,7 @@ class Monitor2D():
                 
             self.fig_height = 1.8 * self.fig_size * self.settings["all"]["figure_aspect"]
             
+        
             
         
         print(self.settings["all"])
@@ -232,9 +237,19 @@ class Monitor2D():
         self.settings[name] = {
             "log":True, "vmin":self.ds[name].min().values, "vmax":self.ds[name].max().values,
             }
+        if self.mode == "omp_history":
+            self.settings[name]["log"] = False
         # Modify through inputs
         self.capture_setting_inputs(name)
+        
+
         settings = self.settings[name]
+        
+        if settings["vmin"] == None:
+            settings["vmin"] = self.ds[name].min().values
+            
+        if settings["vmax"] == None:
+            settings["vmax"] = self.ds[name].max().values
         
         meta = self.ds.metadata
         
@@ -266,6 +281,13 @@ class Monitor2D():
         if self.settings["all"]["ylim"] != (None,None):
             print(self.settings["all"]["ylim"])
             ax.set_ylim(self.settings["all"]["ylim"])
+            
+        if self.mode == "omp_history":
+            norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
+            self.case.select_region("outer_midplane_a")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
+            ax.set_title(f"OMP {name}")
+
+            
             
 def plot_ddt(case, smoothing = 1, volume_weighted = True):
     """
