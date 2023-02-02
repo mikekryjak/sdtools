@@ -160,19 +160,18 @@ class Monitor2D():
             windows = [windows]
             
         self.input_settings = settings
+        
+        # Defaults:
         self.settings = {"all": {"xlim":(None, None), "ylim":(None, None), "figure_aspect":0.9}}
         self.capture_setting_inputs("all")
         
-        
-        
         self.fig_size = 3.5
-
         self.mode = mode
         self.case = case
         self.ds = self.case.ds
 #
         if mode == "grid":
-            self.fig_height = self.fig_size * self.settings["plot"]["figure_aspect"]
+            self.fig_height = self.fig_size * self.settings["all"]["figure_aspect"]
             self.wspace = 0.25
         else:
             self.fig_height = 1.8 * self.fig_size
@@ -181,7 +180,7 @@ class Monitor2D():
         self.windows = windows
         num_rows = len(self.windows)
         
-        self.c = ["navy", "deeppink", "teal", "darkorange"]
+        self.c = mike_cmap()
         
         for row_id in range(num_rows):
         
@@ -201,32 +200,27 @@ class Monitor2D():
         Take settings from inputs and pass them to the correct plot
         """
         if self.input_settings is not None:
-            if plot in self.inputs.keys():
-                for setting in self.inputs[plot].keys():
+            if plot in self.input_settings.keys():
+                for setting in self.input_settings[plot].keys():
                     self.settings[plot][setting] = self.input_settings[plot][setting]
                         
     def add_plot(self, ax, name):
         
-        
-        kwargs = {"log":True, "vmin":None, "vmax":None}
-        
-        if self.inputs is not None:
-            if name in self.inputs.keys():
-                for key in self.inputs[name].keys():
-                    kwargs[key] = self.inputs[name][key]
+        # Default settings
+        self.settings[name] = {"log":True, "vmin":None, "vmax":None}
+        # Modify through inputs
+        self.capture_setting_inputs(name)
+        settings = self.settings[name]
         
         meta = self.ds.metadata
         print(self.settings)
         
-        if self.settings["plot"]["xlim"] != (None,None):
-            ax.set_xlim(self.settings["plot"]["xlim"])
-        if self.settings["plot"]["ylim"] != (None,None):
-            ax.set_xlim(self.settings["plot"]["ylim"])
+        
         
         
         if self.mode == "grid":
         
-            abs(self.ds[name].isel(t=-1)).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""}, vmin=kwargs["vmin"], vmax=kwargs["vmax"])
+            abs(self.ds[name].isel(t=-1)).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""}, vmin=settings["vmin"], vmax=settings["vmax"])
             ax.set_title(name)
 
             ax.set_ylabel(""); ax.set_xlabel("")
@@ -237,13 +231,18 @@ class Monitor2D():
             
             
         elif self.mode == "pcolor":
-            abs(self.ds[name].isel(t=-1)).bout.pcolormesh(ax = ax, cmap = "Spectral_r", logscale=kwargs["log"], vmin=kwargs["vmin"], vmax=kwargs["vmax"])#, cbar_kwargs={"label":""})
+            abs(self.ds[name].isel(t=-1)).bout.pcolormesh(ax = ax, cmap = "Spectral_r", logscale=settings["log"], vmin=settings["vmin"], vmax=settings["vmax"])#, cbar_kwargs={"label":""})
             ax.set_title(name)
 
             ax.set_ylabel(""); ax.set_xlabel("")
             ax.tick_params(axis="x", labelrotation = 0)
             ax.grid(which="both", alpha = 0.3)
             # [ax.vlines(meta[x], self.ds["x"][0], self.ds["x"][-1], colors = "k") for x in ["jyseps1_1", "jyseps1_2", "jyseps2_1", "jyseps2_2"]]
+            
+        if self.settings["all"]["xlim"] != (None,None):
+            ax.set_xlim(self.settings["all"]["xlim"])
+        if self.settings["all"]["ylim"] != (None,None):
+            ax.set_xlim(self.settings["all"]["ylim"])
             
 def plot_ddt(case, smoothing = 1, volume_weighted = True):
     """
@@ -457,3 +456,26 @@ def plot_rz_grid(case, ax, xlim = (None,None), ylim = (None,None)):
         ax.set_xlim(xlim)
     if ylim != (None,None):
         ax.set_ylim(ylim)
+        
+        
+def _create_norm(logscale, norm, vmin, vmax):
+    if logscale:
+        if norm is not None:
+            raise ValueError(
+                "norm and logscale cannot both be passed at the same time."
+            )
+        if vmin * vmax > 0:
+            # vmin and vmax have the same sign, so can use standard log-scale
+            norm = mpl.colors.LogNorm(vmin=vmin, vmax=vmax)
+        else:
+            # vmin and vmax have opposite signs, so use symmetrical logarithmic scale
+            if not isinstance(logscale, bool):
+                linear_scale = logscale
+            else:
+                linear_scale = 1.0e-5
+            linear_threshold = min(abs(vmin), abs(vmax)) * linear_scale
+            norm = mpl.colors.SymLogNorm(linear_threshold, vmin=vmin, vmax=vmax)
+    elif norm is None:
+        norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+
+    return norm
