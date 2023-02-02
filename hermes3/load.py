@@ -143,6 +143,7 @@ class Case:
             print(f"CHECK: Total domain volume is {self.ds.dv.values.sum():.3E} [m3]")
         else:
             self.extract_1d_tokamak_geometry()
+            # self.clean_guards()
             self.guard_replace()
 
     
@@ -205,6 +206,17 @@ class Case:
                 "long_name": "Ion temperature (d+)",
                 })
 
+    # def clean_guards(self):
+        
+    #     to_clean = ["Dd_Dpar", "Ed+_iz","Ed+_rec", "Ed_Dpar", "Edd+_cx",
+    #                 "Fd+_iz", "Fd+_rec", "Fd_Dpar", "Fdd+_cx", "Rd+_ex",
+    #                 "Rd+_rec", "Sd+_iz", "Sd+_rec", "Sd+_src", "Sd_Dpar",
+    #                 "Sd_src"]
+        
+    #     for param in to_clean:
+    #         self.ds[param]
+        
+        
     def guard_replace(self):
 
         if self.is_2d == False:
