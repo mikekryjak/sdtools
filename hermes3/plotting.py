@@ -156,27 +156,48 @@ class Monitor2D():
     def __init__(self, case, mode, windows, settings = None):
         
         # Catch if user supplies just a [param] instead of [[param]]
-        if len(windows)==1 and isinstance(["Ne"], list):
-            windows = [windows]
+        # if len(windows[0])==1 and isinstance(windows, list):
+        #     windows = [windows]
             
         self.input_settings = settings
         
         # Defaults:
-        self.settings = {"all": {"xlim":(None, None), "ylim":(None, None), "figure_aspect":0.9}}
-        self.capture_setting_inputs("all")
+        self.settings = {"all": {"xlim":(None, None), "ylim":(None, None), 
+                                 "figure_aspect":0.9, "wspace_modifier":1, 
+                                 "view":None, "dpi":100}}
+        
         
         self.fig_size = 3.5
         self.mode = mode
         self.case = case
         self.ds = self.case.ds
-#
+        
+
+        self.capture_setting_inputs("all")
+
+            
+            
+        # Set figure layout
         if mode == "grid":
             self.fig_height = self.fig_size * self.settings["all"]["figure_aspect"]
             self.wspace = 0.25
-        else:
-            self.fig_height = 1.8 * self.fig_size
-            self.wspace = 0.4
-
+            
+        elif mode == "pcolor":
+            
+            if self.settings["all"]["view"] == "lower_divertor":
+                
+                self.settings["all"]["figure_aspect"] = 0.5
+                self.settings["all"]["ylim"] = (None,0)
+                self.wspace = 0.15
+                
+            else:
+                self.wspace = 0.4
+                
+            self.fig_height = 1.8 * self.fig_size * self.settings["all"]["figure_aspect"]
+            
+            
+        
+        print(self.settings["all"])
         self.windows = windows
         num_rows = len(self.windows)
         
@@ -186,7 +207,8 @@ class Monitor2D():
         
             row_windows = self.windows[row_id]
             num_windows = len(row_windows)
-            fig, self.axes = plt.subplots(1, num_windows, figsize = (self.fig_size*num_windows, self.fig_height))
+            fig, self.axes = plt.subplots(1, num_windows, dpi = self.settings["all"]["dpi"],
+                                          figsize = (self.fig_size*num_windows, self.fig_height))
             fig.subplots_adjust(wspace = self.wspace)
             
             if num_windows == 1:
@@ -207,20 +229,20 @@ class Monitor2D():
     def add_plot(self, ax, name):
         
         # Default settings
-        self.settings[name] = {"log":True, "vmin":None, "vmax":None}
+        self.settings[name] = {
+            "log":True, "vmin":self.ds[name].min().values, "vmax":self.ds[name].max().values,
+            }
         # Modify through inputs
         self.capture_setting_inputs(name)
         settings = self.settings[name]
         
         meta = self.ds.metadata
-        print(self.settings)
-        
-        
         
         
         if self.mode == "grid":
         
-            abs(self.ds[name].isel(t=-1)).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""}, vmin=settings["vmin"], vmax=settings["vmax"])
+            norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
+            abs(self.ds[name].isel(t=-1)).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""}, vmin=settings["vmin"], vmax=settings["vmax"], norm = norm)
             ax.set_title(name)
 
             ax.set_ylabel(""); ax.set_xlabel("")
@@ -242,7 +264,8 @@ class Monitor2D():
         if self.settings["all"]["xlim"] != (None,None):
             ax.set_xlim(self.settings["all"]["xlim"])
         if self.settings["all"]["ylim"] != (None,None):
-            ax.set_xlim(self.settings["all"]["ylim"])
+            print(self.settings["all"]["ylim"])
+            ax.set_ylim(self.settings["all"]["ylim"])
             
 def plot_ddt(case, smoothing = 1, volume_weighted = True):
     """
@@ -458,7 +481,7 @@ def plot_rz_grid(case, ax, xlim = (None,None), ylim = (None,None)):
         ax.set_ylim(ylim)
         
         
-def _create_norm(logscale, norm, vmin, vmax):
+def create_norm(logscale, norm, vmin, vmax):
     if logscale:
         if norm is not None:
             raise ValueError(
