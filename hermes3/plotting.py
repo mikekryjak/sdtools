@@ -139,7 +139,7 @@ class Monitor():
             ax.set_xlim(right = self.plot_settings["xmax"])
         # ax.set_xlim((self.plot_settings["xmin"], self.plot_settings["xmax"]))
 
-        ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncols = 2)
+        ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
     
         # ax.xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
         ax.set_ylabel("")
@@ -195,7 +195,7 @@ class Monitor2D():
                 self.wspace = 0.15
                 
             else:
-                self.wspace = 0.4
+                self.wspace = 0.2
                 
             self.fig_height = 1.8 * self.fig_size * self.settings["all"]["figure_aspect"]
             
