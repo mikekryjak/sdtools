@@ -237,7 +237,7 @@ class Monitor2D():
         self.settings[name] = {
             "log":True, "vmin":self.ds[name].min().values, "vmax":self.ds[name].max().values,
             }
-        if self.mode == "omp_history":
+        if "history" in self.mode:
             self.settings[name]["log"] = False
         # Modify through inputs
         self.capture_setting_inputs(name)
@@ -276,11 +276,7 @@ class Monitor2D():
             ax.grid(which="both", alpha = 0.3)
             # [ax.vlines(meta[x], self.ds["x"][0], self.ds["x"][-1], colors = "k") for x in ["jyseps1_1", "jyseps1_2", "jyseps2_1", "jyseps2_2"]]
             
-        if self.settings["all"]["xlim"] != (None,None):
-            ax.set_xlim(self.settings["all"]["xlim"])
-        if self.settings["all"]["ylim"] != (None,None):
-            print(self.settings["all"]["ylim"])
-            ax.set_ylim(self.settings["all"]["ylim"])
+        
             
         if self.mode == "omp_history":
             norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
@@ -291,6 +287,12 @@ class Monitor2D():
             norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
             self.case.select_region("outer_lower_target")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
             ax.set_title(f"Target {name}")
+            
+        if self.settings["all"]["xlim"] != (None,None):
+            ax.set_xlim(self.settings["all"]["xlim"])
+        if self.settings["all"]["ylim"] != (None,None):
+            print(self.settings["all"]["ylim"])
+            ax.set_ylim(self.settings["all"]["ylim"])
 
             
             
