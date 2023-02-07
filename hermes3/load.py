@@ -433,7 +433,31 @@ class Case:
 
         self.norms = d
         
-      
+    def select_symmetric_puff(self, width, center_half_gap):
+        """
+        Select region meant for setting outboard neutral puff.
+        The region is a poloidal row of cells in the radial coordinate
+        of the final radial fluid cell.
+        There are two puffs symmetric about the midplane axis.
+        
+        Parameters:
+            - width: size of each puff region in no. of cells
+            - center_half_gap: half of the gap between the puffs in no. of cells
+        """
+        
+        width = 3
+        center_half_gap = 1
+
+        midplane_a = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g
+        midplane_b = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1
+
+        selection =  (-self.MXG-1, 
+                    np.r_[
+                        slice(midplane_b+center_half_gap, midplane_b+center_half_gap+width),
+                        slice(midplane_b-center_half_gap-width, midplane_b-center_half_gap),
+                        ])
+
+        return self.ds.isel(x = selection[0], theta = selection[1])
     
     def select_custom_core_ring(self, i):
             """
