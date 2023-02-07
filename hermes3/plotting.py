@@ -182,7 +182,7 @@ class Monitor2D():
             self.fig_height = self.fig_size * self.settings["all"]["figure_aspect"]
             self.wspace = 0.25
             
-        elif mode == "omp_history" or mode == "target_history":
+        elif "history" in mode:
             self.fig_height = 0.8 * self.fig_size * self.settings["all"]["figure_aspect"]
             self.wspace = 0.3
             
@@ -237,7 +237,7 @@ class Monitor2D():
         self.settings[name] = {
             "log":True, "vmin":self.ds[name].min().values, "vmax":self.ds[name].max().values,
             }
-        if self.mode == "omp_history":
+        if "history" in self.mode:
             self.settings[name]["log"] = False
         # Modify through inputs
         self.capture_setting_inputs(name)
@@ -291,6 +291,11 @@ class Monitor2D():
             norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
             self.case.select_region("outer_lower_target")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
             ax.set_title(f"Target {name}")
+            
+        if self.mode == "field_line_history":
+            norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
+            self.case.select_custom_sol_ring(2, "outer_lower")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
+            ax.set_title(f"Field line {name}")
 
             
             
