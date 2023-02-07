@@ -484,6 +484,11 @@ class Case:
             """
             
             i = i + self.ixseps1 - 1
+            outer_midplane_a = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g
+            outer_midplane_b = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1     
+            inner_midplane_a = int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g 
+            inner_midplane_b = int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g + 1               
+            
             if i > self.nx - self.MXG*2 :
                 raise Exception("i is too large!")
             
@@ -493,16 +498,16 @@ class Case:
             if region == "inner":
                 selection = (slice(i+1,i+2), slice(0+self.MYG, self.ny_inner + self.MYG))
             if region == "inner_lower":
-                selection = (slice(i+1,i+2), slice(0+self.MYG, int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g +2))
+                selection = (slice(i+1,i+2), slice(0+self.MYG, inner_midplane_a +1))
             if region == "inner_upper":
-                selection = (slice(i+1,i+2), slice(int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g, self.ny_inner + self.MYG))
+                selection = (slice(i+1,i+2), slice(inner_midplane_b, self.ny_inner + self.MYG))
             
             if region == "outer":
                 selection = (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, self.nyg - self.MYG))
             if region == "outer_lower":
-                selection = (slice(i+1,i+2), slice(int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g, self.nyg - self.MYG))
+                selection = (slice(i+1,i+2), slice(outer_midplane_b, self.nyg - self.MYG))
             if region == "outer_upper":
-                selection = (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 2))
+                selection = (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, outer_midplane_a+1))
             
             return self.ds.isel(x = selection[0], theta = selection[1])
 
