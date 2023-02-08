@@ -139,7 +139,7 @@ class Monitor():
             ax.set_xlim(right = self.plot_settings["xmax"])
         # ax.set_xlim((self.plot_settings["xmin"], self.plot_settings["xmax"]))
 
-        ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncols = 2)
+        ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
     
         # ax.xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
         ax.set_ylabel("")
@@ -182,7 +182,7 @@ class Monitor2D():
             self.fig_height = self.fig_size * self.settings["all"]["figure_aspect"]
             self.wspace = 0.25
             
-        elif mode == "omp_history" or mode == "target_history":
+        elif "history" in mode:
             self.fig_height = 0.8 * self.fig_size * self.settings["all"]["figure_aspect"]
             self.wspace = 0.3
             
@@ -195,7 +195,7 @@ class Monitor2D():
                 self.wspace = 0.15
                 
             else:
-                self.wspace = 0.4
+                self.wspace = 0.2
                 
             self.fig_height = 1.8 * self.fig_size * self.settings["all"]["figure_aspect"]
             
@@ -287,12 +287,6 @@ class Monitor2D():
             norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
             self.case.select_region("outer_lower_target")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
             ax.set_title(f"Target {name}")
-            
-        if self.settings["all"]["xlim"] != (None,None):
-            ax.set_xlim(self.settings["all"]["xlim"])
-        if self.settings["all"]["ylim"] != (None,None):
-            print(self.settings["all"]["ylim"])
-            ax.set_ylim(self.settings["all"]["ylim"])
 
             
             
@@ -433,7 +427,7 @@ def diagnose_cvode(self, lims = (0,0), scale = "log"):
                 axes[i,j].set_xlim(lims)
                 
     
-def plot_selection(case, selection):
+def plot_selection(case, selection, dpi = 100):
     """ 
     Plot selected points on a R,Z grid
     X,Y grid doesn't work - need to fix it
@@ -463,7 +457,7 @@ def plot_selection(case, selection):
     zselect = selection["Z"].values.flatten()
 
     # Plot
-    fig, axes = plt.subplots(1,3, figsize=(12,5), dpi = 100, gridspec_kw={'width_ratios': [2.5, 1, 2]})
+    fig, axes = plt.subplots(1,3, figsize=(12,5), dpi = dpi, gridspec_kw={'width_ratios': [2.5, 1, 2]})
     fig.subplots_adjust(wspace=0.3)
 
     plot_xy_grid(case, axes[0])
