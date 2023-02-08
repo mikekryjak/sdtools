@@ -436,7 +436,7 @@ def diagnose_cvode(self, lims = (0,0), scale = "log"):
                 axes[i,j].set_xlim(lims)
                 
     
-def plot_selection(case, selection):
+def plot_selection(case, selection, dpi = 100):
     """ 
     Plot selected points on a R,Z grid
     X,Y grid doesn't work - need to fix it
@@ -466,7 +466,7 @@ def plot_selection(case, selection):
     zselect = selection["Z"].values.flatten()
 
     # Plot
-    fig, axes = plt.subplots(1,3, figsize=(12,5), dpi = 100, gridspec_kw={'width_ratios': [2.5, 1, 2]})
+    fig, axes = plt.subplots(1,3, figsize=(12,5), dpi = dpi, gridspec_kw={'width_ratios': [2.5, 1, 2]})
     fig.subplots_adjust(wspace=0.3)
 
     plot_xy_grid(case, axes[0])
