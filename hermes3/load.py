@@ -445,8 +445,8 @@ class Case:
             - center_half_gap: half of the gap between the puffs in no. of cells
         """
         
-        width = 3
-        center_half_gap = 1
+        # width = 3
+        # center_half_gap = 1
 
         midplane_a = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g
         midplane_b = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1
