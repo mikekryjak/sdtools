@@ -21,12 +21,12 @@ def save_last10s_subset(solps_path, destination_path):
 class SOLEDGEdata:
 
     def __init__(self):
-        pass
+        self.regions = dict()
     
     def read_csv(self, path, mode):
         
         df = pd.read_csv(path)
-        self.regions = dict()
+        
         
         if mode == "plot1d":
             self.regions["omp"] = df
