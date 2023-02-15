@@ -287,6 +287,12 @@ class Monitor2D():
             norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
             self.case.select_region("outer_lower_target")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
             ax.set_title(f"Target {name}")
+            
+        if self.settings["all"]["ylim"] != (None, None):
+            ax.set_ylim(self.settings["all"]["ylim"])
+            
+        if self.settings["all"]["xlim"] != (None, None):
+            ax.set_xlim(self.settings["all"]["xlim"])
 
             
             

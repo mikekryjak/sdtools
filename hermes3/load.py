@@ -439,6 +439,12 @@ class Case:
             "long_name": "anomalous thermal diffusion (d+)"
         },
         
+        "Dnnd": {
+            "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
+            "units": "m2s-1",
+            "standard_name": "Neutral diffusion (d)",
+            "long_name": "Neutral diffusion (d)"
+        },
         
 
         

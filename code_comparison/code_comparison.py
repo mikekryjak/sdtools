@@ -1,8 +1,9 @@
 import numpy as np
 import os, sys
 import pandas as pd
-import scipy
+import scipy.signal
 import re
+from collections import defaultdict
 
 sys.path.append(r'C:\Users\mikek\OneDrive\Project\python-packages')
 from hermes3.utils import *
@@ -17,9 +18,10 @@ class SOLEDGEdata:
     def read_csv(self, path, mode):
         
         df = pd.read_csv(path)
+        self.regions = dict()
         
         if mode == "plot1d":
-            self.omp = df
+            self.regions["omp"] = df
             self.process_omp()
             
         if mode == "wall_ntmpi":
@@ -32,7 +34,7 @@ class SOLEDGEdata:
         Process the csv file named "plot1d" which has radial profiles at the OMP.
         """
         
-        self.omp = self.omp.rename(columns = {'Dense' : "Ne", 
+        self.regions["omp"] = self.regions["omp"].rename(columns = {'Dense' : "Ne", 
                                             'Tempe':"Te", 
                                             'Densi':"Nd+", 
                                             'Tempi':"Td+",
@@ -40,8 +42,8 @@ class SOLEDGEdata:
                                             'Ppi':"Pd+",
                                             'IRadi':"Rd+_ex",
                                             "DIST":"x"})
-        self.omp = self.omp.set_index("x")
-        self.omp.index.name = "pos"
+        self.regions["omp"] = self.regions["omp"].set_index("x")
+        self.regions["omp"].index.name = "pos"
         
     def process_ring(self):
         """ 
@@ -78,7 +80,7 @@ class SOLEDGEdata:
             df = self.wallring.copy()
             df.index -= strikepoints[target]
             
-            setattr(self, target, df)
+            self.regions[target] = df
         
         self.strikepoints = strikepoints
 
@@ -89,32 +91,45 @@ class SOLPSdata:
     def read_dataframes(self, path):
         file = read_file(path)
         self.file = file
-        self.params = file.keys()
+        self.params = defaultdict(dict)
         self.omp = pd.DataFrame()
-        self.omp_params = [] #["ti3da", "te3da"]
-        self.outer_lower_params = []
+        self.imp = pd.DataFrame()
 
         
-        for param in self.params:
-            # print(self.file[param].columns())
-            self.file[param].columns = ["pos", param]
-            self.file[param] = self.file[param].set_index("pos")
-            self.file[param].index = self.file[param].index.astype(float)
+        # for param in self.file.keys():
             
-            if param.endswith("da"): #re.search(".*da", param):
-                self.omp_params.append(self.file[param])
+            
+        
+        # for region in self.params.keys():
+        for param in self.file.keys():
+            if any([x in param for x in ["ti3", "te3", "ne3", "dab23", "dmb23"]]):
+                self.file[param].columns = ["pos", param]
+                self.file[param] = self.file[param].set_index("pos")
+                self.file[param].index = self.file[param].index.astype(float)
                 
-            elif param.endswith("dr"):
-                self.outer_lower_params.append(self.file[param])
+                if param.endswith("da"): #re.search(".*da", param):
+                    self.params["omp"][param] = self.file[param]
+                    
+                elif param.endswith("dr"):
+                    self.params["outer_lower"][param] = self.file[param]
+                    
+                elif param.endswith("di"):
+                    self.params["imp"][param] = self.file[param]
+
                 
-        self.omp = pd.concat(self.omp_params, axis = 1)
-        self.outer_lower = pd.concat(self.outer_lower_params, axis = 1)
+        self.regions = dict()
+        self.regions["omp"] = pd.concat(self.params["omp"].values(), axis = 1)
+        self.regions["imp"] = pd.concat(self.params["imp"].values(), axis = 1)
+        self.regions["outer_lower"] = pd.concat(self.params["outer_lower"].values(), axis = 1)
+        
         self.process_omp()
+        self.process_imp()
         self.process_target()
+
         
         
     def process_omp(self):
-        self.omp = self.omp.rename(columns = {
+        self.regions["omp"] = self.regions["omp"].rename(columns = {
             "ti3da":"Td+",
             "te3da":"Te",
             "ne3da":"Ne",
@@ -123,11 +138,24 @@ class SOLPSdata:
         }
         )
         
-        self.omp["Nd"] = self.omp["ND"] + self.omp["ND2"]*2 # Combine atomic and molecular data to compare with Hermes-3
+        self.regions["omp"]["Nd"] = self.regions["omp"]["ND"] + self.regions["omp"]["ND2"]*2 # Combine atomic and molecular data to compare with Hermes-3
+        
+    
+    def process_imp(self):
+        self.regions["imp"] = self.regions["imp"].rename(columns = {
+            "ti3di":"Td+",
+            "te3di":"Te",
+            "ne3di":"Ne",
+            "dab23di":"ND", # As in SOLPS
+            "dmb23di":"ND2" # As in SOLPS
+        }
+        )
+        
+        self.regions["imp"]["Nd"] = self.regions["imp"]["ND"] + self.regions["imp"]["ND2"]*2 # Combine atomic and molecular data to compare with Hermes-3
                 
             
     def process_target(self):
-        self.outer_lower = self.outer_lower.rename(columns = {
+        self.regions["outer_lower"] = self.regions["outer_lower"].rename(columns = {
             "ti3dr":"Td+",
             "te3dr":"Te",
             "ne3dr":"Ne",
@@ -136,17 +164,22 @@ class SOLPSdata:
         }
         )
         
-        self.outer_lower["Nd"] = self.outer_lower["ND"] + self.outer_lower["ND2"]*2 # Combine atomic and molecular data to compare with Hermes-3
+        self.regions["outer_lower"]["Nd"] = self.regions["outer_lower"]["ND"] + self.regions["outer_lower"]["ND2"]*2 # Combine atomic and molecular data to compare with Hermes-3
+
                 
 class Hermesdata:
     def __init__(self):
         pass
     
-    def read_case(self, case):
+    def read_case(self, case, tind = -1):
         self.case = case
         
-        self.omp = self.compile_results(self.case.select_region("outer_midplane_a").isel(t=-1))
-        self.outer_lower = self.compile_results(self.case.select_region("outer_lower_target").isel(t=-1))
+        self.regions = dict()
+        self.regions["omp"] = self.compile_results(self.case.select_region("outer_midplane_a").isel(t=tind))
+        self.regions["imp"] = self.compile_results(self.case.select_region("inner_midplane_a").isel(t=tind))
+        self.regions["outer_lower"] = self.compile_results(self.case.select_region("outer_lower_target").isel(t=tind))
+        
+        self.regions["imp"].index *= -1    # Ensure core is on the LHS
 
         
     def compile_results(self, dataset):
