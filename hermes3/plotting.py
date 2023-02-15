@@ -84,21 +84,52 @@ class Monitor():
             abs(self.core["Sd+_rec"].mean(["x", "theta"])).plot(ax = ax, label = "core", c = self.c[0])
             abs(self.sol["Sd+_rec"].mean(["x", "theta"])).plot(ax = ax, label = "sol", c = self.c[1])
             
+        elif name == "core_temp_gradient":
+            """ 
+            Difference in temp on OMP between x indices a and b
+            """
+            omp = self.case.select_region("outer_midplane_a").sel(t=slice(None,None))
+
+            a = 2
+            b = 15
+            
+            (omp["Td+"].isel(x=a) - omp["Td+"].isel(x=b)).plot.line(ax = ax, x="t", label = "Ions", c = self.c[0])
+            (omp["Te"].isel(x=a) - omp["Te"].isel(x=b)).plot.line(ax = ax, x="t", label = "Electrons", c = self.c[1])
+            
+            ax.set_ylabel("Temperature [eV]")
+            ax.set_title(f"OMP Core temperature gradient between x={a} and {b}")
+            
+        elif name == "core_dens_gradient":
+            """ 
+            Difference in dens on OMP between x indices a and b
+            """
+            omp = self.case.select_region("outer_midplane_a").sel(t=slice(None,None))
+
+            a = 2
+            b = 15
+            
+            (omp["Ne"].isel(x=a) - omp["Ne"].isel(x=b)).plot.line(ax = ax, x="t", c = self.c[0], label = "Ne")
+            
+            ax.set_title(f"OMP Core plasma density gradient between x={a} and {b}")
+            
         elif name == "cvode_order":
             ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_last_order"].values, label = "last_order", lw = 1, c = self.c[0])
             
         elif name == "cvode_evals":
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nsteps"].values, label = "nsteps")
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nfevals"].values, label = "nfevals")
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_npevals"].values, label = "npevals")
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nliters"].values, label = "nliters")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nsteps"].values, c = self.c[0], label = "nsteps")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nfevals"].values, c = self.c[1], label = "nfevals")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_npevals"].values, c = self.c[2], label = "npevals")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nliters"].values, c = self.c[3], label = "nliters")
             ax.set_yscale("log")
 
         elif name == "cvode_fails":
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_num_fails"].values, label = "num_fails")
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nonlin_fails"].values, label = "nonlin_fails")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_num_fails"].values, c = self.c[0], label = "num_fails")
+            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nonlin_fails"].values, c = self.c[1], label = "nonlin_fails")
             ax.set_yscale("log")
-
+            
+        elif name == "ncalls_per_timestep":
+            ncalls_per_timestep = (self.ds["ncalls"].data[0:-1]/self.ds.coords["t"].diff("t"))
+            ax.plot(self.ds.coords["t"][0:-1], ncalls_per_timestep, c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
 
         ax.set_title(name)
         if self.plot_settings["xmin"] is not None:
@@ -108,7 +139,7 @@ class Monitor():
             ax.set_xlim(right = self.plot_settings["xmax"])
         # ax.set_xlim((self.plot_settings["xmin"], self.plot_settings["xmax"]))
 
-        ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncols = 2)
+        ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
     
         # ax.xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
         ax.set_ylabel("")
@@ -119,41 +150,70 @@ class Monitor():
         
 class Monitor2D():
     """ 
+    Plot monitor windows in the pattern [[1, 2, 3], [4, 5, 6]] or [[1]]
     mode is grid or pcolor
     """
-    def __init__(self, case, mode, windows, inputs = None):
+    def __init__(self, case, mode, windows, settings = None):
         
-        self.inputs = inputs
-        self.settings = {"plot": {"xlim":(None, None), "ylim":(None, None), "figure_aspect":0.9}}
+        # Catch if user supplies just a [param] instead of [[param]]
+        # if len(windows[0])==1 and isinstance(windows, list):
+        #     windows = [windows]
+            
+        self.input_settings = settings
         
-        if self.inputs is not None:
-            if "plot" in self.inputs.keys():
-                for key in self.inputs["plot"].keys():
-                    self.settings["plot"][key] = self.inputs["plot"][key]
+        # Defaults:
+        self.settings = {"all": {"xlim":(None, None), "ylim":(None, None), 
+                                 "figure_aspect":0.9, "wspace_modifier":1, 
+                                 "view":None, "dpi":100}}
+        
         
         self.fig_size = 3.5
-
         self.mode = mode
         self.case = case
         self.ds = self.case.ds
-#
-        if mode == "grid":
-            self.fig_height = self.fig_size * self.settings["plot"]["figure_aspect"]
-            self.wspace = 0.25
-        else:
-            self.fig_height = 1.8 * self.fig_size
-            self.wspace = 0.4
+        
 
+        self.capture_setting_inputs("all")
+
+            
+            
+        # Set figure layout
+        if mode == "grid":
+            self.fig_height = self.fig_size * self.settings["all"]["figure_aspect"]
+            self.wspace = 0.25
+            
+        elif "history" in mode:
+            self.fig_height = 0.8 * self.fig_size * self.settings["all"]["figure_aspect"]
+            self.wspace = 0.3
+            
+        elif mode == "pcolor":
+            
+            if self.settings["all"]["view"] == "lower_divertor":
+                
+                self.settings["all"]["figure_aspect"] = 0.5
+                self.settings["all"]["ylim"] = (None,0)
+                self.wspace = 0.15
+                
+            else:
+                self.wspace = 0.2
+                
+            self.fig_height = 1.8 * self.fig_size * self.settings["all"]["figure_aspect"]
+            
+        
+            
+        
+        print(self.settings["all"])
         self.windows = windows
         num_rows = len(self.windows)
         
-        self.c = ["navy", "deeppink", "teal", "darkorange"]
+        self.c = mike_cmap()
         
         for row_id in range(num_rows):
         
             row_windows = self.windows[row_id]
             num_windows = len(row_windows)
-            fig, self.axes = plt.subplots(1, num_windows, figsize = (self.fig_size*num_windows, self.fig_height))
+            fig, self.axes = plt.subplots(1, num_windows, dpi = self.settings["all"]["dpi"],
+                                          figsize = (self.fig_size*num_windows, self.fig_height))
             fig.subplots_adjust(wspace = self.wspace)
             
             if num_windows == 1:
@@ -162,29 +222,42 @@ class Monitor2D():
                 for i, name in enumerate(row_windows):
                     self.add_plot(self.axes[i], name)
         
-        
+    def capture_setting_inputs(self, plot):
+        """
+        Take settings from inputs and pass them to the correct plot
+        """
+        if self.input_settings is not None:
+            if plot in self.input_settings.keys():
+                for setting in self.input_settings[plot].keys():
+                    self.settings[plot][setting] = self.input_settings[plot][setting]
+                        
     def add_plot(self, ax, name):
         
+        # Default settings
+        self.settings[name] = {
+            "log":True, "vmin":self.ds[name].min().values, "vmax":self.ds[name].max().values,
+            }
+        if "history" in self.mode:
+            self.settings[name]["log"] = False
+        # Modify through inputs
+        self.capture_setting_inputs(name)
         
-        kwargs = {"log":True, "vmin":None, "vmax":None}
+
+        settings = self.settings[name]
         
-        if self.inputs is not None:
-            if name in self.inputs.keys():
-                for key in self.inputs[name].keys():
-                    kwargs[key] = self.inputs[name][key]
+        if settings["vmin"] == None:
+            settings["vmin"] = self.ds[name].min().values
+            
+        if settings["vmax"] == None:
+            settings["vmax"] = self.ds[name].max().values
         
         meta = self.ds.metadata
-        print(self.settings)
-        
-        if self.settings["plot"]["xlim"] != (None,None):
-            ax.set_xlim(self.settings["plot"]["xlim"])
-        if self.settings["plot"]["ylim"] != (None,None):
-            ax.set_xlim(self.settings["plot"]["ylim"])
         
         
         if self.mode == "grid":
         
-            abs(self.ds[name].isel(t=-1)).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""}, vmin=kwargs["vmin"], vmax=kwargs["vmax"])
+            norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
+            abs(self.ds[name].isel(t=-1)).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""}, vmin=settings["vmin"], vmax=settings["vmax"], norm = norm)
             ax.set_title(name)
 
             ax.set_ylabel(""); ax.set_xlabel("")
@@ -195,13 +268,42 @@ class Monitor2D():
             
             
         elif self.mode == "pcolor":
-            abs(self.ds[name].isel(t=-1)).bout.pcolormesh(ax = ax, cmap = "Spectral_r", logscale=kwargs["log"], vmin=kwargs["vmin"], vmax=kwargs["vmax"])#, cbar_kwargs={"label":""})
+            abs(self.ds[name].isel(t=-1)).bout.pcolormesh(ax = ax, cmap = "Spectral_r", logscale=settings["log"], vmin=settings["vmin"], vmax=settings["vmax"])#, cbar_kwargs={"label":""})
             ax.set_title(name)
 
             ax.set_ylabel(""); ax.set_xlabel("")
             ax.tick_params(axis="x", labelrotation = 0)
             ax.grid(which="both", alpha = 0.3)
             # [ax.vlines(meta[x], self.ds["x"][0], self.ds["x"][-1], colors = "k") for x in ["jyseps1_1", "jyseps1_2", "jyseps2_1", "jyseps2_2"]]
+            
+        
+            
+        elif self.mode == "omp_history":
+            norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
+            self.case.select_region("outer_midplane_a")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
+            ax.set_title(f"OMP {name}")
+            
+        elif self.mode == "target_history":
+            norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
+            self.case.select_region("outer_lower_target")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
+            ax.set_title(f"Target {name}")
+            
+            
+        elif self.mode == "field_line_history":
+            norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
+            self.case.select_custom_sol_ring(1, "outer_lower")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
+            ax.set_title(f"1st SOL ring {name}")
+            
+        else:
+            raise Exception(f"Mode {self.mode} not supported")
+            
+        if self.settings["all"]["ylim"] != (None, None):
+            ax.set_ylim(self.settings["all"]["ylim"])
+            
+        if self.settings["all"]["xlim"] != (None, None):
+            ax.set_xlim(self.settings["all"]["xlim"])
+
+            
             
 def plot_ddt(case, smoothing = 1, volume_weighted = True):
     """
@@ -340,7 +442,7 @@ def diagnose_cvode(self, lims = (0,0), scale = "log"):
                 axes[i,j].set_xlim(lims)
                 
     
-def plot_selection(case, selection):
+def plot_selection(case, selection, dpi = 100):
     """ 
     Plot selected points on a R,Z grid
     X,Y grid doesn't work - need to fix it
@@ -370,7 +472,7 @@ def plot_selection(case, selection):
     zselect = selection["Z"].values.flatten()
 
     # Plot
-    fig, axes = plt.subplots(1,3, figsize=(12,5), dpi = 100, gridspec_kw={'width_ratios': [2.5, 1, 2]})
+    fig, axes = plt.subplots(1,3, figsize=(12,5), dpi = dpi, gridspec_kw={'width_ratios': [2.5, 1, 2]})
     fig.subplots_adjust(wspace=0.3)
 
     plot_xy_grid(case, axes[0])
@@ -415,3 +517,26 @@ def plot_rz_grid(case, ax, xlim = (None,None), ylim = (None,None)):
         ax.set_xlim(xlim)
     if ylim != (None,None):
         ax.set_ylim(ylim)
+        
+        
+def create_norm(logscale, norm, vmin, vmax):
+    if logscale:
+        if norm is not None:
+            raise ValueError(
+                "norm and logscale cannot both be passed at the same time."
+            )
+        if vmin * vmax > 0:
+            # vmin and vmax have the same sign, so can use standard log-scale
+            norm = mpl.colors.LogNorm(vmin=vmin, vmax=vmax)
+        else:
+            # vmin and vmax have opposite signs, so use symmetrical logarithmic scale
+            if not isinstance(logscale, bool):
+                linear_scale = logscale
+            else:
+                linear_scale = 1.0e-5
+            linear_threshold = min(abs(vmin), abs(vmax)) * linear_scale
+            norm = mpl.colors.SymLogNorm(linear_threshold, vmin=vmin, vmax=vmax)
+    elif norm is None:
+        norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+
+    return norm

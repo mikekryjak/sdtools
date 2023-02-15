@@ -143,6 +143,7 @@ class Case:
             print(f"CHECK: Total domain volume is {self.ds.dv.values.sum():.3E} [m3]")
         else:
             self.extract_1d_tokamak_geometry()
+            # self.clean_guards()
             self.guard_replace()
 
     
@@ -205,6 +206,17 @@ class Case:
                 "long_name": "Ion temperature (d+)",
                 })
 
+    # def clean_guards(self):
+        
+    #     to_clean = ["Dd_Dpar", "Ed+_iz","Ed+_rec", "Ed_Dpar", "Edd+_cx",
+    #                 "Fd+_iz", "Fd+_rec", "Fd_Dpar", "Fdd+_cx", "Rd+_ex",
+    #                 "Rd+_rec", "Sd+_iz", "Sd+_rec", "Sd+_src", "Sd_Dpar",
+    #                 "Sd_src"]
+        
+    #     for param in to_clean:
+    #         self.ds[param]
+        
+        
     def guard_replace(self):
 
         if self.is_2d == False:
@@ -356,6 +368,20 @@ class Case:
             "standard_name": "ion energy source (d+)",
             "long_name": "Ion energy source (d+)"
         },
+        
+        "Pd_src": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "neutral energy source (d)",
+            "long_name": "Neutral energy source (d)"
+        },
+        
+        "Sd_src": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "neutral density source (d)",
+            "long_name": "Neutral density source (d)"
+        },
 
         "Rd+_ex": {
             "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
@@ -413,6 +439,12 @@ class Case:
             "long_name": "anomalous thermal diffusion (d+)"
         },
         
+        "Dnnd": {
+            "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
+            "units": "m2s-1",
+            "standard_name": "Neutral diffusion (d)",
+            "long_name": "Neutral diffusion (d)"
+        },
         
 
         
@@ -421,7 +453,31 @@ class Case:
 
         self.norms = d
         
-      
+    def select_symmetric_puff(self, width, center_half_gap):
+        """
+        Select region meant for setting outboard neutral puff.
+        The region is a poloidal row of cells in the radial coordinate
+        of the final radial fluid cell.
+        There are two puffs symmetric about the midplane axis.
+        
+        Parameters:
+            - width: size of each puff region in no. of cells
+            - center_half_gap: half of the gap between the puffs in no. of cells
+        """
+        
+        # width = 3
+        # center_half_gap = 1
+
+        midplane_a = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g
+        midplane_b = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1
+
+        selection =  (-self.MXG-1, 
+                    np.r_[
+                        slice(midplane_b+center_half_gap, midplane_b+center_half_gap+width),
+                        slice(midplane_b-center_half_gap-width, midplane_b-center_half_gap),
+                        ])
+
+        return self.ds.isel(x = selection[0], theta = selection[1])
     
     def select_custom_core_ring(self, i):
             """
@@ -448,6 +504,11 @@ class Case:
             """
             
             i = i + self.ixseps1 - 1
+            outer_midplane_a = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g
+            outer_midplane_b = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1     
+            inner_midplane_a = int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g 
+            inner_midplane_b = int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g + 1               
+            
             if i > self.nx - self.MXG*2 :
                 raise Exception("i is too large!")
             
@@ -457,16 +518,16 @@ class Case:
             if region == "inner":
                 selection = (slice(i+1,i+2), slice(0+self.MYG, self.ny_inner + self.MYG))
             if region == "inner_lower":
-                selection = (slice(i+1,i+2), slice(0+self.MYG, int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g +2))
+                selection = (slice(i+1,i+2), slice(0+self.MYG, inner_midplane_a +1))
             if region == "inner_upper":
-                selection = (slice(i+1,i+2), slice(int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g, self.ny_inner + self.MYG))
+                selection = (slice(i+1,i+2), slice(inner_midplane_b, self.ny_inner + self.MYG))
             
             if region == "outer":
                 selection = (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, self.nyg - self.MYG))
             if region == "outer_lower":
-                selection = (slice(i+1,i+2), slice(int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g, self.nyg - self.MYG))
+                selection = (slice(i+1,i+2), slice(outer_midplane_b, self.nyg - self.MYG))
             if region == "outer_upper":
-                selection = (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 2))
+                selection = (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, outer_midplane_a+1))
             
             return self.ds.isel(x = selection[0], theta = selection[1])
 

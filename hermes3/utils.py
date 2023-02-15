@@ -1,4 +1,24 @@
+import pickle as pkl
 
+def read_file(filename, quiet = False):
+# Reads a pickle file and returns it.
+
+    with open(filename, "rb") as f:
+    # Open file in read binary mode, dump file to result.
+        data = pkl.load(f)
+        if not quiet:
+            print("{} loaded".format(filename))
+        
+    return data
+
+def write_file(data, filename, quiet = False):
+# Writes an object to a pickle file.
+    
+    with open(filename, "wb") as file:
+    # Open file in write binary mode, dump result to file
+        pkl.dump(data, file)
+        if not quiet:
+            print("{} written".format(filename))
 
 def constants(name):
     
