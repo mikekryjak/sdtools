@@ -368,6 +368,20 @@ class Case:
             "standard_name": "ion energy source (d+)",
             "long_name": "Ion energy source (d+)"
         },
+        
+        "Pd_src": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "neutral energy source (d)",
+            "long_name": "Neutral energy source (d)"
+        },
+        
+        "Sd_src": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "neutral density source (d)",
+            "long_name": "Neutral density source (d)"
+        },
 
         "Rd+_ex": {
             "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
