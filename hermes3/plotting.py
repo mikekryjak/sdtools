@@ -278,15 +278,24 @@ class Monitor2D():
             
         
             
-        if self.mode == "omp_history":
+        elif self.mode == "omp_history":
             norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
             self.case.select_region("outer_midplane_a")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
             ax.set_title(f"OMP {name}")
             
-        if self.mode == "target_history":
+        elif self.mode == "target_history":
             norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
             self.case.select_region("outer_lower_target")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
             ax.set_title(f"Target {name}")
+            
+            
+        elif self.mode == "field_line_history":
+            norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
+            self.case.select_custom_sol_ring(1, "outer_lower")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
+            ax.set_title(f"1st SOL ring {name}")
+            
+        else:
+            raise Exception(f"Mode {self.mode} not supported")
             
         if self.settings["all"]["ylim"] != (None, None):
             ax.set_ylim(self.settings["all"]["ylim"])
