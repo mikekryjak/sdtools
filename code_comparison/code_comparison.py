@@ -8,7 +8,15 @@ from collections import defaultdict
 sys.path.append(r'C:\Users\mikek\OneDrive\Project\python-packages')
 from hermes3.utils import *
 
+def save_last10s_subset(solps_path, destination_path):
+    solps = file_read(solps_path)
 
+    dfs = dict()
+    for key in solps.keys():
+        if any([x in key for x in ["ti3", "te3", "ne3", "dab23", "dmb23"]]):
+            dfs[key] = pd.DataFrame(solps[key])
+
+    file_write(dfs, destination_path)
 
 class SOLEDGEdata:
 
