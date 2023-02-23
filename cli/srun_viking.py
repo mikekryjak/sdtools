@@ -80,3 +80,34 @@ print(f"\n--> Made slurm script at ", runscriptpath, "\n")
 # run(f"sbatch", "{runscriptpath}")
 
 # print(f"Exectuted running of {jobname}")
+
+
+# Here is how you can get dir names, but you can't pass them to the commented out lines very easily...
+"""
+#!/bin/bash
+
+# From https://stackoverflow.com/questions/27708656/pass-command-line-arguments-via-sbatch
+sbatch << EOT
+#!/bin/bash
+# From https://stackoverflow.com/questions/59895/how-do-i-get-the-directory-where-a-bash-script-is-located-from-within-the-script
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+# From https://stackoverflow.com/questions/23162299/how-to-get-the-last-part-of-dirname-in-bash
+JOB_NAME $(basename $SCRIPT_DIR)
+
+#SBATCH -J "$JOB_NAME"
+#SBATCH -N 2
+#SBATCH --tasks-per-node=20
+#SBATCH -p nodes
+#SBATCH --time=00:05:00
+#SBATCH -o /mnt/lustre/users/mjk557/cases/slurmlogs/"$JOB_NAME".out
+#SBATCH -e /mnt/lustre/users/mjk557/cases/slurmlogs/"$JOB_NAME".err
+#SBATCH --account=phys-bout-2019         # Project account
+#SBATCH --mail-type=BEGIN,END,FAIL               # Mail events (NONE, BEGIN, END, FAIL, ALL)
+#SBATCH --mail-user=mike.kryjak@york.ac.uk        # Where to send mail
+
+mpirun -n 40 /mnt/lustre/users/mjk557/hermes-3/anomalous-improvements/hermes-3 -d "$SCRIPT_DIR" restart
+EOT
+
+
+"""
