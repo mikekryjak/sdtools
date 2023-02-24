@@ -116,16 +116,16 @@ class Monitor():
             ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_last_order"].values, label = "last_order", lw = 1, c = self.c[0])
             
         elif name == "cvode_evals":
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nsteps"].values, c = self.c[0], label = "nsteps")
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nfevals"].values, c = self.c[1], label = "nfevals")
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_npevals"].values, c = self.c[2], label = "npevals")
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nliters"].values, c = self.c[3], label = "nliters")
+            ax.plot(self.ds.coords["t"][0:-1], np.diff(self.ds.data_vars["cvode_nsteps"].data), c = self.c[0], label = "nsteps")
+            ax.plot(self.ds.coords["t"][0:-1], np.diff(self.ds.data_vars["cvode_nfevals"].data), c = self.c[1], label = "nfevals")
+            ax.plot(self.ds.coords["t"][0:-1], np.diff(self.ds.data_vars["cvode_npevals"].data), c = self.c[2], label = "npevals")
+            ax.plot(self.ds.coords["t"][0:-1], np.diff(self.ds.data_vars["cvode_nliters"].data), c = self.c[3], label = "nliters")
             ax.set_yscale("log")
 
         elif name == "cvode_fails":
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_num_fails"].values, c = self.c[0], label = "num_fails")
-            ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_nonlin_fails"].values, c = self.c[1], label = "nonlin_fails")
-            ax.set_yscale("log")
+            ax.plot(self.ds.coords["t"][0:-1], np.diff(self.ds.data_vars["cvode_num_fails"].data), c = self.c[0], label = "num_fails")
+            ax.plot(self.ds.coords["t"][0:-1], np.diff(self.ds.data_vars["cvode_nonlin_fails"].data), c = self.c[1], label = "nonlin_fails")
+            ax.set_yscale("linear")
             
         elif name == "ncalls_per_timestep":
             ncalls_per_timestep = (self.ds["ncalls"].data[0:-1]/self.ds.coords["t"].diff("t"))
