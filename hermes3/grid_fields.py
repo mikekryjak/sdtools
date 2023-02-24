@@ -320,7 +320,7 @@ class Field():
         self.data = np.zeros_like(self.mesh.Rxy)    # Copy any array from existing grid as a template
 
 
-    def plot(self):
+    def plot(self, dpi = 80):
 
         plt.style.use("default")
 
@@ -333,7 +333,7 @@ class Field():
         colors = [cmap(x) for x in fieldnorm.flatten()]
         norm = mpl.colors.Normalize(vmin=0, vmax=np.max(field))
 
-        fig, axes = plt.subplots(1,3, figsize = (10,6), gridspec_kw={'width_ratios': [5,2.0, 0.3]}, dpi = 110)
+        fig, axes = plt.subplots(1,3, figsize = (10,6), gridspec_kw={'width_ratios': [5,2.0, 0.3]}, dpi = dpi)
         fig.subplots_adjust(wspace=0.3)
         fig.suptitle(self.name)
 
