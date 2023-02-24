@@ -28,21 +28,25 @@ class SOLEDGEdata:
         df = pd.read_csv(path)
         
         
-        if mode == "plot1d":
-            self.regions["omp"] = df
-            self.process_omp()
+        if mode == "plot1d_omp":
+            
+            self.process_plot1d(df, "omp")
+            
+        elif mode == "plot1d_imp":
+            
+            self.process_plot1d(df, "imp")
             
         if mode == "wall_ntmpi":
             self.wallring = df
             self.process_ring()
 
             
-    def process_omp(self):
+    def process_plot1d(self, df, name):
         """ 
         Process the csv file named "plot1d" which has radial profiles at the OMP.
         """
-        
-        self.regions["omp"] = self.regions["omp"].rename(columns = {'Dense' : "Ne", 
+        self.regions[name] = df
+        self.regions[name] = self.regions[name].rename(columns = {'Dense' : "Ne", 
                                             'Tempe':"Te", 
                                             'Densi':"Nd+", 
                                             'Tempi':"Td+",
@@ -50,8 +54,8 @@ class SOLEDGEdata:
                                             'Ppi':"Pd+",
                                             'IRadi':"Rd+_ex",
                                             "DIST":"x"})
-        self.regions["omp"] = self.regions["omp"].set_index("x")
-        self.regions["omp"].index.name = "pos"
+        self.regions[name] = self.regions[name].set_index("x")
+        self.regions[name].index.name = "pos"
         
     def process_ring(self):
         """ 
@@ -193,7 +197,7 @@ class Hermesdata:
     def compile_results(self, dataset):
         self.dataset = dataset
 
-        params = ["Td+", "Te", "Ne", "Nd"]
+        params = ["Td+", "Te", "Ne", "Nd", "Sd+_iz"]
         x = []
         for param in params:
             data = self.dataset[param]
@@ -210,25 +214,6 @@ class Hermesdata:
         
         return df
     
-    def process_omp(self):
-        self.omp_object = self.case.select_region("outer_midplane_a").isel(t=-1)
-
-        self.omp = pd.DataFrame()
-
-        params = ["Td+", "Te", "Ne", "Nd"]
-        x = []
-        for param in params:
-            data = self.omp_object[param]
-            df = pd.DataFrame(index = data["R"])
-            df.index.name = "pos"
-            df[param] = data.values
-            x.append(df)
-            
-        self.omp = pd.concat(x, axis = 1)
-        
-        # Normalise to separatrix
-        sep_R = self.omp.index[self.case.ixseps1 + self.case.MXG]
-        self.omp.index -= sep_R
         
           
         
