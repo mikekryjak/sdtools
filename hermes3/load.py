@@ -47,7 +47,8 @@ class Load:
                 keep_boundaries = False, 
                 squeeze = True, 
                 double_load = False,
-                unnormalise_geom = False):
+                unnormalise_geom = False,
+                unnormalise = True):
         """ 
         Double load returns a case with and without guards.
         """
@@ -113,12 +114,16 @@ class Load:
             if squeeze:
                 ds = ds.squeeze(drop = True)
                 
-            return Case(ds, casepath, unnormalise_geom)
+            return Case(ds, casepath, 
+                        unnormalise_geom,
+                        unnormalise = unnormalise)
 
 
 class Case:
 
-    def __init__(self, ds, casepath, unnormalise_geom):
+    def __init__(self, ds, casepath, 
+                 unnormalise_geom = False,
+                 unnormalise = True):
 
         self.ds = ds
         self.name = os.path.split(casepath)[-1]
@@ -133,7 +138,10 @@ class Case:
 
         self.colors = ["cyan", "lime", "crimson", "magenta", "black", "red"]
 
-        self.unnormalise(unnormalise_geom)
+        if unnormalise is True:
+            self.unnormalise(unnormalise_geom)
+        else:
+            print("Skipping unnormalisation")
         self.derive_vars()
         self.guard_replaced = False
         
@@ -444,6 +452,13 @@ class Case:
             "units": "m2s-1",
             "standard_name": "Neutral diffusion (d)",
             "long_name": "Neutral diffusion (d)"
+        },
+        
+        "t": {
+            "conversion": 1/m["Omega_ci"],
+            "units": "s",
+            "standard_name": "time",
+            "long_name": "Time"
         },
         
 
