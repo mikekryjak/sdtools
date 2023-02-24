@@ -33,4 +33,6 @@ def constants(name):
 
 
 def mike_cmap():
-    return ["navy", "deeppink", "teal", "darkorange", "limegreen", "crimson"]
+    return ["teal", "darkorange", "firebrick", "limegreen", "deeppink", "navy", "crimson"]
+    
+
