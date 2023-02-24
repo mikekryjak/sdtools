@@ -34,7 +34,8 @@ class Monitor():
         
             row_windows = self.windows[row_id]
             num_windows = len(row_windows)
-            fig, self.axes = plt.subplots(1, num_windows, figsize = (self.fig_size*num_windows, self.fig_size))
+            fig, self.axes = plt.subplots(1, num_windows, figsize = (self.fig_size*num_windows*1.2, self.fig_size))
+            fig.subplots_adjust(wspace = 0.4)
             
             if num_windows == 1:
                 self.add_plot(self.axes, row_windows[0])
