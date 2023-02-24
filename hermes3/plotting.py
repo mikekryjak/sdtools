@@ -49,6 +49,18 @@ class Monitor():
         legend = True
         xformat = True
         
+        if "cvode" in name:
+            cvode = dict()
+            
+            for param in ["cvode_nfevals", "cvode_npevals", "cvode_nliters", "cvode_nniters", "cvode_nsteps", "ncalls", "cvode_num_fails", "cvode_nonlin_fails"]:
+                if "cvode" in param:
+                    param_name = param.split("cvode_")[1]
+                else:
+                    param_name = param
+                
+                cvode[param_name] = np.gradient(self.ds[param], self.ds.coords["t"])
+            
+        
         if name == "target_temp":
             targets = dict()
             for target in  ["outer_lower"]:
@@ -117,20 +129,35 @@ class Monitor():
             ax.plot(self.ds.coords["t"], self.ds.data_vars["cvode_last_order"].values, label = "last_order", lw = 1, c = self.c[0])
             
         elif name == "cvode_evals":
-            ax.plot(self.ds.coords["t"][0:-1], np.diff(self.ds.data_vars["cvode_nsteps"].data), c = self.c[0], label = "nsteps")
-            ax.plot(self.ds.coords["t"][0:-1], np.diff(self.ds.data_vars["cvode_nfevals"].data), c = self.c[1], label = "nfevals")
-            ax.plot(self.ds.coords["t"][0:-1], np.diff(self.ds.data_vars["cvode_npevals"].data), c = self.c[2], label = "npevals")
-            ax.plot(self.ds.coords["t"][0:-1], np.diff(self.ds.data_vars["cvode_nliters"].data), c = self.c[3], label = "nliters")
+            ax.plot(self.ds.coords["t"], cvode["nsteps"], c = self.c[0], label = "nsteps")
+            ax.plot(self.ds.coords["t"], cvode["nfevals"], c = self.c[1], label = "nfevals")
+            ax.plot(self.ds.coords["t"], cvode["npevals"], c = self.c[2], label = "npevals")
+            ax.plot(self.ds.coords["t"], cvode["nliters"], c = self.c[3], label = "nliters")
             ax.set_yscale("log")
 
         elif name == "cvode_fails":
-            ax.plot(self.ds.coords["t"][0:-1], np.diff(self.ds.data_vars["cvode_num_fails"].data), c = self.c[0], label = "num_fails")
-            ax.plot(self.ds.coords["t"][0:-1], np.diff(self.ds.data_vars["cvode_nonlin_fails"].data), c = self.c[1], label = "nonlin_fails")
+       
+            ax.plot(self.ds.coords["t"], cvode["num_fails"], c = self.c[0], label = "num_fails")
+            ax.plot(self.ds.coords["t"], cvode["nonlin_fails"], c = self.c[1], label = "nonlin_fails")
             ax.set_yscale("linear")
             
-        elif name == "ncalls_per_timestep":
+        elif name == "ncalls_per_second":
+
             ncalls_per_timestep = (self.ds["ncalls"].data[0:-1]/self.ds.coords["t"].diff("t"))
             ax.plot(self.ds.coords["t"][0:-1], ncalls_per_timestep, c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
+            
+        elif name == "ncalls_per_step":
+            ncalls_per_step = (self.ds["cvode_nfevals"] + self.ds["cvode_npevals"]) / self.ds["cvode_nsteps"]
+            ax.plot(self.ds.coords["t"], ncalls_per_step, c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
+            
+        elif name == "linear_per_newton":
+            ax.plot(self.ds.coords["t"], np.divide(self.ds["cvode_nliters"], self.ds["cvode_nniters"]), c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
+            
+        elif name == "precon_per_newton":
+            ax.plot(self.ds.coords["t"], self.ds["cvode_npevals"]/self.ds["cvode_nliters"], c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
+        
+        elif name == "fails_per_step":
+            ax.plot(self.ds.coords["t"], (self.ds["cvode_num_fails"] + self.ds["cvode_nonlin_fails"])/self.ds["cvode_nsteps"], c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
 
         ax.set_title(name)
         if self.plot_settings["xmin"] is not None:
