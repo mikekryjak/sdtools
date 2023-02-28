@@ -141,22 +141,25 @@ class Monitor():
             ax.plot(self.ds.coords["t"], cvode["nonlin_fails"], c = self.c[1], label = "nonlin_fails")
             ax.set_yscale("linear")
             
-        elif name == "ncalls_per_second":
+        elif name == "cvode_last_step":
+            ax.plot(self.ds.coords["t"], self.ds["cvode_last_step"], c = self.c[0], label = "last tstep")
+            
+        elif name == "cvode_ncalls_per_second":
 
             ncalls_per_timestep = (self.ds["ncalls"].data[0:-1]/self.ds.coords["t"].diff("t"))
             ax.plot(self.ds.coords["t"][0:-1], ncalls_per_timestep, c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
             
-        elif name == "ncalls_per_step":
-            ncalls_per_step = (self.ds["cvode_nfevals"] + self.ds["cvode_npevals"]) / self.ds["cvode_nsteps"]
+        elif name == "cvode_ncalls_per_step":
+            ncalls_per_step = (cvode["nfevals"] + cvode["npevals"]) / cvode["nsteps"]
             ax.plot(self.ds.coords["t"], ncalls_per_step, c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
             
-        elif name == "linear_per_newton":
+        elif name == "cvode_linear_per_newton":
             ax.plot(self.ds.coords["t"], np.divide(self.ds["cvode_nliters"], self.ds["cvode_nniters"]), c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
             
-        elif name == "precon_per_newton":
+        elif name == "cvode_precon_per_newton":
             ax.plot(self.ds.coords["t"], self.ds["cvode_npevals"]/self.ds["cvode_nliters"], c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
         
-        elif name == "fails_per_step":
+        elif name == "cvode_fails_per_step":
             ax.plot(self.ds.coords["t"], (self.ds["cvode_num_fails"] + self.ds["cvode_nonlin_fails"])/self.ds["cvode_nsteps"], c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
 
         ax.set_title(name)
