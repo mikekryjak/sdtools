@@ -8,7 +8,6 @@ import matplotlib as mpl
 import os, sys
 import traceback
 import platform
-import colorcet as cc
 from scipy import stats
 from boututils.datafile import DataFile
 from boutdata.collect import collect
