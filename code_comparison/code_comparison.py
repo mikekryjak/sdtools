@@ -2,8 +2,17 @@ import numpy as np
 import os, sys
 import pandas as pd
 import scipy.signal
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+import xbout
+from matplotlib.widgets import RangeSlider
+
+
 import re
 from collections import defaultdict
+
+import gridtools.solps_python_scripts.setup
+from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d
 
 sys.path.append(r'C:\Users\mikek\OneDrive\Project\python-packages')
 from hermes3.utils import *
@@ -215,6 +224,145 @@ class Hermesdata:
         return df
     
         
+class viewer_2d():
+    """
+    Pass a case:
+    case = {
+        <case_name> : {"name" : <case name>, "code" : "hermes", "ds" : <hermes-3 dataset>},
+        <case_name> : {"name" : <case name>, "code" : "solps", "path" : <path to SOLPS dir>}
+        <case_name> : {"code" : "soledge", "path": <path to SOLEDGE dir>}
+        }
+    """
+    def __init__(self,
+                 param,
+                 cases,
+                 vmin = None,
+                 vmax = None,
+                 logscale = True,
+                 dpi = 120,
+                 cmap = "Spectral_r"):
+        
+
+        self.param = param
+        self.cases = cases
+        num_cases = len(cases.keys())
+        self.max, self.min = self.find_ranges()
+
+        # Find ranges if not provided
+        if vmin == None:
+            vmin = min
+        if vmax == None:
+            vmax = max
+
+        fig = plt.figure(dpi=120)
+        fig.set_figheight(5)
+        fig.set_figwidth(num_cases*4)
+
+        spec = mpl.gridspec.GridSpec(ncols=num_cases+3, nrows=1,
+                                        width_ratios = [1]*num_cases + [0.1] + [0.1] + [0.1], # cbar, empty space, control
+                                        )
+
+        axes = [None]*(num_cases+3)
+
+
+        for i, casename in enumerate(cases.keys()):
+            
+            # All plots after the first one share x and y axes
+            if i == 0:
+                axes[i] = fig.add_subplot(spec[i])
+            else:
+                axes[i] = fig.add_subplot(spec[i], sharex=axes[0], sharey=axes[0])
+            
+            model = cases[casename]
+            
+            if model["code"] == "hermes":
+                model["ds"][param].bout.polygon(ax = axes[i], add_colorbar = False, logscale = logscale, separatrix = True, cmap = cmap, vmin = vmin, vmax = vmax, antialias = False)
+                
+                
+                # axes[i].plot(model["ds"]["R"])
+                axes[i].set_title(f"Hermes-3\{casename}")
+                
+            elif model["code"] == "solps":
+                plot_2d(fig, axes[i], where = model["path"], what = self.name_parser(param,"solps"), cmap = "Spectral_r", scale = ("log" if logscale is True else "linear"), vmin = vmin, vmax = vmax, plot_cbar = False)
+                axes[i].set_title(f"SOLPS\{casename}")
+                
+            axes[i].set_ylim(-0.88,0.1)
+            axes[i].set_xlim(0.15, 0.78)
+            
+            # Take out Y markings from plots after first one
+            if i != 0:
+                axes[i].set_ylabel("")
+                axes[i].set_xlabel("R [m]")
+                axes[i].tick_params(axis="y", which="both", left=False,labelleft=False)
+                
+        # Add colorbar
+        axes[-3] = fig.add_subplot(spec[-3])   
+        norm = xbout.plotting.utils._create_norm(logscale, None, vmin, vmax)
+        sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+        cbar = plt.colorbar(mappable = sm, cax = axes[-3], label = param)
+
+        # Add widget
+        axes[-1] = fig.add_subplot(spec[-1])
+
+        # axes[-1] = fig.add_axes([0.8, 0.2, 0.65, 0.5])
+        slider = RangeSlider(
+            axes[-1], "Colour limits",
+            self.min, self.max,
+            orientation = "vertical",
+            )
+
+        artists = [axes[i].collections[0] for i in range(num_cases)]
+        # artists = artists.append(cbar)
+
+        def update(val):
+            slider.ax.set_ylim(self.min, self.max) # This is inexplicably needed otherwise it freezes
+            
+            cbar.norm.vmin = val[0]
+            cbar.norm.vmax = val[1]
+                
+            for i, artist in enumerate(artists):
+                if cases[list(cases.keys())[i]]["code"] == "solps" and logscale == True:
+                    artist.norm.vmin = np.log10(val[0])
+                    artist.norm.vmax = np.log10(val[1])
+                else:
+                    artist.norm.vmin = val[0]
+                    artist.norm.vmax = val[1]
+                
+                fig.canvas.draw_idle()
+                fig.canvas.flush_events() # https://stackoverflow.com/questions/64789437/what-is-the-difference-between-figure-show-figure-canvas-draw-and-figure-canva
+                
+        slider.on_changed(update)
+            
+        
+    def find_ranges(self):
+        """
+        Find min and max for plotting.
+        Only uses hermes so far
+        """
+        max = []
+        min = []
+        
+        for casename in self.cases.keys():
+            case = self.cases[casename]
+            if case["code"] == "hermes":
+                max.append(case["ds"][self.param].values.max())
+                min.append(case["ds"][self.param].values.min())
+                
+        return np.max(max), np.min(min)
+    
+    def name_parser(self, x, code):
+        
+        solps = {
+            "Ne" : "ne",
+            "Te" : "te",
+            "Td+" : "ti",            
+        }
+        
+        if code == "solps":
+            return solps[x]
+        
+
+            
           
         
 def file_write(data, filename):
