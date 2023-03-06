@@ -76,6 +76,7 @@ class Monitor():
             self.core["Nd"].mean(["x", "theta"]).plot(ax = ax, label = "neut core", ls = "--", c = self.c[1])
             self.sol["Ne"].mean(["x", "theta"]).plot(ax = ax, label = "Ne sol", c = self.c[0])
             self.sol["Nd"].mean(["x", "theta"]).plot(ax = ax, label = "neut sol", c = self.c[1])
+            ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
             # ax.set_yscale("log")
             
         elif name == "temperature":
@@ -84,18 +85,22 @@ class Monitor():
             self.sol["Td+"].mean(["x", "theta"]).plot(ax = ax, label = "Td+ sol", c = self.c[0])
             self.sol["Te"].mean(["x", "theta"]).plot(ax = ax, label = "Te sol", c = self.c[1])
             ax.set_yscale("log")
+            ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
             
         elif name == "radiation":
             (self.core["Rd+_ex"].mean(["x", "theta"])*-1).plot(ax = ax, label = "core", c = self.c[0])
             (self.sol["Rd+_ex"].mean(["x", "theta"])*-1).plot(ax = ax, label = "sol", c = self.c[1])
+            ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
 
         elif name == "ionisation":
             self.core["Sd+_iz"].mean(["x", "theta"]).plot(ax = ax, label = "core", c = self.c[0])
             self.sol["Sd+_iz"].mean(["x", "theta"]).plot(ax = ax, label = "sol", c = self.c[1])
+            ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
             
         elif name == "recombination":
             abs(self.core["Sd+_rec"].mean(["x", "theta"])).plot(ax = ax, label = "core", c = self.c[0])
             abs(self.sol["Sd+_rec"].mean(["x", "theta"])).plot(ax = ax, label = "sol", c = self.c[1])
+            ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
             
         elif name == "core_temp_gradient":
             """ 
@@ -111,6 +116,7 @@ class Monitor():
             
             ax.set_ylabel("Temperature [eV]")
             ax.set_title(f"OMP Core temperature gradient between x={a} and {b}")
+            ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
             
         elif name == "core_dens_gradient":
             """ 
@@ -134,6 +140,7 @@ class Monitor():
             ax.plot(self.ds.coords["t"], cvode["npevals"], c = self.c[2], label = "npevals")
             ax.plot(self.ds.coords["t"], cvode["nliters"], c = self.c[3], label = "nliters")
             ax.set_yscale("log")
+            ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
 
         elif name == "cvode_fails":
        
@@ -142,25 +149,36 @@ class Monitor():
             ax.set_yscale("linear")
             
         elif name == "cvode_last_step":
-            ax.plot(self.ds.coords["t"], self.ds["cvode_last_step"], c = self.c[0], label = "last tstep")
+            ax.plot(self.ds.coords["t"], self.ds["cvode_last_step"], c = self.c[0])
             
         elif name == "cvode_ncalls_per_second":
-
+            # Per second of time simulated
             ncalls_per_timestep = (self.ds["ncalls"].data[0:-1]/self.ds.coords["t"].diff("t"))
-            ax.plot(self.ds.coords["t"][0:-1], ncalls_per_timestep, c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
+            ax.plot(self.ds.coords["t"][0:-1], ncalls_per_timestep, c = self.c[0], lw = 1, markersize=1, marker = "o")
             
         elif name == "cvode_ncalls_per_step":
             ncalls_per_step = (cvode["nfevals"] + cvode["npevals"]) / cvode["nsteps"]
-            ax.plot(self.ds.coords["t"], ncalls_per_step, c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
+            ax.plot(self.ds.coords["t"], ncalls_per_step, c = self.c[0], lw = 1, markersize=1, marker = "o")
             
         elif name == "cvode_linear_per_newton":
-            ax.plot(self.ds.coords["t"], np.divide(self.ds["cvode_nliters"], self.ds["cvode_nniters"]), c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
+            ax.plot(self.ds.coords["t"], np.divide(self.ds["cvode_nliters"], self.ds["cvode_nniters"]), c = self.c[0], lw = 1, markersize=1, marker = "o")
             
         elif name == "cvode_precon_per_newton":
-            ax.plot(self.ds.coords["t"], self.ds["cvode_npevals"]/self.ds["cvode_nliters"], c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
+            ax.plot(self.ds.coords["t"], self.ds["cvode_npevals"]/self.ds["cvode_nliters"], c = self.c[0], lw = 1, markersize=1, marker = "o")
         
         elif name == "cvode_fails_per_step":
-            ax.plot(self.ds.coords["t"], (self.ds["cvode_num_fails"] + self.ds["cvode_nonlin_fails"])/self.ds["cvode_nsteps"], c = self.c[0], lw = 1, markersize=1, marker = "o", label = r"ncalls/t")
+            ax.plot(self.ds.coords["t"], (self.ds["cvode_num_fails"] + self.ds["cvode_nonlin_fails"])/self.ds["cvode_nsteps"], c = self.c[0], lw = 1, markersize=1, marker = "o")
+        
+        elif name == "cvode_fails_per_second":
+            # Per second of time simulated
+            ax.plot(self.ds.coords["t"], cvode["num_fails"], c = self.c[0], lw = 1, markersize=1, marker = "o")
+            
+        elif name == "cvode_stab_lims":
+            # Per second of time simulated
+            ax.plot(self.ds.coords["t"], self.ds["cvode_stab_lims"], c = self.c[0], lw = 1, markersize=1, marker = "o")
+        
+        else:
+            raise Exception(f"Plot {name} not available")
 
         ax.set_title(name)
         if self.plot_settings["xmin"] is not None:
@@ -170,7 +188,7 @@ class Monitor():
             ax.set_xlim(right = self.plot_settings["xmax"])
         # ax.set_xlim((self.plot_settings["xmin"], self.plot_settings["xmax"]))
 
-        ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
+        
     
         # ax.xaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
         ax.set_ylabel("")
@@ -336,7 +354,7 @@ class Monitor2D():
 
             
             
-def plot_ddt(case, smoothing = 1, volume_weighted = True):
+def plot_ddt(case, smoothing = 1, dpi = 120, volume_weighted = True, ylims = (None,None), xlims = (None,None)):
     """
     RMS of all the ddt parameters, which are convergence metrics.
     Inputs:
@@ -367,7 +385,7 @@ def plot_ddt(case, smoothing = 1, volume_weighted = True):
         res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))    # Root mean square
         res[param] = np.convolve(res[param], np.ones(smoothing), "same")    # Moving average with window = smoothing
 
-    fig, ax = plt.subplots(figsize = (8,6), dpi = 100)
+    fig, ax = plt.subplots(figsize = (5,4), dpi = dpi)
 
     for param in list_params:
         ax.plot(case.ds.coords["t"], res[param], label = param, lw = 1)
@@ -376,9 +394,14 @@ def plot_ddt(case, smoothing = 1, volume_weighted = True):
     ax.grid(which = "major", lw = 1)
     ax.grid(which = "minor", lw = 1, alpha = 0.3)
     ax.legend(loc = "upper left", bbox_to_anchor=(1,1))
-    ax.set_xlabel("Time")
-    ax.set_ylabel("Normalised residual")
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Cell weighted residual RMS [-]")
     ax.set_title(f"Residual plot: {case.name}")
+    
+    if ylims != (None,None):
+        ax.set_ylim(ylims)
+    if xlims != (None,None):
+        ax.set_xlim(xlims)
 
 def plot_monitors(self, to_plot, what = ["mean", "max", "min"], ignore = []):
     """
