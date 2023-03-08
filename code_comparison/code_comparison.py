@@ -5,7 +5,7 @@ import scipy.signal
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import xbout
-from matplotlib.widgets import RangeSlider
+from matplotlib.widgets import RangeSlider, TextBox
 
 
 import re
@@ -107,19 +107,46 @@ class SOLEDGEdata:
 
 class SOLPSdata:
     def __init__(self):
-        pass
-    
-    def read_dataframes(self, path):
-        file = read_file(path)
-        self.file = file
+        
         self.params = defaultdict(dict)
         self.omp = pd.DataFrame()
         self.imp = pd.DataFrame()
-
         
-        # for param in self.file.keys():
-            
-            
+        
+    def read_last10s(self, casepath):
+        """
+        Read original last10s.pkl file
+        """
+        
+        last10s = read_file(os.path.join(casepath, "last10s.pkl"))
+        dfs = dict()
+        
+        for param in last10s.keys():
+            if len(np.array(last10s[param]).shape) == 2: 
+                if last10s[param].shape[1] == 2:
+                    if any([param.endswith(x) for x in ["da", "dr", "di"]]):
+                        dfs[param] = pd.DataFrame(last10s[param])
+                        dfs[param].columns = ["pos", param]
+                        dfs[param] = dfs[param].set_index("pos")
+                        dfs[param].index = dfs[param].index.astype(float)
+                        
+                        if param.endswith("da"): #re.search(".*da", param):
+                            self.params["omp"][param] = dfs[param]
+                            
+                        elif param.endswith("dr"):
+                            self.params["outer_lower"][param] = dfs[param]
+                            
+                        elif param.endswith("di"):
+                            self.params["imp"][param] = dfs[param]
+        
+        self.create_dataframes()
+        
+    def read_dataframes(self, path):
+        """
+        Read last10s.pkl re-saved as dataframes to avoid incompatibility
+        """
+        file = read_file(path)
+        self.file = file
         
         # for region in self.params.keys():
         for param in self.file.keys():
@@ -138,6 +165,10 @@ class SOLPSdata:
                     self.params["imp"][param] = self.file[param]
 
                 
+        self.create_dataframes()
+        
+        
+    def create_dataframes(self):
         self.regions = dict()
         self.regions["omp"] = pd.concat(self.params["omp"].values(), axis = 1)
         self.regions["imp"] = pd.concat(self.params["imp"].values(), axis = 1)
@@ -146,7 +177,6 @@ class SOLPSdata:
         self.process_omp()
         self.process_imp()
         self.process_target()
-
         
         
     def process_omp(self):
@@ -250,17 +280,42 @@ class viewer_2d():
 
         # Find ranges if not provided
         if vmin == None:
-            vmin = min
+            vmin = self.min
         if vmax == None:
-            vmax = max
+            vmax = self.max
 
         fig = plt.figure(dpi=120)
-        fig.set_figheight(5)
-        fig.set_figwidth(num_cases*4)
+        fig.set_figheight(6)
+        fig.set_figwidth(num_cases*3.5)
 
-        spec = mpl.gridspec.GridSpec(ncols=num_cases+3, nrows=1,
-                                        width_ratios = [1]*num_cases + [0.1] + [0.1] + [0.1], # cbar, empty space, control
+        gs0 = mpl.gridspec.GridSpec(ncols=1, nrows=3, 
+                                    height_ratios = [0.9, 0.05, 0.05],
+                                    hspace = 0.4,
+                                    left = 0.1,
+                                    right = 0.9,
+                                    top = 0.9,
+                                    bottom = 0)
+        # Plot grid
+        gs0a = mpl.gridspec.GridSpecFromSubplotSpec(
+                                        subplot_spec=gs0[0],
+                                        ncols=num_cases+1, nrows=1,
+                                        width_ratios = [1]*num_cases + [0.1], # cbar, empty space, control
                                         )
+        
+        # Widget grid
+        gs0b = mpl.gridspec.GridSpecFromSubplotSpec(
+                                        subplot_spec=gs0[1],
+                                        ncols=3, nrows=1,
+                                        width_ratios = [0.2, 0.2, 0.6], # box, box, slider
+                                        wspace = 0.5,
+                                        )
+        
+        # Dummy gridspec for space
+        gs0c = mpl.gridspec.GridSpecFromSubplotSpec(
+                                        subplot_spec=gs0[2],
+                                        ncols=1, nrows=1,
+                                        )
+        
 
         axes = [None]*(num_cases+3)
 
@@ -269,21 +324,18 @@ class viewer_2d():
             
             # All plots after the first one share x and y axes
             if i == 0:
-                axes[i] = fig.add_subplot(spec[i])
+                axes[i] = fig.add_subplot(gs0a[i])
             else:
-                axes[i] = fig.add_subplot(spec[i], sharex=axes[0], sharey=axes[0])
+                axes[i] = fig.add_subplot(gs0a[i], sharex=axes[0], sharey=axes[0])
             
             model = cases[casename]
             
             if model["code"] == "hermes":
                 model["ds"][param].bout.polygon(ax = axes[i], add_colorbar = False, logscale = logscale, separatrix = True, cmap = cmap, vmin = vmin, vmax = vmax, antialias = False)
-                
-                
-                # axes[i].plot(model["ds"]["R"])
                 axes[i].set_title(f"Hermes-3\{casename}")
                 
             elif model["code"] == "solps":
-                plot_2d(fig, axes[i], where = model["path"], what = self.name_parser(param,"solps"), cmap = "Spectral_r", scale = ("log" if logscale is True else "linear"), vmin = vmin, vmax = vmax, plot_cbar = False)
+                plot_2d(fig, axes[i], where = model["path"], what = name_parser(param,"solps"), cmap = "Spectral_r", scale = ("log" if logscale is True else "linear"), vmin = vmin, vmax = vmax, plot_cbar = False)
                 axes[i].set_title(f"SOLPS\{casename}")
                 
             axes[i].set_ylim(-0.88,0.1)
@@ -296,23 +348,45 @@ class viewer_2d():
                 axes[i].tick_params(axis="y", which="both", left=False,labelleft=False)
                 
         # Add colorbar
-        axes[-3] = fig.add_subplot(spec[-3])   
+        axes[-1] = fig.add_subplot(gs0a[-1])   
         norm = xbout.plotting.utils._create_norm(logscale, None, vmin, vmax)
         sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
-        cbar = plt.colorbar(mappable = sm, cax = axes[-3], label = param)
+        cbar = plt.colorbar(mappable = sm, cax = axes[-1], label = param)
 
-        # Add widget
-        axes[-1] = fig.add_subplot(spec[-1])
-
-        # axes[-1] = fig.add_axes([0.8, 0.2, 0.65, 0.5])
+        
+        boxmin = TextBox(
+            ax = fig.add_subplot(gs0b[0]), 
+            label = "Min", 
+            initial = f"{self.min:.2e}",
+            textalignment="center")
+        
+        boxmax = TextBox(
+            ax = fig.add_subplot(gs0b[1]), 
+            label = "Max", 
+            initial = f"{self.max:.2e}",
+            textalignment="center")
+        
         slider = RangeSlider(
-            axes[-1], "Colour limits",
+            fig.add_subplot(gs0b[2]), "Colour limits",
             self.min, self.max,
-            orientation = "vertical",
+            orientation = "horizontal",
+            valinit = (self.min, self.max)
             )
 
         artists = [axes[i].collections[0] for i in range(num_cases)]
         # artists = artists.append(cbar)
+        
+        def set_vmin(val):
+            cbar.norm.vmin = val
+                
+            for i, artist in enumerate(artists):
+                if cases[list(cases.keys())[i]]["code"] == "solps" and logscale == True:
+                    artist.norm.vmin = np.log10(val)
+                else:
+                    artist.norm.vmin = val
+                
+                fig.canvas.draw_idle()
+                fig.canvas.flush_events() # https://stackoverflow.com/questions/64789437/what-is-the-difference-between-figure-show-figure-canvas-draw-and-figure-canva
 
         def update(val):
             slider.ax.set_ylim(self.min, self.max) # This is inexplicably needed otherwise it freezes
@@ -332,6 +406,7 @@ class viewer_2d():
                 fig.canvas.flush_events() # https://stackoverflow.com/questions/64789437/what-is-the-difference-between-figure-show-figure-canvas-draw-and-figure-canva
                 
         slider.on_changed(update)
+        boxmin.on_text_change(set_vmin)
             
         
     def find_ranges(self):
@@ -350,16 +425,17 @@ class viewer_2d():
                 
         return np.max(max), np.min(min)
     
-    def name_parser(self, x, code):
-        
-        solps = {
-            "Ne" : "ne",
-            "Te" : "te",
-            "Td+" : "ti",            
-        }
-        
-        if code == "solps":
-            return solps[x]
+def name_parser(x, code):
+    
+    solps = {
+        "Ne" : "ne",
+        "Te" : "te",
+        "Td+" : "ti",   
+        "Nd" : "pdenn"   # Custom made by matteo. Atoms: pdena, Molecules: pdenm         
+    }
+    
+    if code == "solps":
+        return solps[x]
         
 
             
