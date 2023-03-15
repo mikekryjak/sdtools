@@ -51,7 +51,7 @@ def Div_a_Grad_perp_upwind_fast(ds, a, f):
     flux *= dy * dz
     
     F_R = flux
-    F_L = flux.shift(x=1)  # Not sure why it needs shifting by +1 here, but this matches full function.
+    F_L = flux.shift(x=1)  # the shift of 1 index to get F_L because the left flux at cell X is the same as the right flux at cell X-1.
     
     return F_L, F_R
 
