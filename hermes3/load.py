@@ -359,8 +359,8 @@ class Case:
         "Pd": {
             "conversion": m["Nnorm"] * m["Tnorm"] * q_e,
             "units": "Pa",
-            "standard_name": "ion pressure (d+)",
-            "long_name": "Ion pressure (d+)"
+            "standard_name": "neutral pressure (d)",
+            "long_name": "Neutral pressure (d)"
         },
 
         "Pd+": {
