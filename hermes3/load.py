@@ -8,7 +8,6 @@ import matplotlib as mpl
 import os, sys
 import traceback
 import platform
-import colorcet as cc
 from scipy import stats
 from boututils.datafile import DataFile
 from boutdata.collect import collect
@@ -573,10 +572,17 @@ class Case:
         slices["inner_core_edge"] = (slice(0+self.MXG,1+self.MXG), slice(self.j1_1g + 1, self.j2_1g + 1))
         slices["core_edge"] = (slice(0+self.MXG,1+self.MXG), np.r_[slice(self.j1_2g + 1, self.j2_2g + 1), slice(self.j1_1g + 1, self.j2_1g + 1)])
         
-        slices["outer_sol_edge"] = (slice(-1 - self.MXG,- self.MXG), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG))
-        slices["inner_sol_edge"] = (slice(-1 - self.MXG,- self.MXG), slice(self.MYG, self.ny_inner+self.MYG))
-        
-        slices["sol_edge"] = (slice(-1 - self.MXG,- self.MXG), np.r_[slice(self.j1_1g + 1, self.j2_1g + 1), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
+        if self.MXG != 0:
+            
+            slices["outer_sol_edge"] = (slice(-1 - self.MXG, - self.MXG), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG))
+            slices["inner_sol_edge"] = (slice(-1 - self.MXG, - self.MXG), slice(self.MYG, self.ny_inner+self.MYG))
+            slices["sol_edge"] = (slice(-1 - self.MXG, - self.MXG), np.r_[slice(self.j1_1g + 1, self.j2_1g + 1), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
+            
+        else:
+            
+            slices["outer_sol_edge"] = (slice(-1, None), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG))
+            slices["inner_sol_edge"] = (slice(-1, None), slice(self.MYG, self.ny_inner+self.MYG))
+            slices["sol_edge"] = (slice(-1 - self.MXG, - self.MXG), np.r_[slice(self.j1_1g + 1, self.j2_1g + 1), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
         
         slices["inner_lower_target"] = (slice(None,None), slice(self.MYG, self.MYG + 1))
         slices["inner_upper_target"] = (slice(None,None), slice(self.ny_inner+self.MYG -1, self.ny_inner+self.MYG))
@@ -613,7 +619,36 @@ class Case:
         
         return self.ds.isel(x = selection[0], theta = selection[1])
     
-    
+    def select_domain_boundary(self):
+        """
+        Extract R,Z coordinates of the model boundary using cell corner information
+        """
+        r = []
+        z = []
+
+        loc = {
+            "inner_lower_target" : "xy_lower_left_corners",
+            "inner_sol_edge" : "xy_lower_right_corners",
+            "inner_upper_target" : "xy_upper_right_corners",
+            "upper_pfr_edge" : "xy_upper_left_corners",
+            "outer_upper_target" : "xy_lower_left_corners",
+            "outer_sol_edge" : "xy_lower_right_corners",
+            "outer_lower_target" : "xy_upper_right_corners",
+            "lower_pfr_edge" : "xy_upper_left_corners"
+        }
+
+        for region in loc.keys():
+            sel = self.select_region(region)
+
+            name = loc[region]
+            r.append(sel[f"R{name}"].values.flatten())
+            z.append(sel[f"Z{name}"].values.flatten())
+
+        r = np.concatenate(r)
+        z = np.concatenate(z)
+        
+        return r,z
+        
     
     def extract_1d_tokamak_geometry(self):
         ds = self.ds
