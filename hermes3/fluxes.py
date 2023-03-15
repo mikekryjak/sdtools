@@ -5,6 +5,7 @@ def Div_a_Grad_perp_upwind_fast(ds, a, f):
     AUTHOR: M KRYJAK 15/03/2023
     Rewrite of Div_a_Grad_perp_upwind but using fast Xarray functions
     Runs very fast, but cannot be easily verified against the code
+    Full comments available in the slower version
     
     Parameters
     ----------
@@ -12,7 +13,7 @@ def Div_a_Grad_perp_upwind_fast(ds, a, f):
         Dataset with the simulation results for geometrical info
     a : np.array
         First term in the derivative equation, e.g. chi * N
-    b : np.array
+    f : np.array
         Second term in the derivative equation, e.g. q_e * T
     
     Returns
@@ -47,6 +48,8 @@ def Div_a_Grad_perp_upwind_fast(ds, a, f):
 
     gradient = (f.shift(x=-1) - f) * (J*g11 + J.shift(x=-1)*g11.shift(x=-1)) / (dx + dx.shift(x=-1))
     flux = -gradient * 0.5 * (a + a.shift(x=-1))
+    flux *= dy * dz
+    
     F_R = flux
     F_L = flux.shift(x=1)  # Not sure why it needs shifting by +1 here, but this matches full function.
     
