@@ -175,6 +175,17 @@ class Case:
 
     def derive_vars(self):
         ds = self.ds
+        
+        # From Hypnotoad trim_yboundaries() in compare_grid_files
+        if ds.metadata["jyseps2_1"] != ds.metadata["jyseps1_2"]:
+            ds.metadata["null_config"] = "cdn"
+        else:
+            ds.metadata["null_config"] = "sn"
+            
+        ds.metadata["species"] = [x.split("P")[1] for x in self.ds.data_vars if x.startswith("P") and len(x) < 4]
+        ds.metadata["charged_species"] = [x for x in ds.metadata["species"] if "e" in x or "+" in x]
+        ds.metadata["neutral_species"] = list(set(ds.metadata["species"]).difference(set(ds.metadata["charged_species"])))
+        
         q_e = constants("q_e")
 
         if "Ph+" in ds.data_vars:
