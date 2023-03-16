@@ -1,5 +1,28 @@
 import xarray as xr
 
+def calculate_fluxes(ds):   
+    
+    
+    for name in ds.metadata["charged_species"]:
+        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"N{name}"] * ds[f"anomalous_Chi_{name}"], constants("q_e") * ds[f"T{name}"])
+        ds[f"hf_perp_diff_L_{name}"] = L 
+        ds[f"hf_perp_diff_R_{name}"] = R
+
+        L, R  =  Div_a_Grad_perp_upwind_fast(ds, constants("q_e") * ds[f"T{name}"] * ds[f"anomalous_D_{name}"], ds[f"N{name}"])
+        ds[f"hf_perp_conv_L_{name}"] = L 
+        ds[f"hf_perp_conv_R_{name}"] = R
+
+        ds[f"hf_perp_tot_L_{name}"] = ds[f"hf_perp_conv_L_{name}"] + ds[f"hf_perp_diff_L_{name}"]
+        ds[f"hf_perp_tot_R_{name}"] = ds[f"hf_perp_conv_R_{name}"] + ds[f"hf_perp_diff_R_{name}"]
+
+        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"anomalous_D_{name}"] * ds[f"N{name}"] / ds[f"N{name}"], ds[f"N{name}"])
+        ds[f"pf_perp_diff_L_{name}"] = L 
+        ds[f"pf_perp_diff_R_{name}"] = R
+        
+        
+    return ds
+    
+
 def Div_a_Grad_perp_upwind_fast(ds, a, f):
     """
     AUTHOR: M KRYJAK 15/03/2023
