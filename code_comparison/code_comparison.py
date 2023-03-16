@@ -340,7 +340,14 @@ class viewer_2d():
             model = cases[casename]
             
             if model["code"] == "hermes":
-                model["ds"][param].bout.polygon(ax = axes[i], add_colorbar = False, logscale = logscale, separatrix = True, cmap = cmap, vmin = vmin, vmax = vmax, antialias = False)
+                model["ds"][param].bout.polygon(ax = axes[i], 
+                                                add_colorbar = False, logscale = logscale, 
+                                                separatrix = True, cmap = cmap, 
+                                                vmin = vmin, vmax = vmax, 
+                                                antialias = True,
+
+                                                linewidth = 0.1,
+                                                )
                 axes[i].set_title(f"Hermes-3\{casename}")
                 
             elif model["code"] == "solps":
