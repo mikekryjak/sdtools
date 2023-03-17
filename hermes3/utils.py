@@ -34,5 +34,15 @@ def constants(name):
 
 def mike_cmap():
     return ["teal", "darkorange", "firebrick", "limegreen", "deeppink", "navy", "crimson"]
+
+
+def select_custom_core_ring(ds, i):
+    sel = {"x":i, "theta":slice(ds.regions["core"].ylower_ind, ds.regions["core"].yupper_ind)}
+    return ds[sel]
+   
+def select_custom_sol_ring(ds, i):
+    sel = {"x":i, "theta":slice(ds.regions["lower_inner_pfr"].ylower_ind, ds.regions["lower_outer_pfr"].yupper_ind)}
+    return ds[sel] 
+    
     
 
