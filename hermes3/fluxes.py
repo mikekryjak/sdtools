@@ -1,4 +1,5 @@
 import xarray as xr
+from hermes3.utils import *
 
 def calculate_fluxes(ds):   
     
