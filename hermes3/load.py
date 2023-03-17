@@ -43,7 +43,9 @@ class Load:
     def case_2D(casepath, 
                 gridfilepath = None, 
                 verbose = False, 
-                keep_boundaries = False, 
+                keep_boundaries = None, 
+                keep_xboundaries = False,
+                keep_yboundaries = False,
                 squeeze = True, 
                 double_load = False,
                 unnormalise_geom = False,
@@ -51,20 +53,20 @@ class Load:
         """ 
         Double load returns a case with and without guards.
         """
-
+        
+        if keep_xboundaries == True or keep_boundaries == True:
+            xboundaries = True
+        else:
+            xboundaries = False
+        if keep_yboundaries == True or keep_boundaries == True:
+            yboundaries = True
+        else:
+            yboundaries = False
+            
+        print(xboundaries)
+        print(yboundaries)
         datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
-        
-        ds = xbout.load.open_boutdataset(
-                datapath = datapath, 
-                inputfilepath = inputfilepath, 
-                gridfilepath = gridfilepath,
-                info = False,
-                geometry = "toroidal",
-                cache = False,
-                keep_xboundaries=keep_boundaries,
-                keep_yboundaries=keep_boundaries,
-                )
 
         # Load both a case with and without guards
         if double_load is True:
@@ -106,8 +108,8 @@ class Load:
                 gridfilepath = gridfilepath,
                 info = False,
                 geometry = "toroidal",
-                keep_xboundaries=keep_boundaries,
-                keep_yboundaries=keep_boundaries,
+                keep_xboundaries=xboundaries,
+                keep_yboundaries=yboundaries,
                 )
             
             if squeeze:
@@ -521,38 +523,52 @@ class Case:
         
         
         
+        
+        
     def select_custom_sol_ring(self, i, region):
             """
             Creates custom SOL ring slice beyond the separatrix.
             args[0] = i = index of SOL ring (0 is separatrix, 1 is first SOL ring)
             args[1] = region = all, inner, inner_lower, inner_upper, outer, outer_lower, outer_upper
+            
+            TODO: CHECK THE OFFSETS ON X AXIS, THEY ARE POTENTIALLY WRONG
             """
             
-            i = i + self.ixseps1 - 1
-            outer_midplane_a = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g
-            outer_midplane_b = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1     
-            inner_midplane_a = int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g 
-            inner_midplane_b = int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g + 1               
-            
+            # if i < self.ixseps1 - self.MXG*2 :
+            #     raise Exception("i is too small!")
             if i > self.nx - self.MXG*2 :
                 raise Exception("i is too large!")
             
-            if region == "all":
-                selection = (slice(i+1,i+2), np.r_[slice(0+self.MYG, self.j2_2g + 1), slice(self.j1_1g + 1, self.nyg - self.MYG)])
-            
-            if region == "inner":
-                selection = (slice(i+1,i+2), slice(0+self.MYG, self.ny_inner + self.MYG))
-            if region == "inner_lower":
-                selection = (slice(i+1,i+2), slice(0+self.MYG, inner_midplane_a +1))
-            if region == "inner_upper":
-                selection = (slice(i+1,i+2), slice(inner_midplane_b, self.ny_inner + self.MYG))
-            
-            if region == "outer":
-                selection = (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, self.nyg - self.MYG))
-            if region == "outer_lower":
-                selection = (slice(i+1,i+2), slice(outer_midplane_b, self.nyg - self.MYG))
-            if region == "outer_upper":
-                selection = (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, outer_midplane_a+1))
+            if self.ds.metadata["topology"] == "connected-double-null":
+                
+                outer_midplane_a = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g
+                outer_midplane_b = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1     
+                inner_midplane_a = int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g 
+                inner_midplane_b = int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g + 1               
+                
+                
+                
+                if region == "all":
+                    selection = (slice(i+1,i+2), np.r_[slice(0+self.MYG, self.j2_2g + 1), slice(self.j1_1g + 1, self.nyg - self.MYG)])
+                
+                if region == "inner":
+                    selection = (slice(i+1,i+2), slice(0+self.MYG, self.ny_inner + self.MYG))
+                if region == "inner_lower":
+                    selection = (slice(i+1,i+2), slice(0+self.MYG, inner_midplane_a +1))
+                if region == "inner_upper":
+                    selection = (slice(i+1,i+2), slice(inner_midplane_b, self.ny_inner + self.MYG))
+                
+                if region == "outer":
+                    selection = (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, self.nyg - self.MYG))
+                if region == "outer_lower":
+                    selection = (slice(i+1,i+2), slice(outer_midplane_b, self.nyg - self.MYG))
+                if region == "outer_upper":
+                    selection = (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, outer_midplane_a+1))
+                    
+            elif self.ds.metadata["topology"] == "single-null":
+                
+                if region == "all":
+                    selection = (slice(i+0,i+1), slice(0+self.MYG, self.nyg - self.MYG))
             
             return self.ds.isel(x = selection[0], theta = selection[1])
 
