@@ -113,7 +113,7 @@ class Load:
                 )
             
             if squeeze:
-                ds = ds.squeeze(drop = True)
+                ds = ds.squeeze(drop = False)
                 
             return Case(ds, casepath, 
                         unnormalise_geom,
@@ -129,7 +129,7 @@ class Case:
         self.ds = ds
         self.name = os.path.split(casepath)[-1]
         self.datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
-        self.inputfilepath = os.path.join(casepath, "BOUT.inp")
+        self.inputfilepath = os.path.join(casepath, "BOUT.settings")
         self.normalised_vars = []
 
         if "x" in self.ds.dims:
@@ -158,6 +158,9 @@ class Case:
     
 
     def unnormalise(self, unnormalise_geom):
+        
+        # self.ds = self.unnormalise_xhermes(self.ds)
+        
         self.calc_norms()
         
 
@@ -271,6 +274,131 @@ class Case:
             raise Exception("2D guard replacement not done yet!")
 
 
+    def unnormalise_xhermes(self, ds):
+        # Normalisation
+        meta = ds.attrs["metadata"]
+        Cs0 = meta["Cs0"]
+        Omega_ci = meta["Omega_ci"]
+        rho_s0 = meta["rho_s0"]
+        Nnorm = meta["Nnorm"]
+        Tnorm = meta["Tnorm"]
+
+        # SI values
+        Mp = 1.67e-27  # Proton mass
+        e = 1.602e-19  # Coulombs
+
+        # Coordinates
+        ds.t.attrs["units_type"] = "hermes"
+        ds.t.attrs["units"] = "s"
+        ds.t.attrs["conversion"] = 1.0 / Omega_ci
+
+        for varname in ds:
+            da = ds[varname]
+            if len(da.dims) == 4:  # Time-evolving field
+                da.attrs["units_type"] = "hermes"
+
+                # Check if data already has units and conversion attributes
+                if ("units" in da.attrs) and ("conversion" in da.attrs):
+                    print(varname + " already annotated")
+                    continue  # No need to add attributes
+
+                # Mark as Hermes-normalised data
+                da.attrs["units_type"] = "hermes"
+
+                if varname[:2] == "NV":
+                    # Momentum
+                    da.attrs.update(
+                        {
+                            "units": "kg m / s",
+                            "conversion": Mp * Nnorm * Cs0,
+                            "standard_name": "momentum",
+                            "long_name": varname[2:] + " parallel momentum",
+                        }
+                    )
+                elif varname[0] == "N":
+                    # Density
+                    da.attrs.update(
+                        {
+                            "units": "m^-3",
+                            "conversion": Nnorm,
+                            "standard_name": "density",
+                            "long_name": varname[1:] + " number density",
+                        }
+                    )
+
+                elif varname[0] == "T":
+                    # Temperature
+                    da.attrs.update(
+                        {
+                            "units": "eV",
+                            "conversion": Tnorm,
+                            "standard_name": "temperature",
+                            "long_name": varname[1:] + " temperature",
+                        }
+                    )
+
+                elif varname[0] == "V":
+                    # Velocity
+                    da.attrs.update(
+                        {
+                            "units": "m / s",
+                            "conversion": Cs0,
+                            "standard_name": "velocity",
+                            "long_name": varname[1:] + " parallel velocity",
+                        }
+                    )
+
+                elif varname[0] == "P":
+                    # Pressure
+                    da.attrs.update(
+                        {
+                            "units": "Pa",
+                            "conversion": e * Tnorm * Nnorm,
+                            "standard_name": "pressure",
+                            "long_name": varname[1:] + " pressure",
+                        }
+                    )
+                elif varname == "phi":
+                    # Potential
+                    da.attrs.update(
+                        {
+                            "units": "V",
+                            "conversion": Tnorm,
+                            "standard_name": "potential",
+                            "long_name": "Plasma potential",
+                        }
+                    )
+                else:
+                    # Don't know what this is
+                    da.attrs["units_type"] = "unknown"
+
+        if ds.attrs["options"] is not None:
+            # Process options
+            options = ds.attrs["options"]
+
+            # List of components
+            component_list = [
+                c.strip() for c in options["hermes"]["components"].strip(" ()\t").split(",")
+            ]
+
+            # Turn into a dictionary
+            components = {}
+            for component in component_list:
+                if component in options:
+                    c_opts = options[component]
+                    if "type" in c_opts:
+                        c_type = c_opts["type"]
+                    else:
+                        c_type = component  # Type is the name of the component
+                else:
+                    c_opts = None
+                    c_type = component
+                components[component] = {"type": c_type, "options": c_opts}
+            ds.attrs["components"] = components
+
+        return ds
+    
+    
     def calc_norms(self):
         
         m = self.ds.metadata
@@ -415,6 +543,13 @@ class Case:
             "units": "m-3s-1",
             "standard_name": "ionisation",
             "long_name": "Ionisation ion source (d+)"
+        },
+        
+        "Sd+_rec": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units": "m-3s-1",
+            "standard_name": "recombination",
+            "long_name": "Recombination ion source (d+)"
         },
         
         "NVd+": {
