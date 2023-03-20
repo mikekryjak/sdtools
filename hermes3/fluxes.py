@@ -24,6 +24,208 @@ def calculate_fluxes(ds):
     return ds
     
 
+def sheath_boundary_simple(bd, gamma_e, gamma_i, Ne, Te, Ti, Zi=1, AA=1, sheath_ion_polytropic=1.0,
+                           include_convective=True):
+    """
+    Calculate the electron and ion heat flux at the sheath, using the formula used in the
+    sheath_boundary_simple component, assuming a single ion species
+    with charge Zi (hydrogen=1) and atomic mass AA (hydrogen=1)
+
+    # Returns
+
+    flux_down, flux_up
+
+    With units of Watts, i.e the power flowing out of each cell
+
+    Slices at lower Y and upper Y respectively, giving heat conduction through sheath.
+    Note: These do *not* include the convective heat flux, since that would usually
+    be calculated in the pressure evolution (evolve_pressure component).
+    """
+
+    if not include_convective:
+        gamma_e = gamma_e - 2.5
+        gamma_i = gamma_i - 3.5
+    
+    J = bd['J']
+    dx = bd['dx']
+    dy = bd['dy']
+    dz = bd['dz']
+    g_22 = bd['g_22']
+
+    # Lower y
+    if yboundaries:
+        y = 2 # First point in the domain
+        ym = y - 1
+        Ne_m = Ne.isel(theta=ym)
+        Te_m = Te.isel(theta=ym)
+        Ti_m = Ti.isel(theta=ym)
+    else:
+        y = 0
+        ym = y # Same metric tensor component in boundary cells as in domain
+        yp = y + 1 # For extrapolating boundary
+        
+        Ne_m = Ne.isel(theta=y)**2 / Ne.isel(theta=yp)
+        Te_m = Te.isel(theta=y)**2 / Te.isel(theta=yp)
+        Ti_m = Ti.isel(theta=y)**2 / Ti.isel(theta=yp)
+
+    nesheath = 0.5 * (Ne.isel(theta=y) + Ne_m)
+    tesheath = 0.5 * (Te.isel(theta=y) + Te_m)
+    tisheath = 0.5 * (Ti.isel(theta=y) + Ti_m)
+
+    qe = 1.602e-19 # Elementary charge [C]
+    mp = 1.67e-27 # Proton mass [kg]
+    me = 9.11e-31 # Electron mass [kg]
+    
+    # Ion flow speed
+    C_i = np.sqrt((sheath_ion_polytropic * qe * tisheath + Zi * qe * tesheath) / (AA * mp))
+
+    vesheath = C_i  # Assuming no current
+
+    # Parallel heat flux in W/m^2.
+    # Note: Corrected for 5/2Pe convective thermal flux, and small electron kinetic energy flux
+    # so gamma_e is the total *energy* flux coefficient.
+    q_e = ((gamma_e - 2.5) * qe * tesheath - 0.5 * me * vesheath**2) * nesheath * vesheath
+    q_i = gamma_i * qe * tisheath * nesheath * vesheath
+
+    # Multiply by cell area to get power
+    flux_down_e = q_e * dx.isel(theta=y) * dz.isel(theta=y) * (J.isel(theta=y) + J.isel(theta=ym)) / (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=ym)))
+    flux_down_i = q_i * dx.isel(theta=y) * dz.isel(theta=y) * (J.isel(theta=y) + J.isel(theta=ym)) / (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=ym)))
+
+    ions_down = nesheath * vesheath * dx.isel(theta=y) * dz.isel(theta=y) * (J.isel(theta=y) + J.isel(theta=ym)) / (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=ym)))
+    
+    # Repeat for upper Y boundary
+    if yboundaries:
+        y = -3 # First point in the domain
+        yp = y + 1
+        Ne_p = Ne.isel(theta=yp)
+        Te_p = Te.isel(theta=yp)
+        Ti_p = Ti.isel(theta=yp)
+    else:
+        y = -1
+        yp = y # Same metric tensor component in boundary cells as in domain
+        ym = y - 1 # For extrapolating boundary
+        
+        Ne_p = Ne.isel(theta=y)**2 / Ne.isel(theta=ym)
+        Te_p = Te.isel(theta=y)**2 / Te.isel(theta=ym)
+        Ti_p = Ti.isel(theta=y)**2 / Ti.isel(theta=ym)
+
+    nesheath = 0.5 * (Ne.isel(theta=y) + Ne_p)
+    tesheath = 0.5 * (Te.isel(theta=y) + Te_p)
+    tisheath = 0.5 * (Ti.isel(theta=y) + Ti_p)
+    C_i = np.sqrt((sheath_ion_polytropic * qe * tisheath + Zi * qe * tesheath) / (AA * mp))
+    vesheath = C_i
+    
+    q_e = (gamma_e * qe * tesheath - 0.5 * me * vesheath**2) * nesheath * vesheath
+    q_i = gamma_i * qe * tisheath * nesheath * vesheath
+
+    flux_up_e = q_e * dx.isel(theta=y) * dz.isel(theta=y) * (J.isel(theta=y) + J.isel(theta=yp)) / (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=yp)))
+    flux_up_i = q_i * dx.isel(theta=y) * dz.isel(theta=y) * (J.isel(theta=y) + J.isel(theta=yp)) / (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=yp)))
+
+    ions_up = nesheath * vesheath * dx.isel(theta=y) * dz.isel(theta=y) * (J.isel(theta=y) + J.isel(theta=yp)) / (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=yp)))
+
+    return flux_down_e, flux_up_e, flux_down_i, flux_up_i, ions_down, ions_up
+    
+def sheath_boundary_simple_original(bd, gamma_e, gamma_i, Ne, Te, Ti, Zi=1, AA=1, sheath_ion_polytropic=1.0,
+                           include_convective=True):
+    """
+    Calculate the electron and ion heat flux at the sheath, using the formula used in the
+    sheath_boundary_simple component, assuming a single ion species
+    with charge Zi (hydrogen=1) and atomic mass AA (hydrogen=1)
+
+    # Returns
+
+    flux_down, flux_up
+
+    With units of Watts, i.e the power flowing out of each cell
+
+    Slices at lower Y and upper Y respectively, giving heat conduction through sheath.
+    Note: These do *not* include the convective heat flux, since that would usually
+    be calculated in the pressure evolution (evolve_pressure component).
+    """
+
+    if not include_convective:
+        gamma_e = gamma_e - 2.5
+        gamma_i = gamma_i - 3.5
+    
+    J = bd['J']
+    dx = bd['dx']
+    dy = bd['dy']
+    dz = bd['dz']
+    g_22 = bd['g_22']
+
+    # Lower y
+    if yboundaries:
+        y = 2 # First point in the domain
+        ym = y - 1
+        Ne_m = Ne.isel(theta=ym)
+        Te_m = Te.isel(theta=ym)
+        Ti_m = Ti.isel(theta=ym)
+    else:
+        y = 0
+        ym = y # Same metric tensor component in boundary cells as in domain
+        yp = y + 1 # For extrapolating boundary
+        
+        Ne_m = Ne.isel(theta=y)**2 / Ne.isel(theta=yp)
+        Te_m = Te.isel(theta=y)**2 / Te.isel(theta=yp)
+        Ti_m = Ti.isel(theta=y)**2 / Ti.isel(theta=yp)
+
+    nesheath = 0.5 * (Ne.isel(theta=y) + Ne_m)
+    tesheath = 0.5 * (Te.isel(theta=y) + Te_m)
+    tisheath = 0.5 * (Ti.isel(theta=y) + Ti_m)
+
+    qe = 1.602e-19 # Elementary charge [C]
+    mp = 1.67e-27 # Proton mass [kg]
+    me = 9.11e-31 # Electron mass [kg]
+    
+    # Ion flow speed
+    C_i = np.sqrt((sheath_ion_polytropic * qe * tisheath + Zi * qe * tesheath) / (AA * mp))
+
+    vesheath = C_i  # Assuming no current
+
+    # Parallel heat flux in W/m^2.
+    # Note: Corrected for 5/2Pe convective thermal flux, and small electron kinetic energy flux
+    # so gamma_e is the total *energy* flux coefficient.
+    q_e = ((gamma_e - 2.5) * qe * tesheath - 0.5 * me * vesheath**2) * nesheath * vesheath
+    q_i = gamma_i * qe * tisheath * nesheath * vesheath
+
+    # Multiply by cell area to get power
+    flux_down_e = q_e * dx.isel(theta=y) * dz.isel(theta=y) * (J.isel(theta=y) + J.isel(theta=ym)) / (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=ym)))
+    flux_down_i = q_i * dx.isel(theta=y) * dz.isel(theta=y) * (J.isel(theta=y) + J.isel(theta=ym)) / (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=ym)))
+
+    ions_down = nesheath * vesheath * dx.isel(theta=y) * dz.isel(theta=y) * (J.isel(theta=y) + J.isel(theta=ym)) / (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=ym)))
+    
+    # Repeat for upper Y boundary
+    if yboundaries:
+        y = -3 # First point in the domain
+        yp = y + 1
+        Ne_p = Ne.isel(theta=yp)
+        Te_p = Te.isel(theta=yp)
+        Ti_p = Ti.isel(theta=yp)
+    else:
+        y = -1
+        yp = y # Same metric tensor component in boundary cells as in domain
+        ym = y - 1 # For extrapolating boundary
+        
+        Ne_p = Ne.isel(theta=y)**2 / Ne.isel(theta=ym)
+        Te_p = Te.isel(theta=y)**2 / Te.isel(theta=ym)
+        Ti_p = Ti.isel(theta=y)**2 / Ti.isel(theta=ym)
+
+    nesheath = 0.5 * (Ne.isel(theta=y) + Ne_p)
+    tesheath = 0.5 * (Te.isel(theta=y) + Te_p)
+    tisheath = 0.5 * (Ti.isel(theta=y) + Ti_p)
+    C_i = np.sqrt((sheath_ion_polytropic * qe * tisheath + Zi * qe * tesheath) / (AA * mp))
+    vesheath = C_i
+    
+    q_e = (gamma_e * qe * tesheath - 0.5 * me * vesheath**2) * nesheath * vesheath
+    q_i = gamma_i * qe * tisheath * nesheath * vesheath
+
+    flux_up_e = q_e * dx.isel(theta=y) * dz.isel(theta=y) * (J.isel(theta=y) + J.isel(theta=yp)) / (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=yp)))
+    flux_up_i = q_i * dx.isel(theta=y) * dz.isel(theta=y) * (J.isel(theta=y) + J.isel(theta=yp)) / (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=yp)))
+
+    ions_up = nesheath * vesheath * dx.isel(theta=y) * dz.isel(theta=y) * (J.isel(theta=y) + J.isel(theta=yp)) / (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=yp)))
+
+    return flux_down_e, flux_up_e, flux_down_i, flux_up_i, ions_down, ions_up
+
 def Div_a_Grad_perp_upwind_fast(ds, a, f):
     """
     AUTHOR: M KRYJAK 15/03/2023
