@@ -191,6 +191,11 @@ class Case:
         ds.metadata["charged_species"] = [x for x in ds.metadata["species"] if "e" in x or "+" in x]
         ds.metadata["neutral_species"] = list(set(ds.metadata["species"]).difference(set(ds.metadata["charged_species"])))
         
+        if "single-null" in ds.metadata["topology"]:
+            ds.metadata["targets"] = ["inner_lower", "outer_lower"]
+        elif "double-null" in ds.metadata["topology"]:
+            ds.metadata["targets"] = ["inner_lower", "outer_lower", "inner_upper", "outer_upper"]
+        
         q_e = constants("q_e")
 
         if "Ph+" in ds.data_vars:
@@ -537,6 +542,14 @@ class Case:
             "standard_name": "exciation radiation (d+)",
             "long_name": "Multi-step ionisation radiation (d+)"
         },
+        
+        "Rd+_rec": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "recombination radiation (d+)",
+            "long_name": "Recombination radiation (d+)"
+        },
+
 
         "Sd+_iz": {
             "conversion": m["Nnorm"] * m["Omega_ci"],
@@ -665,6 +678,8 @@ class Case:
             Creates custom SOL ring slice beyond the separatrix.
             args[0] = i = index of SOL ring (0 is separatrix, 1 is first SOL ring)
             args[1] = region = all, inner, inner_lower, inner_upper, outer, outer_lower, outer_upper
+            
+            NOTE: INDEX HERE IS THE ACTUAL INDEX AS OPPOSED TO THE CUSTOM CORE RING
             
             TODO: CHECK THE OFFSETS ON X AXIS, THEY ARE POTENTIALLY WRONG
             """
