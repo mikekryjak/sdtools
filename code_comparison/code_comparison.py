@@ -11,10 +11,13 @@ from matplotlib.widgets import RangeSlider, TextBox
 import re
 from collections import defaultdict
 
+sys.path.append(r'C:\Users\mikek\OneDrive\Project\python-packages')
+
 import gridtools.solps_python_scripts.setup
 from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d
 
-sys.path.append(r'C:\Users\mikek\OneDrive\Project\python-packages')
+
+
 from hermes3.utils import *
 
 def save_last10s_subset(solps_path, destination_path):
@@ -197,7 +200,7 @@ class SOLPSdata:
                 for col in df.columns:
                     if re.search(f"^{key}..", col):
                         new_columns.append(name_map[key])
-                        print(f"{name_map[key]} found: {col}")
+                        # print(f"{name_map[key]} found: {col}")
                     else:
                         new_columns.append(col)
                 df.columns = new_columns
@@ -248,13 +251,13 @@ class Hermesdata:
     def __init__(self):
         pass
     
-    def read_case(self, case, tind = -1):
-        self.case = case
-        
+    def read_case(self, ds):
+
+        self.ds = ds
         self.regions = dict()
-        self.regions["omp"] = self.compile_results(self.case.select_region("outer_midplane_a").isel(t=tind))
-        self.regions["imp"] = self.compile_results(self.case.select_region("inner_midplane_a").isel(t=tind))
-        self.regions["outer_lower"] = self.compile_results(self.case.select_region("outer_lower_target").isel(t=tind))
+        self.regions["omp"] = self.compile_results(ds.hermesm.select_region("outer_midplane_a"))
+        self.regions["imp"] = self.compile_results(ds.hermesm.select_region("inner_midplane_a"))
+        self.regions["outer_lower"] = self.compile_results(ds.hermesm.select_region("outer_lower_target"))
         
         self.regions["imp"].index *= -1    # Ensure core is on the LHS
 
@@ -274,7 +277,7 @@ class Hermesdata:
         df = pd.concat(x, axis = 1)
 
         # Normalise to separatrix
-        sep_R = df.index[self.case.ixseps1 + self.case.MXG]
+        sep_R = df.index[self.ds.metadata["ixseps1"] + self.ds.metadata["MXG"]]
         df.index -= sep_R
         
         return df
@@ -747,7 +750,7 @@ def lineplot(
 
     for region in regions:
 
-        fig, axes = plt.subplots(1,len(params), dpi = 150, figsize = (4*len(params),3.5))
+        fig, axes = plt.subplots(1,len(params), dpi = dpi, figsize = (4*len(params),3.5))
         fig.subplots_adjust(hspace = 0.1, wspace = 0.25)
 
         
