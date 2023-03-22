@@ -24,9 +24,9 @@ class Monitor():
         self.windows = windows
         num_rows = len(self.windows)
         
-        self.noguards = case.select_region("all_noguards")
-        self.core = case.select_region("core_noguards")
-        self.sol = case.select_region("sol_noguards")
+        self.noguards = case.ds.hermesm.select_region("all_noguards")
+        self.core = case.ds.hermesm.select_region("core_noguards")
+        self.sol = case.ds.hermesm.select_region("sol_noguards")
         
         self.c = ["navy", "deeppink", "teal", "darkorange"]
         
@@ -106,7 +106,7 @@ class Monitor():
             """ 
             Difference in temp on OMP between x indices a and b
             """
-            omp = self.case.select_region("outer_midplane_a").sel(t=slice(None,None))
+            omp = self.case.ds.hermesm.select_region("outer_midplane_a").sel(t=slice(None,None))
 
             a = 2
             b = 15
@@ -122,7 +122,7 @@ class Monitor():
             """ 
             Difference in dens on OMP between x indices a and b
             """
-            omp = self.case.select_region("outer_midplane_a").sel(t=slice(None,None))
+            omp = self.case.ds.hermesm.select_region("outer_midplane_a").sel(t=slice(None,None))
 
             a = 2
             b = 15
@@ -329,12 +329,12 @@ class Monitor2D():
             
         elif self.mode == "omp_history":
             norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
-            self.case.select_region("outer_midplane_a")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
+            self.case.ds.hermesm.select_region("outer_midplane_a")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
             ax.set_title(f"OMP {name}")
             
         elif self.mode == "target_history":
             norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
-            self.case.select_region("outer_lower_target")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
+            self.case.ds.hermesm.select_region("outer_lower_target")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
             ax.set_title(f"Target {name}")
             
             
