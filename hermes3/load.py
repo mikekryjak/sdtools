@@ -146,14 +146,14 @@ class Case:
         self.derive_vars()
         self.guard_replaced = False
         
-        # if self.is_2d is True:
-        #     self.extract_2d_tokamak_geometry()
+        if self.is_2d is True:
+            self.extract_2d_tokamak_geometry()
         
-        #     print(f"CHECK: Total domain volume is {self.ds.dv.values.sum():.3E} [m3]")
-        # else:
-        #     self.extract_1d_tokamak_geometry()
-        #     # self.clean_guards()
-        #     self.guard_replace()
+            print(f"CHECK: Total domain volume is {self.ds.dv.values.sum():.3E} [m3]")
+        else:
+            self.extract_1d_tokamak_geometry()
+            # self.clean_guards()
+            self.guard_replace()
 
     
 
