@@ -146,14 +146,14 @@ class Case:
         self.derive_vars()
         self.guard_replaced = False
         
-        if self.is_2d is True:
-            self.extract_2d_tokamak_geometry()
+        # if self.is_2d is True:
+        #     self.extract_2d_tokamak_geometry()
         
-            print(f"CHECK: Total domain volume is {self.ds.dv.values.sum():.3E} [m3]")
-        else:
-            self.extract_1d_tokamak_geometry()
-            # self.clean_guards()
-            self.guard_replace()
+        #     print(f"CHECK: Total domain volume is {self.ds.dv.values.sum():.3E} [m3]")
+        # else:
+        #     self.extract_1d_tokamak_geometry()
+        #     # self.clean_guards()
+        #     self.guard_replace()
 
     
 
@@ -231,15 +231,15 @@ class Case:
                 "long_name": "Ion temperature (d+)",
                 })
 
-    # def clean_guards(self):
+    def clean_guards(self):
         
-    #     to_clean = ["Dd_Dpar", "Ed+_iz","Ed+_rec", "Ed_Dpar", "Edd+_cx",
-    #                 "Fd+_iz", "Fd+_rec", "Fd_Dpar", "Fdd+_cx", "Rd+_ex",
-    #                 "Rd+_rec", "Sd+_iz", "Sd+_rec", "Sd+_src", "Sd_Dpar",
-    #                 "Sd_src"]
+        to_clean = ["Dd_Dpar", "Ed+_iz","Ed+_rec", "Ed_Dpar", "Edd+_cx",
+                    "Fd+_iz", "Fd+_rec", "Fd_Dpar", "Fdd+_cx", "Rd+_ex",
+                    "Rd+_rec", "Sd+_iz", "Sd+_rec", "Sd+_src", "Sd_Dpar",
+                    "Sd_src"]
         
-    #     for param in to_clean:
-    #         self.ds[param]
+        for param in to_clean:
+            self.ds[param]
         
         
     def guard_replace(self):
@@ -889,16 +889,22 @@ class Case:
         
         
         if m["keep_xboundaries"] == 0:
+            m["nxg"] = m["nx"] - m["MXG"] * 2  # Take guards into account
             m["MXG"] = 0
+        else:
+            m["nxg"] = m["nx"]
             
         if m["keep_yboundaries"] == 0:
+            m["nyg"] = m["ny"]    # Already doesn't include guard cells
             m["MYG"] = 0
+        else:
+            m["nyg"] = m["ny"] + m["MYG"] * num_targets   # ny taking guards into account
+            
             
           
-        # nyg = ny with guard cells if they exist, otherwise without guard cells
-        # nxg = nx without guard cells
+        # nyg, nxg: cell counts which are always with guard cells if they exist, or not if they don't
               
-        m["nxg"] = m["nx"] - 4 
+        
         m["nyg"] = m["ny"] + m["MYG"] * num_targets   # ny taking guards into account
             
         m["j1_1"] = m["jyseps1_1"]
