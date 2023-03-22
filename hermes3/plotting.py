@@ -496,7 +496,7 @@ def diagnose_cvode(self, lims = (0,0), scale = "log"):
                 axes[i,j].set_xlim(lims)
                 
     
-def plot_selection(case, selection, dpi = 100):
+def plot_selection(ds, selection, dpi = 100):
     """ 
     Plot selected points on a R,Z grid
     X,Y grid doesn't work - need to fix it
@@ -505,8 +505,22 @@ def plot_selection(case, selection, dpi = 100):
     Now I changed it to plot a ds's points over the base dataset, and need to regenerate
     the points somehow. Perhaps need to use something like meshgrid or something
     """
-    self = case
-    meta = self.ds.metadata
+
+    m = ds.metadata
+    
+    # x_idx = np.array([np.array(range(m["nx"]))] * int(m["ny"] + ["MYG"] * 4)).transpose()
+    # y_idx = np.array([np.array(range(m["ny"] + ["MYG"]*4))] * int(m["nx"]))
+    # yflat = y_idx.flatten()
+    # xflat = x_idx.flatten()
+    # rflat = ds.coords["R"].values.flatten()
+    # zflat = ds.coords["Z"].values.flatten()
+
+    # j1_1 = meta["jyseps1_1"]
+    # j1_2 = meta["jyseps1_2"]
+    # j2_1 = meta["jyseps2_1"]
+    # j2_2 = meta["jyseps2_2"]
+    # ixseps2 = meta["ixseps2"]
+    # ixseps1 = meta["ixseps1"]
 
     # Region boundaries
     # ny = meta["ny"]     # Total ny cells (incl guard cells)
@@ -526,49 +540,57 @@ def plot_selection(case, selection, dpi = 100):
     zselect = selection["Z"].values.flatten()
 
     # Plot
-    fig, axes = plt.subplots(1,3, figsize=(12,5), dpi = dpi, gridspec_kw={'width_ratios': [2.5, 1, 2]})
+    fig, axes = plt.subplots(1,2, figsize=(8,5), dpi = dpi, gridspec_kw={'width_ratios': [2, 1]})
     fig.subplots_adjust(wspace=0.3)
 
-    plot_xy_grid(case, axes[0])
+    plot_xy_grid(ds, axes[0])
     # axes[0].scatter(yselect, xselect, s = 4, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 0.5)
 
-    plot_rz_grid(case, axes[1])
+    plot_rz_grid(ds, axes[1])
     axes[1].scatter(rselect, zselect, s = 20, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 1, zorder = 100)
 
-    plot_rz_grid(case, axes[2], ylim=(-1,-0.25))
-    axes[2].scatter(rselect, zselect, s = 20, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 1, zorder = 100)
     
     
-def plot_xy_grid(case, ax):
-    self = case
+def plot_xy_grid(ds, ax):
+
+    m = ds.metadata
+    yflat = ds["y_idx"].data.flatten()
+    xflat = ds["x_idx"].data.flatten()
+        
     ax.set_title("X, Y index space")
-    ax.scatter(self.yflat, self.xflat, s = 1, c = "grey")
-    ax.plot([self.yflat[self.j1_1g]]*np.ones_like(self.xflat), self.xflat, label = "j1_1g",   color = self.colors[0])
-    ax.plot([self.yflat[self.j1_2g]]*np.ones_like(self.xflat), self.xflat, label = "j1_2g", color = self.colors[1])
-    ax.plot([self.yflat[self.j2_1g]]*np.ones_like(self.xflat), self.xflat, label = "j2_1g",   color = self.colors[2])
-    ax.plot([self.yflat[self.j2_2g]]*np.ones_like(self.xflat), self.xflat, label = "j2_2g", color = self.colors[3])
-    ax.plot(self.yflat, [self.yflat[self.ixseps1]]*np.ones_like(self.yflat), label = "ixseps1", color = self.colors[4])
-    if self.ds.metadata["topology"] != "single-null":
-        ax.plot(self.yflat, [self.yflat[self.ixseps2]]*np.ones_like(self.yflat), label = "ixseps1", color = self.colors[5], ls=":")
+    ax.scatter(yflat, xflat, s = 1, c = "grey")
+    ax.plot([yflat[m["j1_1g"]]]*np.ones_like(xflat), xflat, label = "j1_1g",   color = m["colors"][0])
+    ax.plot([yflat[m["j1_2g"]]]*np.ones_like(xflat), xflat, label = "j1_2g", color = m["colors"][1])
+    ax.plot([yflat[m["j2_1g"]]]*np.ones_like(xflat), xflat, label = "j2_1g",   color = m["colors"][2])
+    ax.plot([yflat[m["j2_2g"]]]*np.ones_like(xflat), xflat, label = "j2_2g", color = m["colors"][3])
+    ax.plot(yflat, [yflat[m["ixseps1"]]]*np.ones_like(yflat), label = "ixseps1", color = m["colors"][4])
+    if m["topology"] != "single-null":
+        ax.plot(yflat, [yflat[m["ixseps2"]]]*np.ones_like(yflat), label = "ixseps1", color = m["colors"][5], ls=":")
     ax.legend(loc = "upper center", bbox_to_anchor = (0.5,-0.1), ncol = 3)
     ax.set_xlabel("Y index (incl. guards)")
     ax.set_ylabel("X index (excl. guards)")
 
 
-def plot_rz_grid(case, ax, xlim = (None,None), ylim = (None,None)):
-    self = case
+def plot_rz_grid(ds, ax, xlim = (None,None), ylim = (None,None)):
+    
+    m = ds.metadata
+    
+    rflat = ds.coords["R"].values.flatten()
+    zflat = ds.coords["Z"].values.flatten()
+    
     ax.set_title("R, Z space")
-    ax.scatter(self.rflat, self.zflat, s = 0.1, c = "black")
+    ax.scatter(rflat, zflat, s = 0.1, c = "black")
     ax.set_axisbelow(True)
     ax.grid()
-    ax.plot(self.Rxy[:,self.j1_1g], self.Zxy[:,self.j1_1g], label = "j1_1g",     color = self.colors[0], alpha = 0.7)
-    ax.plot(self.Rxy[:,self.j1_2g], self.Zxy[:,self.j1_2g], label = "j1_2g", color = self.colors[1], alpha = 0.7)
-    ax.plot(self.Rxy[:,self.j2_1g], self.Zxy[:,self.j2_1g], label = "j2_1g",     color = self.colors[2], alpha = 0.7)
-    ax.plot(self.Rxy[:,self.j2_2g], self.Zxy[:,self.j2_2g], label = "j2_2g", color = self.colors[3], alpha = 0.7)
-    ax.plot(self.Rxy[self.ixseps1,:], self.Zxy[self.ixseps1,:], label = "ixseps1", color = self.colors[4], alpha = 0.7, lw = 2)
+    ax.plot(ds["R"][:,m["j1_1g"]], ds["Z"][:,m["j1_1g"]], label = "j1_1g",     color = m["colors"][0], alpha = 0.7)
+    ax.plot(ds["R"][:,m["j1_2g"]], ds["Z"][:,m["j1_2g"]], label = "j1_2g", color = m["colors"][1], alpha = 0.7)
+    ax.plot(ds["R"][:,m["j2_1g"]], ds["Z"][:,m["j2_1g"]], label = "j2_1g",     color = m["colors"][2], alpha = 0.7)
+    ax.plot(ds["R"][:,m["j2_2g"]], ds["Z"][:,m["j2_2g"]], label = "j2_2g", color = m["colors"][3], alpha = 0.7)
+    ax.plot(ds["R"][m["ixseps1"],:], ds["Z"][m["ixseps1"],:], label = "ixseps1", color = m["colors"][4], alpha = 0.7, lw = 2)
     
-    if self.ds.metadata["topology"] != "single-null":
-        ax.plot(self.Rxy[self.ixseps2,:], self.Zxy[self.ixseps2,:], label = "ixseps2", color = self.colors[5], alpha = 0.7, lw = 2, ls=":")
+    ax.set_aspect("equal")
+    if ds.metadata["topology"] != "single-null":
+        ax.plot(ds["R"][m["ixseps2"],:], ds["Z"][m["ixseps2"],:], label = "ixseps2", color = m["colors"][5], alpha = 0.7, lw = 2, ls=":")
 
     if xlim != (None,None):
         ax.set_xlim(xlim)
