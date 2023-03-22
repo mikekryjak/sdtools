@@ -189,6 +189,7 @@ class Case:
             
         ds.metadata["species"] = [x.split("P")[1] for x in self.ds.data_vars if x.startswith("P") and len(x) < 4]
         ds.metadata["charged_species"] = [x for x in ds.metadata["species"] if "e" in x or "+" in x]
+        ds.metadata["ion_species"] = [x for x in ds.metadata["species"] if "+" in x]
         ds.metadata["neutral_species"] = list(set(ds.metadata["species"]).difference(set(ds.metadata["charged_species"])))
         
         
