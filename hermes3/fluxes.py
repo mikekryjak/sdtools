@@ -24,6 +24,36 @@ Particle content: 2.169621801152505e+18
 Particle throughput time: 0.05228062823230518 s
 ------------
 """
+
+
+def calculate_particle_balance(ds):
+    
+    m = ds.metadata
+    
+    core = ds.hermesm.select_region("core_edge")
+    sol = ds.hermesm.select_region("sol_edge")
+    domain = ds.hermesm.select_region("all_noguards").squeeze()
+    domain_volume = domain["dv"].values.sum()
+    
+    heavy_species = m["ion_species"] + m["neutral_species"]
+    
+    pf_total = dict()
+    
+    # Radial fluxes
+    pf_total["core"] = np.sum([core[f"pf_perp_tot_L_{x}"].sum("theta").values for x in heavy_species])
+    pf_total["sol"] = np.sum([core[f"pf_perp_tot_L_{x}"].sum("theta").values for x in heavy_species])
+    
+    # Target fluxes
+    for target_name in m["targets"]:
+        pf_total[target_name] = np.sum([core[f"pf_perp_tot_L_{x}"].sum("theta").values for x in m["ion_species"]])
+        
+    # Atomic reaction fluxes
+    pf_total["iz"] = (domain["Sd+_iz"] * domain["dv"]).sum(["x", "theta"]).values 
+    pf_total["rec"] = (domain["Sd+_rec"] * domain["dv"]).sum(["x", "theta"]).values 
+    
+    
+    
+
 def calculate_target_fluxes(ds):
     # ds = ds.copy() # This avoids accidentally messing up rest of dataset
 
@@ -39,6 +69,8 @@ def calculate_radial_fluxes(ds):
     
     
     for name in ds.metadata["charged_species"]:
+        
+        # Perpendicular heat fluxes
         L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"N{name}"] * ds[f"anomalous_Chi_{name}"], constants("q_e") * ds[f"T{name}"])
         ds[f"hf_perp_diff_L_{name}"] = L 
         ds[f"hf_perp_diff_R_{name}"] = R
@@ -50,12 +82,7 @@ def calculate_radial_fluxes(ds):
         ds[f"hf_perp_tot_L_{name}"] = ds[f"hf_perp_conv_L_{name}"] + ds[f"hf_perp_diff_L_{name}"]
         ds[f"hf_perp_tot_R_{name}"] = ds[f"hf_perp_conv_R_{name}"] + ds[f"hf_perp_diff_R_{name}"]
 
-        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"anomalous_D_{name}"] * ds[f"N{name}"] / ds[f"N{name}"], ds[f"N{name}"])
-        ds[f"pf_perp_diff_L_{name}"] = L 
-        ds[f"pf_perp_diff_R_{name}"] = R
-        
         # Add metadata
-        
         for side in ["L", "R"]:
             
             # Heat fluxes
@@ -70,8 +97,16 @@ def calculate_radial_fluxes(ds):
                 da.attrs["long_name"] = f"Perpendicular {kind_long} heat flux on {side_long} ({name})"
                 da.attrs["source"] = "xHermes"
                 da.attrs["conversion"] = ""
-                
-            # Particle fluxes
+                         
+            
+    for name in ds.metadata["charged_species"]:   
+         
+        # Perpendicular particle fluxes
+        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"anomalous_D_{name}"] * ds[f"N{name}"] / ds[f"N{name}"], ds[f"N{name}"])
+        ds[f"pf_perp_diff_L_{name}"] = L 
+        ds[f"pf_perp_diff_R_{name}"] = R
+        
+        for side in ["L", "R"]:
             for kind in ["diff"]:
                 da = ds[f"pf_perp_{kind}_{side}_{name}"]
                 da.attrs["units"] = "Wm-3"
@@ -128,6 +163,8 @@ def sheath_boundary_simple(bd, species, target,
         target_indices["outer_lower"] = dict(y = -1, y2 = -2, yg = None)
         target_indices["inner_upper"] = dict(y = m["ny_inner"], y2 = m["ny_inner"]-1, yg = None)
         target_indices["outer_upper"] = dict(y = m["ny_inner"]+1, y2 = m["ny_inner"]+2, yg = None)
+    else:
+        raise Exception("Not implemented for when guard cells are present")
     
     idx = target_indices[target]
     y = idx["y"]
