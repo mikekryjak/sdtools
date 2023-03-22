@@ -122,7 +122,7 @@ def _select_region(ds, name):
         slices["inner_sol_edge"] = (slice(-1 - MXG, -MXG), slice(MYG, ny_inner + MYG))
         slices["sol_edge"] = (
             slice(-1 - MXG, -MXG),
-            np.r_[slice(j1_1g + 1, j2_1g + 1), slice(ny_inner + MYG * 3, nyg - MYG)],
+            np.r_[slice(0, j2_1g + 1), slice(ny_inner + MYG * 3, nyg - MYG)],
         )
 
     else:
@@ -133,7 +133,7 @@ def _select_region(ds, name):
         slices["inner_sol_edge"] = (slice(-1, None), slice(MYG, ny_inner + MYG))
         slices["sol_edge"] = (
             slice(-1 - MXG, -MXG),
-            np.r_[slice(j1_1g + 1, j2_1g + 1), slice(ny_inner + MYG * 3, nyg - MYG)],
+            np.r_[slice(0, j2_1g + 1), slice(ny_inner + MYG * 3, nyg - MYG)],
         )
 
     slices["inner_lower_target"] = (slice(None, None), slice(MYG, MYG + 1))
