@@ -907,11 +907,11 @@ class Case:
         m["nyg"] = m["ny"] + m["MYG"] * num_targets   # ny with guards
             
         # Array of radial (x) indices and of poloidal (y) indices for each cell
-        ds.coords["x_idx"] = (["x", "theta"], np.array([np.array(range(m["nx"]))] * int(m["nyg"])).transpose())
-        ds.coords["y_idx"] = (["x", "theta"], np.array([np.array(range(m["nyg"]))] * int(m["nx"])))
+        ds["x_idx"] = (["x", "theta"], np.array([np.array(range(m["nx"]))] * int(m["nyg"])).transpose())
+        ds["y_idx"] = (["x", "theta"], np.array([np.array(range(m["nyg"]))] * int(m["nx"])))
         
         # Cell areas in flux space
-        ds.coords["dv"] = (["x", "theta"], ds["dx"] * ds["dy"] * ds["dz"] * ds["J"])
+        ds["dv"] = (["x", "theta"], ds["dx"].data * ds["dy"].data * ds["dz"].data * ds["J"].data)
         ds["dv"].attrs.update({
             "conversion" : 1,
             "units" : "m3",
@@ -926,7 +926,7 @@ class Case:
         # self.hthe = self.J * self.ds["Bpxy"]    # poloidal arc length per radian
         # self.dl = self.dy * self.hthe    # poloidal arc length
         
-        ds["dr"] = (["x", "theta"], ds.dx / (ds.R * ds.Bpxy))
+        ds["dr"] = (["x", "theta"], ds.dx.data / (ds.R.data * ds.Bpxy.data))
         ds["dr"].attrs.update({
             "conversion" : 1,
             "units" : "m",
@@ -934,7 +934,7 @@ class Case:
             "long_name" : "Length of cell in the radial direction",
             "source" : "xHermes"})
         
-        ds["hthe"] = (["x", "theta"], ds.J * ds["Bpxy"])    # h_theta
+        ds["hthe"] = (["x", "theta"], ds["J"].data * ds["Bpxy"].data)    # h_theta
         ds["hthe"].attrs.update({
             "conversion" : 1,
             "units" : "m/radian",
@@ -942,7 +942,7 @@ class Case:
             "long_name" : "h_theta: poloidal arc length per radian",
             "source" : "xHermes"})
         
-        ds["dl"] = (["x", "theta"], ds.dy * ds["hthe"])    # poloidal arc length
+        ds["dl"] = (["x", "theta"], ds["dy"].data * ds["hthe"].data)    # poloidal arc length
         ds["dl"].attrs.update({
             "conversion" : 1,
             "units" : "m",
