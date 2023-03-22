@@ -54,7 +54,7 @@ def calculate_radial_fluxes(ds):
         ds[f"pf_perp_diff_L_{name}"] = L 
         ds[f"pf_perp_diff_R_{name}"] = R
         
-        # Add units and labels
+        # Add metadata
         
         for side in ["L", "R"]:
             
