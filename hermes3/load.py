@@ -894,6 +894,13 @@ class Case:
         if m["keep_yboundaries"] == 0:
             m["MYG"] = 0
             
+          
+        # nyg = ny with guard cells if they exist, otherwise without guard cells
+        # nxg = nx without guard cells
+              
+        m["nxg"] = m["nx"] - 4 
+        m["nyg"] = m["ny"] + m["MYG"] * num_targets   # ny taking guards into account
+            
         m["j1_1"] = m["jyseps1_1"]
         m["j1_2"] = m["jyseps1_2"]
         m["j2_1"] = m["jyseps2_1"]
@@ -904,11 +911,15 @@ class Case:
         m["j2_1g"] = m["j2_1"] + m["MYG"]
         m["j2_2g"] = m["j2_2"] + m["MYG"] * (num_targets - 1)
         
-        m["nyg"] = m["ny"] + m["MYG"] * num_targets   # ny with guards
+        
+        
+        
+        # print(m["nxg"])
+        # print(m["nx"])
             
         # Array of radial (x) indices and of poloidal (y) indices for each cell
-        ds["x_idx"] = (["x", "theta"], np.array([np.array(range(m["nx"]))] * int(m["nyg"])).transpose())
-        ds["y_idx"] = (["x", "theta"], np.array([np.array(range(m["nyg"]))] * int(m["nx"])))
+        ds["x_idx"] = (["x", "theta"], np.array([np.array(range(m["nxg"]))] * int(m["nyg"])).transpose())
+        ds["y_idx"] = (["x", "theta"], np.array([np.array(range(m["nyg"]))] * int(m["nxg"])))
         
         # Cell areas in flux space
         ds["dv"] = (["x", "theta"], ds["dx"].data * ds["dy"].data * ds["dz"].data * ds["J"].data)
