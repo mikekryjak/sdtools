@@ -619,3 +619,16 @@ def create_norm(logscale, norm, vmin, vmax):
         norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
 
     return norm
+
+
+def camera_view(ax, loc, tokamak = "ST40"):
+    
+    lims = dict()
+    if loc == "lower_outer":
+        lims = dict(x = (0.45, 0.65), y = (-0.9, -0.7))
+    else:
+        raise Exception(f"Location {loc} not implemented yet")
+        
+    ax.set_xlim(lims["x"])
+    ax.set_ylim(lims["y"])
+    
