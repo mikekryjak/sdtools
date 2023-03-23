@@ -116,7 +116,7 @@ def calculate_radial_fluxes(ds):
     for name in ds.metadata["neutral_species"]:
         P = xr.apply_ufunc(zero_to_nan, ds[f"P{name}"], dask = "allowed")
         
-        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"Dnn{name}"]*ds["Nn"], np.log(P))
+        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"Dnn{name}"]*ds[f"N{name}"], np.log(P))
         ds[f"pf_perp_diff_L_{name}"] = L 
         ds[f"pf_perp_diff_R_{name}"] = R
         
@@ -188,8 +188,20 @@ def sheath_boundary_simple(bd, species, target,
     
     reproduce_error = False  # There was a mistake in the original version of this code.
     
-    gamma_e = bd.options["sheath_boundary_simple"]["gamma_e"]
-    gamma_i = bd.options["sheath_boundary_simple"]["gamma_i"]
+    if "sheath_boundary_simple" in bd.options.keys():
+        if "gamma_e" in bd.options["sheath_boundary_simple"].keys():
+            gamma_e = bd.options["sheath_boundary_simple"]["gamma_e"]
+        else:
+            gamma_e = 3.5   # Hermes-3 default
+        
+        if "gamma_e" in bd.options["sheath_boundary_simple"].keys():
+            gamma_i = bd.options["sheath_boundary_simple"]["gamma_i"]
+        else:
+            gamma_i = 3.5   # Hermes-3 default
+    else:
+        gamma_i = 3.5
+        gamma_e = 3.5
+        
     Zi = bd.options[f"{species}"]["charge"]
     AA = bd.options[f"{species}"]["AA"]
 
