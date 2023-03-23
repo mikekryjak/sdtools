@@ -67,6 +67,11 @@ def calculate_target_fluxes(ds):
 
 def calculate_radial_fluxes(ds):   
     
+    def zero_to_nan(x):
+        return np.where(x==0, np.nan, x)
+
+
+
     
     for name in ds.metadata["charged_species"]:
         
@@ -88,7 +93,7 @@ def calculate_radial_fluxes(ds):
             # Heat fluxes
             for kind in ["diff", "conv", "tot"]:
                 da = ds[f"hf_perp_{kind}_{side}_{name}"]
-                da.attrs["units"] = "Wm-3"
+                da.attrs["units"] = "W"
                 da.attrs["standard_name"] = f"Perpendicular heat flux ({name})"
                 
                 kind_long = {"diff":"diffusive", "conv":"convective", "tot":"total"}[kind]
@@ -98,26 +103,36 @@ def calculate_radial_fluxes(ds):
                 da.attrs["source"] = "xHermes"
                 da.attrs["conversion"] = ""
                          
-            
+    
+    # Perpendicular particle fluxes
+       
     for name in ds.metadata["charged_species"]:   
-         
-        # Perpendicular particle fluxes
-        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"anomalous_D_{name}"] * ds[f"N{name}"] / ds[f"N{name}"], ds[f"N{name}"])
+        # L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"anomalous_D_{name}"] * ds[f"N{name}"] / ds[f"N{name}"], ds[f"N{name}"])
+        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"anomalous_D_{name}"], ds[f"N{name}"])
         ds[f"pf_perp_diff_L_{name}"] = L 
         ds[f"pf_perp_diff_R_{name}"] = R
         
-        for side in ["L", "R"]:
-            for kind in ["diff"]:
-                da = ds[f"pf_perp_{kind}_{side}_{name}"]
-                da.attrs["units"] = "Wm-3"
-                da.attrs["standard_name"] = f"Perpendicular particle flux ({name})"
-            
-                side_long = {"L":"LHS cell face", "R":"RHS cell face"}[side]
-                
-                da.attrs["long_name"] = f"Perpendicular diffusive particle flux on {side_long} ({name})"
-                da.attrs["source"] = "xHermes"
-                da.attrs["conversion"] = ""
         
+    for name in ds.metadata["neutral_species"]:
+        P = xr.apply_ufunc(zero_to_nan, ds[f"P{name}"], dask = "allowed")
+        
+        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"Dnn{name}"]*ds["Nn"], np.log(P))
+        ds[f"pf_perp_diff_L_{name}"] = L 
+        ds[f"pf_perp_diff_R_{name}"] = R
+        
+        
+    for name in ds.metadata["neutral_species"] + ds.metadata["charged_species"]:
+        for side in ["L", "R"]:
+                for kind in ["diff"]:
+                    da = ds[f"pf_perp_{kind}_{side}_{name}"]
+                    da.attrs["units"] = "s-1"
+                    da.attrs["standard_name"] = f"Perpendicular particle flux ({name})"
+                
+                    side_long = {"L":"LHS cell face", "R":"RHS cell face"}[side]
+                    
+                    da.attrs["long_name"] = f"Perpendicular diffusive particle flux on {side_long} ({name})"
+                    da.attrs["source"] = "xHermes"
+                    da.attrs["conversion"] = ""
                 
                 
         
