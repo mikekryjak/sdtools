@@ -13,10 +13,22 @@ class HermesDataArrayAccessor(BoutDataArrayAccessor):
         super().__init__(da)
 
     def select_region(self, name):
-        return _select_region(self.data, name)
+        selection = _select_region(self.data, name)
+        return self.data.isel(x=selection[0], theta=selection[1])
     
     def select_custom_core_ring(self, i):
         return _select_custom_core_ring(self.data, i)
+    
+    def clean_guards(self):
+        """
+        Set guard cell values to np.nan
+        Implemented only for x guards for now
+        """
+        xguards = _select_region(self.data, "xguards")
+        ds = self.data.copy()
+        ds[{"x":xguards[0], "theta":xguards[1]}] = np.nan
+        return ds
+        
 
 
 @register_dataset_accessor("hermesm")
@@ -27,8 +39,11 @@ class HermesDatasetAccessor(BoutDatasetAccessor):
     def __init__(self, ds):
         super().__init__(ds)
 
+    
+
     def select_region(self, name):
-        return _select_region(self.data, name)
+        selection = _select_region(self.data, name)
+        return self.data.isel(x=selection[0], theta=selection[1])
     
     def select_custom_core_ring(self, i):
         return _select_custom_core_ring(self.data, i)
@@ -124,6 +139,14 @@ def _select_region(ds, name):
             slice(-1 - MXG, -MXG),
             np.r_[slice(0, j2_1g + 1), slice(ny_inner + MYG * 3, nyg - MYG)],
         )
+        slices["xguards"] = (
+            np.r_[
+                slice(0,MXG),
+                slice(nx - MXG, nx)
+            ],
+            
+            slice(None,None),
+        )
 
     else:
         slices["outer_sol_edge"] = (
@@ -135,6 +158,8 @@ def _select_region(ds, name):
             slice(-1 - MXG, -MXG),
             np.r_[slice(0, j2_1g + 1), slice(ny_inner + MYG * 3, nyg - MYG)],
         )
+        slices["xguards"] = (0,0)
+        
 
     slices["inner_lower_target"] = (slice(None, None), slice(MYG, MYG + 1))
     slices["inner_upper_target"] = (
@@ -201,10 +226,12 @@ def _select_region(ds, name):
         int((j2_1g - j1_1g) / 2) + j1_1g + 1,
     )
     slices["inner_midplane_b"] = (slice(None, None), int((j2_1g - j1_1g) / 2) + j1_1g)
+    
+    
 
     selection = slices[name]
 
-    return ds.isel(x=selection[0], theta=selection[1])
+    return selection
 
 
 def _select_custom_core_ring(self, i):
