@@ -199,6 +199,7 @@ def sheath_boundary_simple(bd, species, target,
         else:
             gamma_i = 3.5   # Hermes-3 default
     else:
+        print("Warning: sheath_boundary_simple not found in settings. Assuming it is enabled")
         gamma_i = 3.5
         gamma_e = 3.5
         
