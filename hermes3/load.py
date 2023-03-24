@@ -878,6 +878,10 @@ class Case:
         ds = self.ds
         m = self.ds.metadata
         
+        # Add theta index to coords so that both X and theta can be accessed index-wise
+        # It is surprisingly hard to extract the index of coordinates in Xarray...
+        ds.coords["theta_idx"] = (["theta"], range(len(ds.coords["theta"])))
+        
         if "single-null" in ds.metadata["topology"]:
             ds.metadata["targets"] = ["inner_lower", "outer_lower"]
         elif "double-null" in ds.metadata["topology"]:
