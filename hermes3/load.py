@@ -63,8 +63,6 @@ class Load:
         else:
             yboundaries = False
             
-        print(xboundaries)
-        print(yboundaries)
         datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
 
@@ -148,8 +146,8 @@ class Case:
         
         if self.is_2d is True:
             self.extract_2d_tokamak_geometry()
-        
-            print(f"CHECK: Total domain volume is {self.ds.dv.values.sum():.3E} [m3]")
+            vol = self.ds.dv.values.sum()
+            print(f"CHECK: Total domain volume is {vol:.3E} [m3]")
         else:
             self.extract_1d_tokamak_geometry()
             # self.clean_guards()
@@ -528,6 +526,13 @@ class Case:
         },
         
         "Sd_src": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "neutral density source (d)",
+            "long_name": "Neutral density source (d)"
+        },
+        
+        "Sd+_src": {
             "conversion": m["Nnorm"] * m["Omega_ci"],
             "units": "Wm-3",
             "standard_name": "neutral density source (d)",
