@@ -62,6 +62,15 @@ def calculate_target_fluxes(ds):
         ds[f"hf_{target}_e"], ds[f"hf_{target}_d+"],  ds[f"pf_{target}_d+"] = sheath_boundary_simple(ds, "d+", 
                                                                                 target = target)
         
+        species = "d"
+        ds[f"pf_{target}_d"] = -ds[f"pf_{target}_d+"] * ds.options["d+"]["recycle_multiplier"]   # TODO generalise and check
+        ds[f"pf_{target}_d"].attrs.update(
+                {
+                "standard_name": f"target particle flux on {target} ({species})",
+                "long_name": f"target particle flux on {target} ({species})",
+                })
+        
+        
     return ds
         
 
@@ -282,7 +291,7 @@ def sheath_boundary_simple(bd, species, target,
     hf_e.attrs["long_name"] = f"target heat flux ({species})"
     pf_i.attrs["long_name"] = f"target particle flux ({species})"
 
-    return hf_e, hf_i,  pf_i, 
+    return hf_e.squeeze(), hf_i.squeeze(),  pf_i.squeeze(), 
     
 def sheath_boundary_simple_original(bd, gamma_e, gamma_i, Ne, Te, Ti, Zi=1, AA=1, sheath_ion_polytropic=1.0,
                            include_convective=True):
