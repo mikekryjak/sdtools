@@ -496,7 +496,7 @@ def diagnose_cvode(self, lims = (0,0), scale = "log"):
                 axes[i,j].set_xlim(lims)
                 
     
-def plot_selection(ds, selection, dpi = 100):
+def plot_selection(ds, selection, dpi = 100, rz_only = False, show_selection = True):
     """ 
     Plot selected points on a R,Z grid
     X,Y grid doesn't work - need to fix it
@@ -507,47 +507,30 @@ def plot_selection(ds, selection, dpi = 100):
     """
 
     m = ds.metadata
-    
-    # x_idx = np.array([np.array(range(m["nx"]))] * int(m["ny"] + ["MYG"] * 4)).transpose()
-    # y_idx = np.array([np.array(range(m["ny"] + ["MYG"]*4))] * int(m["nx"]))
-    # yflat = y_idx.flatten()
-    # xflat = x_idx.flatten()
-    # rflat = ds.coords["R"].values.flatten()
-    # zflat = ds.coords["Z"].values.flatten()
 
-    # j1_1 = meta["jyseps1_1"]
-    # j1_2 = meta["jyseps1_2"]
-    # j2_1 = meta["jyseps2_1"]
-    # j2_2 = meta["jyseps2_2"]
-    # ixseps2 = meta["ixseps2"]
-    # ixseps1 = meta["ixseps1"]
-
-    # Region boundaries
-    # ny = meta["ny"]     # Total ny cells (incl guard cells)
-    # nx = meta["nx"]     # Total nx cells (excl guard cells)
-    # Rxy = self.ds["R"].values    # R coordinate array
-    # Zxy = self.ds["Z"].values    # Z coordinate array
-    # MYG = meta["MYG"]
-
-    # Array of radial (x) indices and of poloidal (y) indices in the style of Rxy, Zxy
-    # x_idx = np.array([np.array(range(nx))] * int(ny + MYG * 4)).transpose()
-    # y_idx = np.array([np.array(range(ny + MYG*4))] * int(nx))
 
     # Slice the X, Y and R, Z arrays and vectorise them for plotting
-    # xselect = selection["x"].values.flatten()
-    # yselect = np.where(ds["theta"].values == selection["theta"].values)    # Theta converted to index space
+    xselect = selection["x"].values.flatten()
+    yselect = selection["theta_idx"].values.flatten()
     rselect = selection["R"].values.flatten()
     zselect = selection["Z"].values.flatten()
 
     # Plot
-    fig, axes = plt.subplots(1,2, figsize=(8,5), dpi = dpi, gridspec_kw={'width_ratios': [2, 1]})
-    fig.subplots_adjust(wspace=0.3)
+    fig, axes = plt.subplots(
+        1,2, figsize=(8,5), dpi = dpi, gridspec_kw={'width_ratios': [2, 1]},
+        )
+    fig.subplots_adjust(
+        wspace=0.15,
+        top = 0.75, bottom = 0.05, left = 0.10, right = 0.95)
 
     plot_xy_grid(ds, axes[0])
-    # axes[0].scatter(yselect, xselect, s = 4, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 0.5)
+    if show_selection is True:
+        for x in xselect:
+            axes[0].scatter(yselect, [x]*len(yselect), s = 4, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 0.5)
 
     plot_rz_grid(ds, axes[1])
-    axes[1].scatter(rselect, zselect, s = 20, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 1, zorder = 100)
+    if show_selection is True:
+        axes[1].scatter(rselect, zselect, s = 20, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 1, zorder = 100)
 
     
     
@@ -566,7 +549,9 @@ def plot_xy_grid(ds, ax):
     ax.plot(yflat, [yflat[m["ixseps1"]]]*np.ones_like(yflat), label = "ixseps1", color = m["colors"][4])
     if m["topology"] != "single-null":
         ax.plot(yflat, [yflat[m["ixseps2"]]]*np.ones_like(yflat), label = "ixseps1", color = m["colors"][5], ls=":")
-    ax.legend(loc = "upper center", bbox_to_anchor = (0.5,-0.1), ncol = 3)
+        
+    ax.plot(yflat[m["ny_inner"]]*np.ones_like(xflat), xflat, label = "ny_inner", color = m["colors"][5])
+    ax.legend(loc = "upper center", bbox_to_anchor = (0.5, 1.3), ncol = 3)
     ax.set_xlabel("Y index (incl. guards)")
     ax.set_ylabel("X index (excl. guards)")
 
@@ -579,7 +564,7 @@ def plot_rz_grid(ds, ax, xlim = (None,None), ylim = (None,None)):
     zflat = ds.coords["Z"].values.flatten()
     
     ax.set_title("R, Z space")
-    ax.scatter(rflat, zflat, s = 0.1, c = "black")
+    ax.scatter(rflat, zflat, s = 0.1, c = "black", alpha = 0.5)
     ax.set_axisbelow(True)
     ax.grid()
     ax.plot(ds["R"][:,m["j1_1g"]], ds["Z"][:,m["j1_1g"]], label = "j1_1g",     color = m["colors"][0], alpha = 0.7)
@@ -587,10 +572,24 @@ def plot_rz_grid(ds, ax, xlim = (None,None), ylim = (None,None)):
     ax.plot(ds["R"][:,m["j2_1g"]], ds["Z"][:,m["j2_1g"]], label = "j2_1g",     color = m["colors"][2], alpha = 0.7)
     ax.plot(ds["R"][:,m["j2_2g"]], ds["Z"][:,m["j2_2g"]], label = "j2_2g", color = m["colors"][3], alpha = 0.7)
     ax.plot(ds["R"][m["ixseps1"],:], ds["Z"][m["ixseps1"],:], label = "ixseps1", color = m["colors"][4], alpha = 0.7, lw = 2)
+
+    ax.plot(
+        ds["R"][m["ixseps1"], slice(None,m["ny_inner"])], 
+        ds["Z"][m["ixseps1"], slice(None,m["ny_inner"])], 
+        
+        label = "ixseps1", color = m["colors"][4], alpha = 0.7, lw = 2)
+    
+    ax.plot(
+        ds["R"][m["ixseps1"], slice(m["ny_inner"]+m["MYG"], m["nyg"])], 
+        ds["Z"][m["ixseps1"], slice(m["ny_inner"]+m["MYG"], m["nyg"])], 
+        
+        color = m["colors"][4], alpha = 0.7, lw = 2)
+    
+    ax.plot(ds["R"][:,m["ny_inner"]], ds["Z"][:,m["ny_inner"]], label = "ny_inner", color = m["colors"][5], alpha = 0.7)
     
     ax.set_aspect("equal")
-    if ds.metadata["topology"] != "single-null":
-        ax.plot(ds["R"][m["ixseps2"],:], ds["Z"][m["ixseps2"],:], label = "ixseps2", color = m["colors"][5], alpha = 0.7, lw = 2, ls=":")
+    # if ds.metadata["topology"] != "single-null":
+    #     ax.plot(ds["R"][m["ixseps2"],:], ds["Z"][m["ixseps2"],:], label = "ixseps2", color = m["colors"][5], alpha = 0.7, lw = 2, ls=":")
 
     if xlim != (None,None):
         ax.set_xlim(xlim)
@@ -625,7 +624,7 @@ def camera_view(ax, loc, tokamak = "ST40"):
     
     lims = dict()
     if loc == "lower_outer":
-        lims = dict(x = (0.45, 0.65), y = (-0.9, -0.7))
+        lims = dict(x = (0.45, 0.65), y = (-0.87, -0.7))
     else:
         raise Exception(f"Location {loc} not implemented yet")
         
