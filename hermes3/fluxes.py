@@ -1,6 +1,7 @@
 import xarray as xr
 import numpy as np
 from hermes3.utils import *
+import pandas as pd
 
 """
 Power in through X inner Pin = 162418.93698190025 W  [55238.53718922597 ion 107180.39979267426 electron]
@@ -26,31 +27,77 @@ Particle throughput time: 0.05228062823230518 s
 """
 
 
-def calculate_particle_balance(ds):
+def calculate_particle_balance(ds, display = True):
     
     m = ds.metadata
     
     core = ds.hermesm.select_region("core_edge")
     sol = ds.hermesm.select_region("sol_edge")
+    pfr = ds.hermesm.select_region("pfr_edge")
     domain = ds.hermesm.select_region("all_noguards").squeeze()
     domain_volume = domain["dv"].values.sum()
-    
+
     heavy_species = m["ion_species"] + m["neutral_species"]
-    
-    pf_total = dict()
-    
-    # Radial fluxes
-    pf_total["core"] = np.sum([core[f"pf_perp_tot_L_{x}"].sum("theta").values for x in heavy_species])
-    pf_total["sol"] = np.sum([core[f"pf_perp_tot_L_{x}"].sum("theta").values for x in heavy_species])
-    
-    # Target fluxes
-    for target_name in m["targets"]:
-        pf_total[target_name] = np.sum([core[f"pf_perp_tot_L_{x}"].sum("theta").values for x in m["ion_species"]])
+
+    df = pd.DataFrame()
+
+    # for species in heavy_species:
+    #     df.loc["core", species] = 
+
+    pf = dict()
+    hf = dict()
+
+    # pf_total = dict()
+
+    for species in heavy_species:
+        pf[species] = dict()
+        # Radial fluxes
+        pf[species]["source"] = (domain[f"S{species}_src"] * domain["dv"]).sum(["x", "theta"]).squeeze()
+        pf[species]["core"] = core[f"pf_perp_diff_L_{species}"].sum("theta").squeeze()
+        pf[species]["sol"] = sol[f"pf_perp_diff_R_{species}"].sum("theta").squeeze()
+        pf[species]["pfr"] = pfr[f"pf_perp_diff_L_{species}"].sum("theta").squeeze()
+
+        # Target fluxes
+        for target_name in m["targets"]:
+            pf[species][target_name] = ds[f"pf_{target_name}_{species}"].sum("x").squeeze()
+
+    for species in m["ion_species"]:      
+        # Atomic reaction fluxes
+        pf[species]["iz"] = (domain["Sd+_iz"] * domain["dv"]).sum(["x", "theta"]).squeeze()
+        pf[species]["rec"] = (domain["Sd+_rec"] * domain["dv"]).sum(["x", "theta"]).squeeze()
         
-    # Atomic reaction fluxes
-    pf_total["iz"] = (domain["Sd+_iz"] * domain["dv"]).sum(["x", "theta"]).values 
-    pf_total["rec"] = (domain["Sd+_rec"] * domain["dv"]).sum(["x", "theta"]).values 
+        neutral = species.replace("+","")
+        
+        # Neutral partner has opposite fluxes
+        pf[neutral]["iz"] = pf[species]["iz"] * -1
+        pf[neutral]["rec"] = pf[species]["rec"] * -1
+        
+    pf_last = dict()
+
+    df = pd.DataFrame()
+    for species in pf.keys():
+        pf_last[species] = dict()
+        for loc in pf[species].keys():
+            pf_last[species][loc] = pf[species][loc].values[-1]
+            
+    df = pd.DataFrame.from_dict(pf_last)
+    df["total"] = df["d+"] + df["d"] 
+
+    totals = pd.DataFrame(columns = df.columns)
+    totals.loc["total"] = df.sum(axis=0)
+    totals.loc["total(frac)"] = totals.loc["total"] / df.loc[["source", "core"], :].sum(axis=0)
+
+    target_total = np.sum([pf_last["d+"][x] for x in m["targets"]])
+
+    frec = (pf_last["d+"]["core"] + pf_last["d+"]["source"]) / target_total
+
+    if display is True:
+        print(f"Recycling fraction: {frec:.2%}")
+        print(f"Domain volume: {domain['dv'].sum():.3e}")
+        display(pd.concat([df,totals]))
     
+    else:
+        return pf
     
     
 
@@ -185,7 +232,7 @@ def sheath_boundary_simple(bd, species, target,
     if m["keep_yboundaries"] == 0:
         target_indices["inner_lower"] = dict(y = 0, y2 = 1, yg = None)
         target_indices["outer_lower"] = dict(y = -1, y2 = -2, yg = None)
-        target_indices["inner_upper"] = dict(y = m["ny_inner"], y2 = m["ny_inner"]-1, yg = None)
+        target_indices["inner_upper"] = dict(y = m["ny_inner"]-1, y2 = m["ny_inner"]-2, yg = None)
         target_indices["outer_upper"] = dict(y = m["ny_inner"]+1, y2 = m["ny_inner"]+2, yg = None)
     else:
         raise Exception("Not implemented for when guard cells are present")
