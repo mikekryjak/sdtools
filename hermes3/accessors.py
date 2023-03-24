@@ -15,10 +15,10 @@ class HermesDataArrayAccessor(BoutDataArrayAccessor):
     def select_region(self, name):
         selection = _select_region(self.data, name)
         return self.data.isel(x=selection[0], theta=selection[1])
-    
+
     def select_custom_core_ring(self, i):
         return _select_custom_core_ring(self.data, i)
-    
+
     def clean_guards(self):
         """
         Set guard cell values to np.nan
@@ -26,9 +26,8 @@ class HermesDataArrayAccessor(BoutDataArrayAccessor):
         """
         xguards = _select_region(self.data, "xguards")
         ds = self.data.copy()
-        ds[{"x":xguards[0], "theta":xguards[1]}] = np.nan
+        ds[{"x": xguards[0], "theta": xguards[1]}] = np.nan
         return ds
-        
 
 
 @register_dataset_accessor("hermesm")
@@ -36,15 +35,14 @@ class HermesDatasetAccessor(BoutDatasetAccessor):
     """
     Methods on Hermes-3 datasets
     """
+
     def __init__(self, ds):
         super().__init__(ds)
-
-    
 
     def select_region(self, name):
         selection = _select_region(self.data, name)
         return self.data.isel(x=selection[0], theta=selection[1])
-    
+
     def select_custom_core_ring(self, i):
         return _select_custom_core_ring(self.data, i)
 
@@ -140,12 +138,8 @@ def _select_region(ds, name):
             np.r_[slice(0, j2_1g + 1), slice(ny_inner + MYG * 3, nyg - MYG)],
         )
         slices["xguards"] = (
-            np.r_[
-                slice(0,MXG),
-                slice(nx - MXG, nx)
-            ],
-            
-            slice(None,None),
+            np.r_[slice(0, MXG), slice(nx - MXG, nx)],
+            slice(None, None),
         )
 
     else:
@@ -158,8 +152,7 @@ def _select_region(ds, name):
             slice(-1 - MXG, -MXG),
             np.r_[slice(0, j2_1g + 1), slice(ny_inner + MYG * 3, nyg - MYG)],
         )
-        slices["xguards"] = (0,0)
-        
+        slices["xguards"] = (0, 0)
 
     slices["inner_lower_target"] = (slice(None, None), slice(MYG, MYG + 1))
     slices["inner_upper_target"] = (
@@ -193,7 +186,29 @@ def _select_region(ds, name):
         slice(0, ixseps1),
         np.r_[slice(None, j1_1g + 1), slice(j2_2g + 1, nyg)],
     )
+    slices["inner_lower_pfr_edge"] = (
+        slice(MXG, MXG + 1),
+        slice(None, j1_1g + 1),
+    )
+    slices["outer_lower_pfr_edge"] = (
+        slice(MXG, MXG + 1),
+        slice(j2_2g + 1, nyg),
+    )
+
     slices["upper_pfr"] = (slice(0, ixseps1), slice(j2_1g + 1, j1_2g + 1))
+
+    if "single-null" not in m["topology"]:
+        slices["inner_upper_pfr_edge"] = (
+            slice(MXG, MXG + 1),
+            slice(j2_1g + 1, ny_inner),
+        )
+        
+        slices["outer_upper_pfr_edge"] = (
+            slice(MXG, MXG + 1),
+            slice(ny_inner + MYG * 2, j1_2g + 1),
+        )
+
+
     slices["pfr"] = (
         slice(0, ixseps1),
         np.r_[
@@ -226,8 +241,6 @@ def _select_region(ds, name):
         int((j2_1g - j1_1g) / 2) + j1_1g + 1,
     )
     slices["inner_midplane_b"] = (slice(None, None), int((j2_1g - j1_1g) / 2) + j1_1g)
-    
-    
 
     selection = slices[name]
 
