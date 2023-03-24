@@ -96,9 +96,38 @@ class Mesh():
                 raise Exception("i is too large!")
             
             return (slice(0+self.MXG+i,1+self.MXG+i), np.r_[slice(self.j1_2g + 1, self.j2_2g + 1), slice(self.j1_1g + 1, self.j2_1g + 1)])
+        
+        def symmetric_puff(width, center_half_gap):
+            """
+            Select region meant for setting outboard neutral puff.
+            The region is a poloidal row of cells in the radial coordinate
+            of the final radial fluid cell.
+            There are two puffs symmetric about the midplane axis.
             
+            Parameters:
+                - width: size of each puff region in no. of cells
+                - center_half_gap: half of the gap between the puffs in no. of cells
+            """
+            
+            # width = 3
+            # center_half_gap = 1
+
+            midplane_a = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g
+            midplane_b = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1
+
+            selection =  (-self.MXG-1, 
+                        np.r_[
+                            slice(midplane_b+center_half_gap, midplane_b+center_half_gap+width),
+                            slice(midplane_b-center_half_gap-width, midplane_b-center_half_gap),
+                            ])
+            return selection
+            # return self.ds.isel(x = selection[0], theta = selection[1])
+                
 
         slices = dict()
+        
+        slices["custom_core_ring"] = custom_core_ring
+        slices["symmetric_puff"] = symmetric_puff
 
         slices["all"] = (slice(None,None), slice(None,None))
         slices["all_noguards"] = (slice(self.MXG,-self.MXG), np.r_[slice(self.MYG,self.ny_inner-self.MYG*2), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
@@ -120,7 +149,7 @@ class Mesh():
         
         slices["sol_edge"] = (slice(-1 - self.MXG,- self.MXG), np.r_[slice(self.j1_1g + 1, self.j2_1g + 1), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
         
-        slices["custom_core_ring"] = custom_core_ring
+        
         
         slices["inner_lower_target"] = (slice(None,None), slice(self.MYG, self.MYG + 1))
         slices["inner_upper_target"] = (slice(None,None), slice(self.ny_inner+self.MYG -1, self.ny_inner+self.MYG))
@@ -291,7 +320,7 @@ class Field():
         self.data = np.zeros_like(self.mesh.Rxy)    # Copy any array from existing grid as a template
 
 
-    def plot(self):
+    def plot(self, dpi = 80):
 
         plt.style.use("default")
 
@@ -304,7 +333,7 @@ class Field():
         colors = [cmap(x) for x in fieldnorm.flatten()]
         norm = mpl.colors.Normalize(vmin=0, vmax=np.max(field))
 
-        fig, axes = plt.subplots(1,3, figsize = (10,6), gridspec_kw={'width_ratios': [5,2.0, 0.3]}, dpi = 110)
+        fig, axes = plt.subplots(1,3, figsize = (10,6), gridspec_kw={'width_ratios': [5,2.0, 0.3]}, dpi = dpi)
         fig.subplots_adjust(wspace=0.3)
         fig.suptitle(self.name)
 
