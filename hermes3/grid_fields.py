@@ -28,7 +28,7 @@ def impose_fields(source, destination):
     Hardcoded for now
     """
     
-    close_mesh()
+    # close_mesh()
     
     mesh = make_new_mesh(source, destination)
     
@@ -42,16 +42,17 @@ def impose_fields(source, destination):
     Pe_src_core = 0.76e6 * 2/3   # W converted to pressure
 
     # Anomalous diffusion coefficients
-    D_core = 1
-    chi_core = 3
-    D_sol = 0.1
-    chi_sol = 0.45
+    D_core = 0.1
+    chi_core = 0.45
+    D_sol = 1
+    chi_sol = 3
     
     # Make regions
     puff_region = mesh.slices("symmetric_puff")(width=3, center_half_gap=1)
     core_edge_region = mesh.slices("core_edge")
     core_region = mesh.slices("core")
     sol_region = mesh.slices("sol")
+    pfr_region = mesh.slices("pfr")
     fields = dict()
     
     fields["Nd_src"] = Field("Nd_src", mesh)
@@ -72,23 +73,31 @@ def impose_fields(source, destination):
     fields["D_d+"] = Field("D_d+", mesh)
     fields["D_d+"].set_value(core_region, D_core, make_per_volume = False)
     fields["D_d+"].set_value(sol_region, D_sol, make_per_volume = False)
+    fields["D_d+"].set_value(pfr_region, D_sol, make_per_volume = False)
 
     fields["D_e"] = Field("D_e", mesh)
     fields["D_e"].set_value(core_region, D_core, make_per_volume = False)
     fields["D_e"].set_value(sol_region, D_sol, make_per_volume = False)
+    fields["D_e"].set_value(pfr_region, D_sol, make_per_volume = False)
 
     fields["chi_d+"] = Field("chi_d+", mesh)
     fields["chi_d+"].set_value(core_region, chi_core, make_per_volume = False)
     fields["chi_d+"].set_value(sol_region, chi_sol, make_per_volume = False)
+    fields["chi_d+"].set_value(pfr_region, chi_sol, make_per_volume = False)
 
     fields["chi_e"] = Field("chi_e", mesh)
     fields["chi_e"].set_value(core_region, chi_core, make_per_volume = False)
     fields["chi_e"].set_value(sol_region, chi_sol, make_per_volume = False)
+    fields["chi_e"].set_value(pfr_region, chi_sol, make_per_volume = False)
     
-    for field in fields.values():
-        mesh.write_field(field)
+    for field_name in fields.keys():
         
-        field.plot()
+        if "D_" in field_name or "chi_" in field_name:
+            mesh.write_field(fields[field_name], dtype = "Field2D")
+        else:
+            mesh.write_field(fields[field_name], dtype = "Field3D")
+        
+        fields[field_name].plot()
         
     close_mesh(mesh)
         
