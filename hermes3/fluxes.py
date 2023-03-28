@@ -26,8 +26,101 @@ Particle throughput time: 0.05228062823230518 s
 ------------
 """
 
+def calculate_heat_balance(ds, show = True, merge_targets = True):
+    print("---------------------------------------")
+    print("HEAT BALANCE")
+    print("---------------------------------------")
 
-def calculate_particle_balance(ds, display = True):
+    m = ds.metadata
+    core = ds.hermesm.select_region("core_edge")
+    sol = ds.hermesm.select_region("sol_edge")
+    pfr = ds.hermesm.select_region("pfr_edge")
+    domain = ds.hermesm.select_region("all_noguards")
+    domain_volume = domain["dv"].values.sum()
+
+    df = pd.DataFrame()
+    hf = dict()
+
+    # Radial and edge fluxes
+    for species in m["species"]:
+        hf[species] = dict()
+        hf[species]["source"] = (domain[f"P{species}_src"] * domain["dv"]).sum(["x", "theta"]).squeeze() * 3/2
+        hf[species]["core"] = core[f"hf_perp_tot_L_{species}"].sum("theta").squeeze()
+        hf[species]["sol"] = sol[f"hf_perp_tot_R_{species}"].sum("theta").squeeze()
+        hf[species]["pfr"] = pfr[f"hf_perp_tot_L_{species}"].sum("theta").squeeze()
+
+
+    # Target fluxes
+    for species in m["charged_species"]:
+        
+        if merge_targets is True:
+            hf[species]["targets"] = 0
+            for target_name in m["targets"]:
+                hf[species]["targets"] += ds[f"hf_{target_name}_{species}"].sum("x").squeeze()
+        else:
+            for target_name in m["targets"]:
+                hf[species][target_name] = ds[f"hf_{target_name}_{species}"].sum("x").squeeze()
+            
+
+    # Atomic reaction fluxes
+    hf["e"]["rad_ex"] = (domain["Rd+_ex"] * domain["dv"]).sum(["x", "theta"]).squeeze()
+    hf["e"]["rad_rec"] = (domain["Rd+_rec"] * domain["dv"]).sum(["x", "theta"]).squeeze()
+
+    # Assemble final timesteps
+    hf_last = dict()
+
+    df = pd.DataFrame()
+    for species in hf.keys():
+        hf_last[species] = dict()
+        for loc in hf[species].keys():
+            hf_last[species][loc] = hf[species][loc].values[-1] * 1e-6    # EVERYTHING IN MW
+            
+    df = pd.DataFrame.from_dict(hf_last)
+    df["total"] = df.sum(axis=1)
+
+    totals = pd.DataFrame(columns = df.columns)
+    totals.loc["total"] = df.sum(axis=0)
+
+
+    totals.loc["total(frac)"] = totals.loc["total"] / df.loc[["source", "core"], :].sum(axis=0)
+
+    if merge_targets is True:
+        target_total = hf_last["d+"]["targets"] + hf_last["e"]["targets"]
+    else:
+        target_total = np.sum([hf_last["d+"][x]+hf_last["e"][x] for x in m["targets"]])
+
+    imbalance = df["total"].sum()
+    imbalance_frac = imbalance / (df["total"]["source"] + df["total"]["core"])
+    
+    if show is True:
+        # print(f"Recycling fraction: {frec:.2%}")
+        print(f"Domain volume: {domain['dv'].sum():.3e} [m3]")
+        print(f"Power imbalance: {imbalance*1e6:,.0f} [W]")
+        print(f"Power imbalance as frac of core + source: {imbalance_frac:.2%}")
+        table = pd.concat([df,totals])
+        
+        def styler(s):
+            if abs(s) < 0.01 or pd.isna(s):
+                c =  "color: lightgrey"
+            else:
+                c =  "color: black"
+
+            
+            return c
+            
+        ts = table.style.format("{:.2f}")
+        ts = ts.applymap(styler)
+        display(ts)
+
+
+def calculate_particle_balance(ds, show = True, merge_targets = True):
+    """
+    NOTE: DOES NOT PRECISELY REPLICATE PAPER BUT IS VERY CLOSE. INVESTIGATE
+    """
+    
+    print("---------------------------------------")
+    print("PARTICLE BALANCE")
+    print("---------------------------------------")
     
     m = ds.metadata
     
@@ -58,8 +151,13 @@ def calculate_particle_balance(ds, display = True):
         pf[species]["pfr"] = pfr[f"pf_perp_diff_L_{species}"].sum("theta").squeeze()
 
         # Target fluxes
-        for target_name in m["targets"]:
-            pf[species][target_name] = ds[f"pf_{target_name}_{species}"].sum("x").squeeze()
+        if merge_targets is True:
+            pf[species]["targets"] = 0
+            for target_name in m["targets"]:
+                pf[species]["targets"] += ds[f"pf_{target_name}_{species}"].sum("x").squeeze()
+        else:
+            for target_name in m["targets"]:
+                pf[species][target_name] = ds[f"pf_{target_name}_{species}"].sum("x").squeeze()
 
     for species in m["ion_species"]:      
         # Atomic reaction fluxes
@@ -87,14 +185,30 @@ def calculate_particle_balance(ds, display = True):
     totals.loc["total"] = df.sum(axis=0)
     totals.loc["total(frac)"] = totals.loc["total"] / df.loc[["source", "core"], :].sum(axis=0)
 
-    target_total = np.sum([pf_last["d+"][x] for x in m["targets"]])
+    if merge_targets is True:
+        target_total = pf[species]["targets"].isel(t=-1)
+    else:
+        target_total = np.sum([pf_last["d+"][x] for x in m["targets"]])
 
-    frec = (pf_last["d+"]["core"] + pf_last["d+"]["source"]) / target_total
+    frec = 1 - (pf_last["d+"]["core"] + pf_last["d+"]["source"]) / abs(target_total)
 
-    if display is True:
+    if show is True:
+        table = pd.concat([df,totals])
+        
+        def styler(s):
+            if abs(s) < 0.01 or pd.isna(s):
+                c =  "color: lightgrey"
+            else:
+                c =  "color: black"
+
+            return c
+
         print(f"Recycling fraction: {frec:.2%}")
         print(f"Domain volume: {domain['dv'].sum():.3e}")
-        display(pd.concat([df,totals]))
+        
+        ts = table.style.format("{:.3e}")
+        ts = ts.applymap(styler)
+        display(ts)
     
     else:
         return pf
@@ -128,26 +242,47 @@ def calculate_radial_fluxes(ds):
 
 
 
+    # HEAT FLUXES---------------------------------
     
     for name in ds.metadata["charged_species"]:
         
-        # Perpendicular heat fluxes
+        # Perpendicular heat diffusion (conduction)
         L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"N{name}"] * ds[f"anomalous_Chi_{name}"], constants("q_e") * ds[f"T{name}"])
         ds[f"hf_perp_diff_L_{name}"] = L 
         ds[f"hf_perp_diff_R_{name}"] = R
 
+        # Perpendicular heat convection
         L, R  =  Div_a_Grad_perp_upwind_fast(ds, constants("q_e") * ds[f"T{name}"] * ds[f"anomalous_D_{name}"], ds[f"N{name}"])
         ds[f"hf_perp_conv_L_{name}"] = L 
         ds[f"hf_perp_conv_R_{name}"] = R
 
+        # Total
         ds[f"hf_perp_tot_L_{name}"] = ds[f"hf_perp_conv_L_{name}"] + ds[f"hf_perp_diff_L_{name}"]
-        ds[f"hf_perp_tot_R_{name}"] = ds[f"hf_perp_conv_R_{name}"] + ds[f"hf_perp_diff_R_{name}"]
+        ds[f"hf_perp_tot_R_{name}"] = ds[f"hf_perp_conv_R_{name}"] + ds[f"hf_perp_diff_R_{name}"]      
+        
+    for name in ds.metadata["neutral_species"]:
+        Plim = xr.apply_ufunc(zero_to_nan, ds[f"P{name}"], dask = "allowed")
+        
+        # Perpendicular heat diffusion
+        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"Dnn{name}"]*ds[f"P{name}"], np.log(Plim))
+        ds[f"hf_perp_conv_L_{name}"] = L 
+        ds[f"hf_perp_conv_R_{name}"] = R
+        
+        # Perpendicular heat conduction
+        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"Dnn{name}"]*ds[f"N{name}"], ds[f"T{name}"])
+        ds[f"hf_perp_diff_L_{name}"] = L 
+        ds[f"hf_perp_diff_R_{name}"] = R
+        
+        # Total
+        ds[f"hf_perp_tot_L_{name}"] = ds[f"hf_perp_conv_L_{name}"] + ds[f"hf_perp_diff_L_{name}"]
+        ds[f"hf_perp_tot_R_{name}"] = ds[f"hf_perp_conv_R_{name}"] + ds[f"hf_perp_diff_R_{name}"]   
+        
 
+    for name in ds.metadata["neutral_species"] + ds.metadata["charged_species"]:
         # Add metadata
         for side in ["L", "R"]:
-            
-            # Heat fluxes
             for kind in ["diff", "conv", "tot"]:
+                
                 da = ds[f"hf_perp_{kind}_{side}_{name}"]
                 da.attrs["units"] = "W"
                 da.attrs["standard_name"] = f"Perpendicular heat flux ({name})"
@@ -160,7 +295,7 @@ def calculate_radial_fluxes(ds):
                 da.attrs["conversion"] = ""
                          
     
-    # Perpendicular particle fluxes
+    # PARTICLE FLUXES---------------------------------
        
     for name in ds.metadata["charged_species"]:   
         # L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"anomalous_D_{name}"] * ds[f"N{name}"] / ds[f"N{name}"], ds[f"N{name}"])
@@ -170,11 +305,12 @@ def calculate_radial_fluxes(ds):
         
         
     for name in ds.metadata["neutral_species"]:
-        P = xr.apply_ufunc(zero_to_nan, ds[f"P{name}"], dask = "allowed")
+        Plim = xr.apply_ufunc(zero_to_nan, ds[f"P{name}"], dask = "allowed")
         
-        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"Dnn{name}"]*ds[f"N{name}"], np.log(P))
+        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"Dnn{name}"]*ds[f"N{name}"], np.log(Plim))
         ds[f"pf_perp_diff_L_{name}"] = L 
         ds[f"pf_perp_diff_R_{name}"] = R
+        
         
         
     for name in ds.metadata["neutral_species"] + ds.metadata["charged_species"]:
@@ -184,6 +320,7 @@ def calculate_radial_fluxes(ds):
                     da.attrs["units"] = "s-1"
                     da.attrs["standard_name"] = f"Perpendicular particle flux ({name})"
                 
+                    kind_long = {"diff":"diffusive", "conv":"convective", "tot":"total"}[kind]
                     side_long = {"L":"LHS cell face", "R":"RHS cell face"}[side]
                     
                     da.attrs["long_name"] = f"Perpendicular diffusive particle flux on {side_long} ({name})"

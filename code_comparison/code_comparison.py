@@ -34,6 +34,7 @@ class SOLEDGEdata:
 
     def __init__(self):
         self.regions = dict()
+        self.code = "SOLEDGE2D"
     
     def read_csv(self, path, mode):
         
@@ -114,6 +115,7 @@ class SOLPSdata:
         self.params = defaultdict(dict)
         self.omp = pd.DataFrame()
         self.imp = pd.DataFrame()
+        self.code = "SOLPS"
         
         
     def read_last10s(self, casepath):
@@ -249,6 +251,7 @@ class SOLPSdata:
                 
 class Hermesdata:
     def __init__(self):
+        self.code = "Hermes-3"
         pass
     
     def read_case(self, ds):
@@ -347,9 +350,9 @@ class viewer_2d():
                                                 add_colorbar = False, logscale = logscale, 
                                                 separatrix = True, cmap = cmap, 
                                                 vmin = vmin, vmax = vmax, 
-                                                antialias = True,
+                                                antialias = False,
 
-                                                linewidth = 0.1,
+                                                linewidth = 0,
                                                 )
                 axes[i].set_title(f"Hermes-3\{casename}")
                 
@@ -750,8 +753,8 @@ def lineplot(
 
     for region in regions:
 
-        fig, axes = plt.subplots(1,len(params), dpi = dpi, figsize = (4*len(params),3.5))
-        fig.subplots_adjust(hspace = 0.1, wspace = 0.25)
+        fig, axes = plt.subplots(1,len(params), dpi = dpi, figsize = (4.2*len(params),5), sharex = True)
+        fig.subplots_adjust(hspace = 0, wspace = 0.25, bottom = 0.25, left = 0.1, right = 0.9)
 
         
         for i, param in enumerate(params):
@@ -768,12 +771,26 @@ def lineplot(
             if param in set_yscales[region].keys():
                 axes[i].set_yscale(set_yscales[region][param])
                 
-            if param in set_ylims[region].keys():
-                if set_ylims[region][param] != (None, None):
-                    axes[i].set_ylim(set_ylims[region][param])
+            
 
-        
-            # axes[i].set_xlim(cases["Hermes-3"].regions[region].index[0] - 0.01, cases["Hermes-3"].regions[region].index[-1] * 1.3)
+            ymin = []; ymax = []
+            for name in cases.keys():
+                if cases[name].code != "SOLEDGE2D":
+                    ymin.append(cases[name].regions[region][param].min())
+                    ymax.append(cases[name].regions[region][param].max())
+                    print(ymin)
+            ymin = min(ymin)*0.8
+            ymax = max(ymax)*1.2
+            
+            axes[i].set_ylim(ymin,ymax)
+            # print(ymin)
+            # print(ymax)
+            
+            # if param in set_ylims[region].keys():
+            #     if set_ylims[region][param] != (None, None):
+            #         axes[i].set_ylim(set_ylims[region][param])
+                
+             
             if xlims != (None, None):
                 axes[i].set_xlim(xlims)
             
@@ -781,6 +798,13 @@ def lineplot(
             axes[i].set_xlabel("Distance from separatrix [m]")
             # axes[i].legend()
             axes[i].set_title(f"{region}: {param}")
+            
+            if region == "omp":
+                axes[i].set_xlim(-0.07, 0.04)
+            elif region == "imp":
+                axes[i].set_xlim(-0.1, 0.1)
+            elif region == "outer_lower":
+                axes[i].set_xlim(-0.1, 0.1)
             
         legend_items = []
         for j, name in enumerate(cases.keys()):
@@ -790,4 +814,4 @@ def lineplot(
                 ls = "-"
             legend_items.append(mpl.lines.Line2D([0], [0], color=colors[j], lw=2, ls = ls))
             
-        fig.legend(legend_items, cases.keys(), loc = "upper left", bbox_to_anchor=(0.9,0.9))
+        fig.legend(legend_items, cases.keys(), ncol = len(cases), loc = "upper center", bbox_to_anchor=(0.5,0.15))

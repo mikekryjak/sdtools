@@ -135,7 +135,7 @@ def _select_region(ds, name):
         slices["inner_sol_edge"] = (slice(-1 - MXG, -MXG), slice(MYG, ny_inner + MYG))
         slices["sol_edge"] = (
             slice(-1 - MXG, -MXG),
-            np.r_[slice(0, j2_1g + 1), slice(ny_inner + MYG * 3, nyg - MYG)],
+            np.r_[slice(0, ny_inner), slice(ny_inner + MYG * 3, nyg - MYG)],
         )
         slices["xguards"] = (
             np.r_[slice(0, MXG), slice(nx - MXG, nx)],
