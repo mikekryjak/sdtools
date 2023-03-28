@@ -17,6 +17,7 @@ import xbout
 from hermes3.utils import *
 from hermes3.named_selections import *
 from hermes3.plotting import *
+from hermes3.fluxes import *
 
 
 class Load:
@@ -152,6 +153,9 @@ class Case:
             self.extract_1d_tokamak_geometry()
             # self.clean_guards()
             self.guard_replace()
+            
+        self.ds = calculate_radial_fluxes(ds)
+        self.ds = calculate_target_fluxes(ds)
 
     
 
@@ -523,6 +527,13 @@ class Case:
             "units": "Wm-3",
             "standard_name": "neutral energy source (d)",
             "long_name": "Neutral energy source (d)"
+        },
+        
+        "Pe_src": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "electron energy source (d)",
+            "long_name": "Electron energy source (d)"
         },
         
         "Sd_src": {
