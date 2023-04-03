@@ -273,19 +273,31 @@ def calculate_radial_fluxes(ds):
         Pd_fix[{"x":-1}] = Pd_fix[{"x":-3}]
         Pd_fix[{"x":-2}] = Pd_fix[{"x":-3}]
         
+        Nd_fix = ds[f"N{name}"].copy()
+        Nd_fix[{"x":1}] = Nd_fix[{"x":2}]
+        Nd_fix[{"x":0}] = Nd_fix[{"x":2}]
+        Nd_fix[{"x":-1}] = Nd_fix[{"x":-3}]
+        Nd_fix[{"x":-2}] = Nd_fix[{"x":-3}]
+        
+        Td_fix = ds[f"T{name}"].copy()
+        Td_fix[{"x":1}] = Td_fix[{"x":2}]
+        Td_fix[{"x":0}] = Td_fix[{"x":2}]
+        Td_fix[{"x":-1}] = Td_fix[{"x":-3}]
+        Td_fix[{"x":-2}] = Td_fix[{"x":-3}]
+        
         Plim = Pd_fix.where(Pd_fix>0, 1e-8 * Pnorm)
         
         # Plim = ds[f"P{name}"].where(ds[f"P{name}"]>0, 1e-8 * Pnorm) # Limit P to 1e-8 in normalised units
         
         # Perpendicular heat diffusion
         L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*ds[f"P{name}"], np.log(Plim))
-        ds[f"hf_perp_conv_L_{name}"] = L * 3/2
-        ds[f"hf_perp_conv_R_{name}"] = R * 3/2
+        ds[f"hf_perp_conv_L_{name}"] = L #* 3/2
+        ds[f"hf_perp_conv_R_{name}"] = R #* 3/2
         
         # Perpendicular heat conduction
-        L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*ds[f"N{name}"], constants("q_e")*ds[f"T{name}"])
-        ds[f"hf_perp_diff_L_{name}"] = L * 3/2 
-        ds[f"hf_perp_diff_R_{name}"] = R * 3/2
+        L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*Nd_fix, constants("q_e")*Td_fix)
+        ds[f"hf_perp_diff_L_{name}"] = L #* 3/2 
+        ds[f"hf_perp_diff_R_{name}"] = R #* 3/2
         
         # Total
         ds[f"hf_perp_tot_L_{name}"] = ds[f"hf_perp_conv_L_{name}"] + ds[f"hf_perp_diff_L_{name}"]
