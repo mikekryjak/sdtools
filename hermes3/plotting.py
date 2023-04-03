@@ -625,9 +625,64 @@ def camera_view(ax, loc, tokamak = "ST40"):
     lims = dict()
     if loc == "lower_outer":
         lims = dict(x = (0.45, 0.65), y = (-0.87, -0.7))
+    elif loc == "lower2":
+        lims = dict(x = (0.15, 0.66), y = (-0.87, -0.5))
+        
     else:
         raise Exception(f"Location {loc} not implemented yet")
         
     ax.set_xlim(lims["x"])
     ax.set_ylim(lims["y"])
+    
+    
+def plot_perp_heat_fluxes(ds):
+    """
+    Takes dataset of a single time slice
+    """
+    
+    if ds.coords["t"].shape != ():
+        raise Exception("Must supply single time slice")
+    
+    fig, ax = plt.subplots(figsize=(4,3), dpi = 150)
+    d = ds.isel(x=slice(2,-2)).sum("theta")
+    d["hf_perp_tot_L_d+"].plot(ax = ax, marker = "o", label = "d+", ms = 2, c = "teal")
+    d["hf_perp_tot_L_e"].plot(ax = ax, marker = "o", label = "e", ms = 2, c = "darkorange")
+    d["hf_perp_tot_L_d"].plot(ax = ax, marker = "o", label = "d", ms = 2, c = "firebrick")
+    ax.set_title("Perpendicular heat fluxes")
+    ax.set_yscale("log")
+    ax.grid()
+    ax.legend()
+    
+def plot_perp_particle_fluxes(ds):
+    """
+    Takes dataset of a single time slice
+    """
+    
+    if ds.coords["t"].shape != ():
+        raise Exception("Must supply single time slice")
+    
+    fig, ax = plt.subplots(figsize=(4,3), dpi = 150)
+    d = ds.isel(x=slice(2,-2)).sum("theta")
+    d["pf_perp_diff_L_d+"].plot(ax = ax, marker = "o", label = "d+", ms = 2, c = "teal")
+    d["pf_perp_diff_L_d"].plot(ax = ax, marker = "o", label = "d", ms = 2, c = "firebrick")
+    ax.set_title("Perpendicular particle fluxes")
+    ax.grid()
+    ax.legend()
+    
+def plot_omp(da_list, legend = True, title = True, dpi = 150, **kwargs):
+    """
+    Wrap standard Xarray plotter for the outboard midplane
+    """
+    fig, ax = plt.subplots(figsize=(4,3), dpi = dpi)
+    for da in da_list:
+        da.hermesm.select_region("outer_midplane_a").plot(ax = ax, label = da.standard_name, **kwargs)
+        
+    ax.grid()
+    if legend is True and len(da_list)>1:
+        ax.legend()
+    
+    if len(da_list) == 1 and title is True:
+        ax.set_title(da_list[0].standard_name)
+    else:
+        ax.set_title("")
     

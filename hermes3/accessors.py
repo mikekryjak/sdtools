@@ -1,5 +1,6 @@
 from xarray import register_dataset_accessor, register_dataarray_accessor
 from xbout import BoutDatasetAccessor, BoutDataArrayAccessor
+from hermes3.plotting import *
 import numpy as np
 
 
@@ -29,6 +30,9 @@ class HermesDataArrayAccessor(BoutDataArrayAccessor):
         ds[{"x": xguards[0], "theta": xguards[1]}] = np.nan
         return ds
 
+    def plot_omp(self):
+        plot_omp([self.data], legend = False, title = False)
+        
 
 @register_dataset_accessor("hermesm")
 class HermesDatasetAccessor(BoutDatasetAccessor):
