@@ -217,9 +217,9 @@ def calculate_particle_balance(ds, show = True, merge_targets = True):
 
 def calculate_target_fluxes(ds):
     # ds = ds.copy() # This avoids accidentally messing up rest of dataset
-
+    m = ds.metadata
     
-    for target in ds.metadata["targets"]:
+    for target in m["targets"]:
         ds[f"hf_{target}_e"], ds[f"hf_{target}_d+"],  ds[f"pf_{target}_d+"] = sheath_boundary_simple(ds, "d+", 
                                                                                 target = target)
         
@@ -240,11 +240,13 @@ def calculate_radial_fluxes(ds):
     def zero_to_nan(x):
         return np.where(x==0, np.nan, x)
 
+    m = ds.metadata
+    Pnorm = m["Nnorm"] * m["Tnorm"] * constants("q_e")
 
 
     # HEAT FLUXES---------------------------------
     
-    for name in ds.metadata["charged_species"]:
+    for name in m["charged_species"]:
         
         # Perpendicular heat diffusion (conduction)
         L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"N{name}"] * ds[f"anomalous_Chi_{name}"], constants("q_e") * ds[f"T{name}"])
@@ -260,25 +262,37 @@ def calculate_radial_fluxes(ds):
         ds[f"hf_perp_tot_L_{name}"] = ds[f"hf_perp_conv_L_{name}"] + ds[f"hf_perp_diff_L_{name}"]
         ds[f"hf_perp_tot_R_{name}"] = ds[f"hf_perp_conv_R_{name}"] + ds[f"hf_perp_diff_R_{name}"]      
         
-    for name in ds.metadata["neutral_species"]:
-        Plim = xr.apply_ufunc(zero_to_nan, ds[f"P{name}"], dask = "allowed")
+    for name in m["neutral_species"]:
+        
+        # Need to force guard cells to be the same as the final radial cells
+        # Otherwise there are issues with extreme negative transport in the 
+        # final radial cells, especially PFR and near targets.
+        Pd_fix = ds[f"P{name}"].copy()
+        Pd_fix[{"x":1}] = Pd_fix[{"x":2}]
+        Pd_fix[{"x":0}] = Pd_fix[{"x":2}]
+        Pd_fix[{"x":-1}] = Pd_fix[{"x":-3}]
+        Pd_fix[{"x":-2}] = Pd_fix[{"x":-3}]
+        
+        Plim = Pd_fix.where(Pd_fix>0, 1e-8 * Pnorm)
+        
+        # Plim = ds[f"P{name}"].where(ds[f"P{name}"]>0, 1e-8 * Pnorm) # Limit P to 1e-8 in normalised units
         
         # Perpendicular heat diffusion
-        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"Dnn{name}"]*ds[f"P{name}"], np.log(Plim))
-        ds[f"hf_perp_conv_L_{name}"] = L 
-        ds[f"hf_perp_conv_R_{name}"] = R
+        L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*ds[f"P{name}"], np.log(Plim))
+        ds[f"hf_perp_conv_L_{name}"] = L * 3/2
+        ds[f"hf_perp_conv_R_{name}"] = R * 3/2
         
         # Perpendicular heat conduction
-        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"Dnn{name}"]*ds[f"N{name}"], ds[f"T{name}"])
-        ds[f"hf_perp_diff_L_{name}"] = L 
-        ds[f"hf_perp_diff_R_{name}"] = R
+        L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*ds[f"N{name}"], constants("q_e")*ds[f"T{name}"])
+        ds[f"hf_perp_diff_L_{name}"] = L * 3/2 
+        ds[f"hf_perp_diff_R_{name}"] = R * 3/2
         
         # Total
         ds[f"hf_perp_tot_L_{name}"] = ds[f"hf_perp_conv_L_{name}"] + ds[f"hf_perp_diff_L_{name}"]
         ds[f"hf_perp_tot_R_{name}"] = ds[f"hf_perp_conv_R_{name}"] + ds[f"hf_perp_diff_R_{name}"]   
         
 
-    for name in ds.metadata["neutral_species"] + ds.metadata["charged_species"]:
+    for name in m["neutral_species"] + m["charged_species"]:
         # Add metadata
         for side in ["L", "R"]:
             for kind in ["diff", "conv", "tot"]:
@@ -297,23 +311,34 @@ def calculate_radial_fluxes(ds):
     
     # PARTICLE FLUXES---------------------------------
        
-    for name in ds.metadata["charged_species"]:   
+    for name in m["charged_species"]:   
         # L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"anomalous_D_{name}"] * ds[f"N{name}"] / ds[f"N{name}"], ds[f"N{name}"])
         L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"anomalous_D_{name}"], ds[f"N{name}"])
         ds[f"pf_perp_diff_L_{name}"] = L 
         ds[f"pf_perp_diff_R_{name}"] = R
         
         
-    for name in ds.metadata["neutral_species"]:
-        Plim = xr.apply_ufunc(zero_to_nan, ds[f"P{name}"], dask = "allowed")
+    for name in m["neutral_species"]:
         
-        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"Dnn{name}"]*ds[f"N{name}"], np.log(Plim))
+        # Need to force guard cells to be the same as the final radial cells
+        # Otherwise there are issues with extreme negative transport in the 
+        # final radial cells, especially PFR and near targets.
+        Pd_fix = ds[f"P{name}"].copy()
+        Pd_fix[{"x":1}] = Pd_fix[{"x":2}]
+        Pd_fix[{"x":0}] = Pd_fix[{"x":2}]
+        Pd_fix[{"x":-1}] = Pd_fix[{"x":-3}]
+        Pd_fix[{"x":-2}] = Pd_fix[{"x":-3}]
+        
+        Plim = Pd_fix.where(Pd_fix>0, 1e-8 * Pnorm)
+        # Plim = ds[f"P{name}"].where(ds[f"P{name}"]>0, 1e-8 * Pnorm) # Limit P to 1e-8 in normalised units
+        
+        L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*ds[f"N{name}"], np.log(Plim))
         ds[f"pf_perp_diff_L_{name}"] = L 
         ds[f"pf_perp_diff_R_{name}"] = R
         
         
         
-    for name in ds.metadata["neutral_species"] + ds.metadata["charged_species"]:
+    for name in m["neutral_species"] + m["charged_species"]:
         for side in ["L", "R"]:
                 for kind in ["diff"]:
                     da = ds[f"pf_perp_{kind}_{side}_{name}"]
@@ -329,7 +354,7 @@ def calculate_radial_fluxes(ds):
                 
                 
         
-    # for name in ds.metadata["neutral_species"]:
+    # for name in m["neutral_species"]:
         
         
     return ds
@@ -621,11 +646,114 @@ def Div_a_Grad_perp_upwind_fast(ds, a, f):
     dy = ds["dy"]
     dz = ds["dz"]
     
-    # shift(x=-1) returns array of x[i+1]s because it moves the array 1 step towards start
-    # So this is equivalent to (f[i+1] - f[i]) * (J[i]*g11[i] - J[i+1]*g11[i+1]) / (dx[i] + dx[i+1])
+    # f = f[i], fp = f[i+1]
+    ap = a.shift(x=-1)
+    fp = f.shift(x=-1)
+    Jp = J.shift(x=-1)
+    g11p = g11.shift(x=-1)
+    dxp = dx.shift(x=-1)
+    
 
-    gradient = (f.shift(x=-1) - f) * (J*g11 + J.shift(x=-1)*g11.shift(x=-1)) / (dx + dx.shift(x=-1))
-    flux = -gradient * 0.5 * (a + a.shift(x=-1))
+    gradient = (fp - f) * (J*g11 + Jp*g11p) / (dx + dxp)
+    
+    # Upwind scheme: if gradient positive, yield a[i+1]. If gradient negative, yield a[i]
+    # xr.where: where true, yield a, else yield something else
+    flux = -gradient * a.where(gradient<0, ap)
+    flux *= dy * dz
+    
+    F_R = flux
+    F_L = flux.shift(x=1)  # the shift of 1 index to get F_L because the left flux at cell X is the same as the right flux at cell X-1.
+    
+    return F_L, F_R
+
+
+
+def Div_a_Grad_perp_fast_broken(ds, a, f):
+    """
+    MK: Tried to reproduce what's in the code.
+    Gives nonsense answers, not sure why.
+    ----------
+    -
+    
+    """
+    result = xr.zeros_like(a)
+    J = ds["J"]
+    g11 = ds["g11"]
+    dx = ds["dx"]
+    dy = ds["dy"]
+    dz = ds["dz"]
+    
+    # f = f[i], fp = f[i+1]
+    ap = a.shift(x=-1)
+    fp = f.shift(x=-1)
+    Jp = J.shift(x=-1)
+    g11p = g11.shift(x=-1)
+    dxp = dx.shift(x=-1)
+    resultp = result.shift(x=-1)
+    
+    # fout = 0.5 * (a + ap) * (J*g11 + Jp*g11p) * (fp - f)/(dx + dxp)
+    fout = (fp - f) * (J*g11 + Jp*g11p) / (dx + dxp) * 0.5 * (a + ap)
+    result -= fout #/ (dx*J) # No need to divide by length since we want flux
+    resultp += fout #/ (dxp*Jp)
+    
+    result *= dy*dz
+    
+    
+    
+    F_R = result
+    F_L = result.shift(x=1)  # the shift of 1 index to get F_L because the left flux at cell X is the same as the right flux at cell X-1.
+    
+    return F_L, F_R
+
+def Div_a_Grad_perp_fast(ds, a, f):
+    """
+    AUTHOR: M KRYJAK 30/03/2023
+    Reproduction of Div_a_Grad_perp from fv_ops.cxx in Hermes-3
+    This is used in neutral parallel transport operators but not in 
+    plasma anomalous diffusion
+    
+    Parameters
+    ----------
+    bd : xarray.Dataset
+        Dataset with the simulation results for geometrical info
+    a : np.array
+        First term in the derivative equation, e.g. chi * N
+    f : np.array
+        Second term in the derivative equation, e.g. q_e * T
+    
+    Returns
+    ----------
+    Tuple of two quantities:
+    (F_L, F_R)
+    These are the flow into the cell from the left (x-1),
+    and the flow out of the cell to the right (x+1). 
+    NOTE: *NOT* the flux; these are already integrated over cell boundaries
+
+    Example
+    ----------
+    -
+    
+    """
+    result = xr.zeros_like(a)
+    J = ds["J"]
+    g11 = ds["g11"]
+    dx = ds["dx"]
+    dy = ds["dy"]
+    dz = ds["dz"]
+    
+    # f = f[i], fp = f[i+1]
+    ap = a.shift(x=-1)
+    fp = f.shift(x=-1)
+    Jp = J.shift(x=-1)
+    g11p = g11.shift(x=-1)
+    dxp = dx.shift(x=-1)
+    resultp = result.shift(x=-1)
+    
+    gradient = (fp - f) * (J*g11 + Jp*g11p) / (dx + dxp)
+    
+    # Upwind scheme: if gradient positive, yield a[i+1]. If gradient negative, yield a[i]
+    # xr.where: where true, yield a, else yield something else
+    flux = -gradient * 0.5 * (a + ap)
     flux *= dy * dz
     
     F_R = flux
