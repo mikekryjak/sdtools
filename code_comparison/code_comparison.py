@@ -280,7 +280,7 @@ class Hermesdata:
         df = pd.concat(x, axis = 1)
 
         # Normalise to separatrix
-        sep_R = df.index[self.ds.metadata["ixseps1"] + self.ds.metadata["MXG"]]
+        sep_R = df.index[self.ds.metadata["ixseps1"]- self.ds.metadata["MXG"]]
         df.index -= sep_R
         
         return df
@@ -346,6 +346,7 @@ class viewer_2d():
             model = cases[casename]
             
             if model["code"] == "hermes":
+                print(casename)
                 model["ds"][param].bout.polygon(ax = axes[i], 
                                                 add_colorbar = False, logscale = logscale, 
                                                 separatrix = True, cmap = cmap, 
@@ -689,6 +690,7 @@ def lineplot(
     colors = ["black", "red", "black", "red", "navy", "limegreen", "firebrick",  "limegreen", "magenta","cyan", "navy"],
     params = ["Td+", "Te", "Td", "Ne", "Nd"],
     regions = ["imp", "omp", "outer_lower"],
+    ylims = (None,None),
     dpi = 120
     ):
     
@@ -744,7 +746,7 @@ def lineplot(
         set_yscales = {
         "omp" : {"Td+": "log", "Te": "log", "Ne": "log", "Nd": "log"},
         "imp" : {"Td+": "log", "Te": "log", "Ne": "log", "Nd": "log"},
-        "outer_lower" : {"Td+": "linear", "Te": "linear", "Ne": "linear", "Nd": "log"},
+        "outer_lower" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ne": "log", "Nd": "log"},
         }
         
         xlims = (None, None)
@@ -764,12 +766,17 @@ def lineplot(
                     if param in data.columns:
                         if "SOLPS" in name:
                             ls = "--"
+                        elif "SOLEDGE" in name:
+                            ls = ":"
                         else:
                             ls = "-"
                         axes[i].plot(data.index, data[param], label = name, c = colors[j], marker = marker, ms = ms, lw = lw, ls = ls)
                     
             if param in set_yscales[region].keys():
                 axes[i].set_yscale(set_yscales[region][param])
+            else:
+                if "T" in param or "N" in param and "outer_lower" not in region:
+                    axes[i].set_yscale("log")
                 
             
 
@@ -778,7 +785,6 @@ def lineplot(
                 if cases[name].code != "SOLEDGE2D":
                     ymin.append(cases[name].regions[region][param].min())
                     ymax.append(cases[name].regions[region][param].max())
-                    print(ymin)
             ymin = min(ymin)*0.8
             ymax = max(ymax)*1.2
             
@@ -791,6 +797,8 @@ def lineplot(
             #         axes[i].set_ylim(set_ylims[region][param])
                 
              
+            if ylims != (None, None):
+                axes[i].set_ylim(ylims)
             if xlims != (None, None):
                 axes[i].set_xlim(xlims)
             
@@ -800,16 +808,18 @@ def lineplot(
             axes[i].set_title(f"{region}: {param}")
             
             if region == "omp":
-                axes[i].set_xlim(-0.07, 0.04)
+                axes[i].set_xlim(-0.06, 0.05)
             elif region == "imp":
-                axes[i].set_xlim(-0.1, 0.1)
+                axes[i].set_xlim(-0.11, 0.09)
             elif region == "outer_lower":
-                axes[i].set_xlim(-0.1, 0.1)
+                axes[i].set_xlim(-0.05, 0.1)
             
         legend_items = []
         for j, name in enumerate(cases.keys()):
             if "SOLPS" in name:
                 ls = "--"
+            elif "SOLEDGE" in name:
+                ls = ":"
             else:
                 ls = "-"
             legend_items.append(mpl.lines.Line2D([0], [0], color=colors[j], lw=2, ls = ls))
