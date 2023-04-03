@@ -379,7 +379,7 @@ def plot_ddt(case, smoothing = 1, dpi = 120, volume_weighted = True, ylims = (No
     for param in list_params:
 
         if volume_weighted:
-            res[param] = (case.ds[param] * case.dv) / np.sum(case.dv)    # Cell volume weighted
+            res[param] = (case.ds[param] * case.ds.dv) / np.sum(case.ds.dv)    # Cell volume weighted
         else:
             res[param] = case.ds[param]
         res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))    # Root mean square
