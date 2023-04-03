@@ -154,8 +154,8 @@ class Case:
             # self.clean_guards()
             self.guard_replace()
             
-        self.ds = calculate_radial_fluxes(ds)
-        self.ds = calculate_target_fluxes(ds)
+        # self.ds = calculate_radial_fluxes(ds)
+        # self.ds = calculate_target_fluxes(ds)
 
     
 
@@ -167,8 +167,8 @@ class Case:
         
 
         if unnormalise_geom == False:
-            list_skip = ["dx", "dy", "J"]
-            print("--> dx, dy and J will not be unnormalised")
+            list_skip = ["g11", "g_22", "dx", "dy", "J"]
+            print("--> g11, g_22, dx, dy and J will not be unnormalised")
         else:
             list_skip = []
 
@@ -429,6 +429,20 @@ class Case:
             "units": "m/radianT",
             "standard_name": "Jacobian",
             "long_name": "Jacobian to translate from flux to cylindrical coordinates in real space",
+        },
+        
+        "g_22": {
+            "conversion": m["rho_s0"] * m["rho_s0"],
+            "units": "m2",
+            "standard_name": "g_22",
+            "long_name": "g_22",
+        },
+        
+        "g11": {
+            "conversion": (m["Bnorm"] * m["rho_s0"])**2,
+            "units": "T-2m-2",
+            "standard_name": "g11",
+            "long_name": "g11",
         },
         
         "Th+": {
