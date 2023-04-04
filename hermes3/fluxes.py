@@ -26,10 +26,7 @@ Particle throughput time: 0.05228062823230518 s
 ------------
 """
 
-def calculate_heat_balance(ds, show = True, merge_targets = True):
-    print("---------------------------------------")
-    print("HEAT BALANCE")
-    print("---------------------------------------")
+def calculate_heat_balance(ds, merge_targets = True):
 
     m = ds.metadata
     core = ds.hermesm.select_region("core_edge")
@@ -42,76 +39,114 @@ def calculate_heat_balance(ds, show = True, merge_targets = True):
     hf = dict()
 
     # Radial and edge fluxes
+    # The summing is clunky but there's apparently no other way in Xarray!
+    net = dict()
+    list_places = ["src", "core", "sol", "pfr"]
+    for place in list_places:
+        net[f"hf_int_{place}_net"] = 0
+
     for species in m["species"]:
         hf[species] = dict()
-        hf[species]["source"] = (domain[f"P{species}_src"] * domain["dv"]).sum(["x", "theta"]).squeeze() * 3/2
-        hf[species]["core"] = core[f"hf_perp_tot_L_{species}"].sum("theta").squeeze()
-        hf[species]["sol"] = sol[f"hf_perp_tot_R_{species}"].sum("theta").squeeze()
-        hf[species]["pfr"] = pfr[f"hf_perp_tot_L_{species}"].sum("theta").squeeze()
+        ds[f"hf_int_src_{species}"] = (domain[f"P{species}_src"] * domain["dv"]).sum(["x", "theta"]).squeeze() * 3/2
+        ds[f"hf_int_core_{species}"] = core[f"hf_perp_tot_L_{species}"].sum("theta").squeeze()
+        ds[f"hf_int_sol_{species}"] = sol[f"hf_perp_tot_R_{species}"].sum("theta").squeeze()
+        ds[f"hf_int_pfr_{species}"] = pfr[f"hf_perp_tot_L_{species}"].sum("theta").squeeze()
+        
+        for place in list_places:
+            net[f"hf_int_{place}_net"] += ds[f"hf_int_{place}_{species}"]
+            
+    for place in list_places:
+        ds[f"hf_int_{place}_net"] = net[f"hf_int_{place}_net"]
 
 
     # Target fluxes
-    for species in m["charged_species"]:
-        
-        if merge_targets is True:
-            hf[species]["targets"] = 0
-            for target_name in m["targets"]:
-                hf[species]["targets"] += ds[f"hf_{target_name}_{species}"].sum("x").squeeze()
-        else:
-            for target_name in m["targets"]:
-                hf[species][target_name] = ds[f"hf_{target_name}_{species}"].sum("x").squeeze()
+    for target_name in m["targets"]:
+        net[target_name] = 0
+    net["targets"] = 0
+
+    for species in m["ion_species"]+m["neutral_species"]+["e"]:
+        net[f"targets_{species}"] = 0
+        for target_name in m["targets"]:
+            ds[f"hf_int_{target_name}_{species}"] = ds[f"hf_{target_name}_{species}"].sum("x").squeeze()
+            net[target_name] += ds[f"hf_int_{target_name}_{species}"] 
+            net[f"targets_{species}"]  += ds[f"hf_int_{target_name}_{species}"] 
             
-
+            
+        ds[f"hf_int_targets_{species}"] = net[f"targets_{species}"]
+            
+    
+    for target_name in m["targets"]:
+        ds[f"hf_int_{target_name}_net"] = net[target_name]
+        net["targets"] += net[target_name]
+        
+    ds[f"hf_int_targets_net"] = net["targets"]
+        
+        
     # Atomic reaction fluxes
-    hf["e"]["rad_ex"] = (domain["Rd+_ex"] * domain["dv"]).sum(["x", "theta"]).squeeze()
-    hf["e"]["rad_rec"] = (domain["Rd+_rec"] * domain["dv"]).sum(["x", "theta"]).squeeze()
+    ds[f"hf_int_rad_ex_e"] = (domain["Rd+_ex"] * domain["dv"]).sum(["x", "theta"]).squeeze()
+    ds[f"hf_int_rad_rec_e"] = (domain["Rd+_rec"] * domain["dv"]).sum(["x", "theta"]).squeeze()       
+                
+    ds["hf_int_rad_ex_net"] = ds[f"hf_int_rad_ex_e"]
+    ds[f"hf_int_rad_rec_net"] = ds[f"hf_int_rad_rec_e"]
 
-    # Assemble final timesteps
-    hf_last = dict()
+    ds[f"hf_int_total_net"] = \
+        ds["hf_int_src_net"] + ds["hf_int_core_net"] + ds["hf_int_sol_net"] + ds["hf_int_pfr_net"] \
+            + ds["hf_int_targets_net"] + ds["hf_int_rad_ex_net"] + ds["hf_int_rad_rec_net"]
+            
+            
+    return ds
+
+def show_heat_balance_table(ds):
+    print("---------------------------------------")
+    print("HEAT BALANCE")
+    print("---------------------------------------")
 
     df = pd.DataFrame()
-    for species in hf.keys():
-        hf_last[species] = dict()
-        for loc in hf[species].keys():
-            hf_last[species][loc] = hf[species][loc].values[-1] * 1e-6    # EVERYTHING IN MW
-            
-    df = pd.DataFrame.from_dict(hf_last)
-    df["total"] = df.sum(axis=1)
+    m = ds.metadata
 
-    totals = pd.DataFrame(columns = df.columns)
-    totals.loc["total"] = df.sum(axis=0)
-
-
-    totals.loc["total(frac)"] = totals.loc["total"] / df.loc[["source", "core"], :].sum(axis=0)
-
-    if merge_targets is True:
-        target_total = hf_last["d+"]["targets"] + hf_last["e"]["targets"]
+    if f"hf_int_{m['targets'][0]}" in ds.data_vars:
+        merge_targets = False
     else:
-        target_total = np.sum([hf_last["d+"][x]+hf_last["e"][x] for x in m["targets"]])
+        merge_targets = True
 
+    last = ds.isel(t=-1)
+    for species in m["species"]:
+        df.loc["source", species] = last[f"hf_int_src_{species}"]
+        df.loc["core", species] = last[f"hf_int_core_{species}"]
+        df.loc["sol", species] = last[f"hf_int_sol_{species}"]
+        df.loc["pfr", species] = last[f"hf_int_pfr_{species}"]
+        if merge_targets is True:
+            df.loc["targets", species] = last[f"hf_int_targets_{species}"]
+        else:
+            for target in m["targets"]:
+                df.loc[target, species] = last[f"hf_int_{target}_{species}"]
+        
+        df.loc["rad_ex", "e"] = last[f"hf_int_rad_ex_e"]
+        df.loc["rad_rec", "e"] = last[f"hf_int_rad_rec_e"]
+        
+    df["total"] = df.sum(axis=1)
     imbalance = df["total"].sum()
     imbalance_frac = imbalance / (df["total"]["source"] + df["total"]["core"])
-    
-    if show is True:
-        # print(f"Recycling fraction: {frec:.2%}")
-        print(f"Domain volume: {domain['dv'].sum():.3e} [m3]")
-        print(f"Power imbalance: {imbalance*1e6:,.0f} [W]")
-        print(f"Power imbalance as frac of core + source: {imbalance_frac:.2%}")
-        table = pd.concat([df,totals])
+
+    # print(f"Recycling fraction: {frec:.2%}")
+    print(f"Domain volume: {domain['dv'].sum():.3e} [m3]")
+    print(f"Power imbalance: {imbalance*1e6:,.0f} [W]")
+    print(f"Power imbalance as frac of core + source: {imbalance_frac:.2%}")
+    print("---------------------------------------")
+    print(f"Total fluxes in [MW]:")
+    table = df.copy()*1e-6 # For display only
+
+    def styler(s):
+        if abs(s) < 0.01 or pd.isna(s):
+            c =  "color: lightgrey"
+        else:
+            c =  "color: black"
+
+        return c
         
-        def styler(s):
-            if abs(s) < 0.01 or pd.isna(s):
-                c =  "color: lightgrey"
-            else:
-                c =  "color: black"
-
-            
-            return c
-            
-        ts = table.style.format("{:.2f}")
-        ts = ts.applymap(styler)
-        display(ts)
-
+    ts = table.style.format("{:.2f}")
+    ts = ts.applymap(styler)
+    display(ts)
 
 def calculate_particle_balance(ds, show = True, merge_targets = True):
     """
@@ -219,18 +254,25 @@ def calculate_target_fluxes(ds):
     # ds = ds.copy() # This avoids accidentally messing up rest of dataset
     m = ds.metadata
     
+    # Hardcoded for only one recycling ion species for now
+    ion = ds.options["recycling"]["species"]
+    
     for target in m["targets"]:
-        ds[f"hf_{target}_e"], ds[f"hf_{target}_d+"],  ds[f"pf_{target}_d+"] = sheath_boundary_simple(ds, "d+", 
+        ds[f"hf_{target}_e"], ds[f"hf_{target}_{ion}"],  ds[f"pf_{target}_{ion}"] = sheath_boundary_simple(ds, ion, 
                                                                                 target = target)
         
-        species = "d"
-        ds[f"pf_{target}_d"] = -ds[f"pf_{target}_d+"] * ds.options["d+"]["recycle_multiplier"]   # TODO generalise and check
-        ds[f"pf_{target}_d"].attrs.update(
+        neutral = ds.metadata["recycle_pair"][ion]
+        ds[f"pf_{target}_{neutral}"] = -ds[f"pf_{target}_{ion}"] * ds.options[ion]["recycle_multiplier"]   # TODO generalise and check
+        ds[f"pf_{target}_{neutral}"].attrs.update(
                 {
-                "standard_name": f"target particle flux on {target} ({species})",
-                "long_name": f"target particle flux on {target} ({species})",
+                "standard_name": f"target particle flux on {target} ({neutral})",
+                "long_name": f"target particle flux on {target} ({neutral})",
                 })
         
+        # Assume neutral heat loss to target is zero for now
+        # TODO: fix this when neutral_gamma is used
+        ds[f"hf_{target}_{neutral}"] = xr.zeros_like(ds[f"hf_{target}_{ion}"])
+            
         
     return ds
         
