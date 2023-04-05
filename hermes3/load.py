@@ -182,6 +182,7 @@ class Case:
 
     def derive_vars(self):
         ds = self.ds
+        m = ds.metadata
         
         # From Hypnotoad trim_yboundaries() in compare_grid_files
         if ds.metadata["jyseps2_1"] != ds.metadata["jyseps1_2"]:
@@ -194,7 +195,12 @@ class Case:
         ds.metadata["ion_species"] = [x for x in ds.metadata["species"] if "+" in x]
         ds.metadata["neutral_species"] = list(set(ds.metadata["species"]).difference(set(ds.metadata["charged_species"])))
         
-        
+        ds.metadata["recycle_pair"] = dict()
+        for ion in ds.metadata["ion_species"]:
+            if "recycle_as" in ds.options[ion].keys():
+                ds.metadata["recycle_pair"][ion] = ds.options[ion]["recycle_as"]
+            else:
+                print(f"No recycling partner found for {ion}")
         
         q_e = constants("q_e")
 
