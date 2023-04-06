@@ -315,8 +315,12 @@ class viewer_2d():
         # Find ranges if not provided
         if vmin == None:
             vmin = self.min
+        else:
+            self.min = vmin
         if vmax == None:
             vmax = self.max
+        else:
+            self.max = vmax
 
         fig = plt.figure(dpi=dpi)
         fig.set_figheight(6)
