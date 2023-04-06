@@ -465,13 +465,17 @@ def sheath_boundary_simple(bd, species, target,
     m = bd.metadata
     target_indices = dict()
     
+    # TODO: Integrate with select_region
     if m["keep_yboundaries"] == 0:
         target_indices["inner_lower"] = dict(y = 0, y2 = 1, yg = None)
         target_indices["outer_lower"] = dict(y = -1, y2 = -2, yg = None)
         target_indices["inner_upper"] = dict(y = m["ny_inner"]-1, y2 = m["ny_inner"]-2, yg = None)
         target_indices["outer_upper"] = dict(y = m["ny_inner"]+1, y2 = m["ny_inner"]+2, yg = None)
     else:
-        raise Exception("Not implemented for when guard cells are present")
+        target_indices["inner_lower"] = dict(y = m["MYG"], y2 = m["MYG"]+1, yg = m["MYG"]-1)
+        target_indices["outer_lower"] = dict(y = -m["MYG"]-1, y2 = -m["MYG"]-2, yg = -m["MYG"])
+        target_indices["inner_upper"] = dict(y = m["ny_inner"] + m["MYG"]-1, y2 = m["ny_inner"], yg = m["ny_inner"] + m["MYG"])
+        target_indices["outer_upper"] = dict(y = m["ny_inner"] + m["MYG"]*3, y2 = m["ny_inner"]+m["MYG"]*3+1, yg = m["ny_inner"] + m["MYG"]*3 - 1)
     
     idx = target_indices[target]
     y = idx["y"]
@@ -556,6 +560,31 @@ def sheath_boundary_simple(bd, species, target,
 
     # Ion flux [s-1]
     pf_i = nesheath * vesheath * dx.isel(theta=y) * dz.isel(theta=y) * (J.isel(theta=y) + J.isel(theta=yg)) / (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=yg)))
+    
+    # Diagnostic prints
+    # if target == "outer_lower":
+    #     factor = (J.isel(theta=y) + J.isel(theta=yg)) #/ (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=yg)))
+        
+        # print(nesheath.isel(t=-1).mean().values)
+        # print(vesheath.isel(t=-1).mean().values)
+        # print(dx.mean().values)
+        # print(g_22.isel(theta=y).mean().values)
+        # print(g_22.isel(theta=yg).mean().values)
+        
+        # print(J.isel(theta=y).mean().values)
+        # print(J.isel(theta=yg).mean().values)
+        
+        # print(dx.isel(theta=y).mean().values)
+        # print(dx.isel(theta=yg).mean().values)
+        
+        # print(dz.mean().values)
+        # print(factor.mean().values)
+
+        # print(J.isel(theta=y).mean().values)
+        # print(f"nesheath: {nesheath.isel(t=-1).sum():.3e}")
+        # print(f"vesheath: {vesheath.isel(t=-1).sum():.3e}")
+        # print(f"dx: {dx.isel(t=-1).sum():.3e}")
+        # print(f"dz: {dz.isel(t=-1).sum():.3e}")
     
     # Negative means leaving the model
     hf_e *= -1
