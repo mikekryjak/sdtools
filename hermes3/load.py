@@ -613,6 +613,20 @@ class Case:
             "long_name": "Neutral momentum (d+)"
         },
         
+        "Vd": {
+            "conversion": m["Cs0"],
+            "units": "ms-1",
+            "standard_name": "neutral velocity",
+            "long_name": "Neutral velocity (d+)"
+        },
+        
+        "Vd+": {
+            "conversion": m["Cs0"],
+            "units": "ms-1",
+            "standard_name": "ion velocity",
+            "long_name": "Ion velocity (d+)"
+        },
+        
         "anomalous_D_e": {
             "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
             "units": "m2s-1",
