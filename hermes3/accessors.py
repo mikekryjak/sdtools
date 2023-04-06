@@ -101,6 +101,12 @@ def _select_region(ds, name):
     j1_2g = j1_2 + MYG * 3
     j2_1g = j2_1 + MYG
     j2_2g = j2_2 + MYG * 3
+    
+    if all([x in name for x in ["target", "guard"]]) and MYG == 0:
+        raise Exception("Trying to select yguards on a dataset without any")
+    
+    if all([x in name for x in ["xguards"]]):
+        raise Exception("Trying to select xguards on a dataset without any")
 
     slices = dict()
 
