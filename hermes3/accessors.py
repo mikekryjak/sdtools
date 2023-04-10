@@ -1,5 +1,6 @@
 from xarray import register_dataset_accessor, register_dataarray_accessor
 from xbout import BoutDatasetAccessor, BoutDataArrayAccessor
+from hermes3.plotting import *
 import numpy as np
 
 
@@ -29,6 +30,9 @@ class HermesDataArrayAccessor(BoutDataArrayAccessor):
         ds[{"x": xguards[0], "theta": xguards[1]}] = np.nan
         return ds
 
+    def plot_omp(self):
+        plot_omp([self.data], legend = False, title = False)
+        
 
 @register_dataset_accessor("hermesm")
 class HermesDatasetAccessor(BoutDatasetAccessor):
@@ -97,6 +101,12 @@ def _select_region(ds, name):
     j1_2g = j1_2 + MYG * 3
     j2_1g = j2_1 + MYG
     j2_2g = j2_2 + MYG * 3
+    
+    if all([x in name for x in ["target", "guard"]]) and MYG == 0:
+        raise Exception("Trying to select yguards on a dataset without any")
+    
+    if all([x in name for x in ["xguards"]]):
+        raise Exception("Trying to select xguards on a dataset without any")
 
     slices = dict()
 

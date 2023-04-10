@@ -154,8 +154,8 @@ class Case:
             # self.clean_guards()
             self.guard_replace()
             
-        self.ds = calculate_radial_fluxes(ds)
-        self.ds = calculate_target_fluxes(ds)
+        # self.ds = calculate_radial_fluxes(ds)
+        # self.ds = calculate_target_fluxes(ds)
 
     
 
@@ -167,8 +167,8 @@ class Case:
         
 
         if unnormalise_geom == False:
-            list_skip = ["dx", "dy", "J"]
-            print("--> dx, dy and J will not be unnormalised")
+            list_skip = ["g11", "g_22", "dx", "dy", "J"]
+            print("--> g11, g_22, dx, dy and J will not be unnormalised")
         else:
             list_skip = []
 
@@ -182,6 +182,7 @@ class Case:
 
     def derive_vars(self):
         ds = self.ds
+        m = ds.metadata
         
         # From Hypnotoad trim_yboundaries() in compare_grid_files
         if ds.metadata["jyseps2_1"] != ds.metadata["jyseps1_2"]:
@@ -194,7 +195,12 @@ class Case:
         ds.metadata["ion_species"] = [x for x in ds.metadata["species"] if "+" in x]
         ds.metadata["neutral_species"] = list(set(ds.metadata["species"]).difference(set(ds.metadata["charged_species"])))
         
-        
+        ds.metadata["recycle_pair"] = dict()
+        for ion in ds.metadata["ion_species"]:
+            if "recycle_as" in ds.options[ion].keys():
+                ds.metadata["recycle_pair"][ion] = ds.options[ion]["recycle_as"]
+            else:
+                print(f"No recycling partner found for {ion}")
         
         q_e = constants("q_e")
 
@@ -431,6 +437,20 @@ class Case:
             "long_name": "Jacobian to translate from flux to cylindrical coordinates in real space",
         },
         
+        "g_22": {
+            "conversion": m["rho_s0"] * m["rho_s0"],
+            "units": "m2",
+            "standard_name": "g_22",
+            "long_name": "g_22",
+        },
+        
+        "g11": {
+            "conversion": (m["Bnorm"] * m["rho_s0"])**2,
+            "units": "T-2m-2",
+            "standard_name": "g11",
+            "long_name": "g11",
+        },
+        
         "Th+": {
             "conversion": m["Tnorm"],
             "units": "eV",
@@ -591,6 +611,20 @@ class Case:
             "units": "kgms-1",
             "standard_name": "neutral momentum",
             "long_name": "Neutral momentum (d+)"
+        },
+        
+        "Vd": {
+            "conversion": m["Cs0"],
+            "units": "ms-1",
+            "standard_name": "neutral velocity",
+            "long_name": "Neutral velocity (d+)"
+        },
+        
+        "Vd+": {
+            "conversion": m["Cs0"],
+            "units": "ms-1",
+            "standard_name": "ion velocity",
+            "long_name": "Ion velocity (d+)"
         },
         
         "anomalous_D_e": {
