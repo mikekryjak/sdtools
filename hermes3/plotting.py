@@ -757,6 +757,60 @@ def plot_perp_particle_fluxes(ds):
     ax.grid()
     ax.legend()
     
+def plot_particle_balance(ds, ylims = (None, None)):
+    """
+    Plot net domain particle flows and the particle imbalance as a function of time.
+    Particle flows are aggregated for all heavy species. 
+    Requires you to have calculated the balance to begin with (see fluxes.py)
+    """
+    fig, ax = plt.subplots(figsize=(4,3), dpi = 150)
+    m = ds.metadata
+    data_pos = [ds["pf_int_core_net"], ds["pf_int_sol_net"], ds["pf_int_src_net"]]
+    labels_pos = ["Core", "SOL", "Source"]
+
+    data_neg = [ds["pf_int_targets_net"]]
+    labels_neg = ["Targets"]
+
+    ax.stackplot(ds.coords["t"], data_pos, labels = labels_pos, baseline = "zero", colors = ["teal", "cyan", "navy"], alpha = 0.7)
+    ax.stackplot(ds.coords["t"], data_neg, labels = labels_neg, baseline = "zero", colors = ["darkorange"], alpha = 0.7)
+
+    ax.plot(ds.coords["t"], ds["pf_int_total_net"], lw = 2, ls = "--", c = "k", label = "Imbalance")
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Particle flow [s-1]")
+    ax.set_title("Particle balance")
+    
+    if ylims != (None, None):
+        ax.set_ylim(ylims)
+    fig.legend(bbox_to_anchor = (1.25,0.9), loc = "upper right")
+    ax.grid(lw = 0.5)
+    
+def plot_heat_balance(ds, ylims = (None, None)):
+    """
+    Plot net domain heat flows and the heat imbalance as a function of time.
+    Heat flows are aggregated for all species. 
+    Requires you to have calculated the balance to begin with (see fluxes.py)
+    """
+    fig, ax = plt.subplots(figsize=(4,3), dpi = 150)
+    m = ds.metadata
+    data_pos = [ds["hf_int_core_net"], ds["hf_int_sol_net"], ds["hf_int_src_net"]]
+    labels_pos = ["Core", "SOL", "Source"]
+
+    data_neg = [ds["hf_int_targets_net"], ds["hf_int_rad_ex_e"], ds["hf_int_rad_rec_e"]]
+    labels_neg = ["Targets", "Rad (ex)", "Rad (rec)"]
+
+    ax.stackplot(ds.coords["t"], data_pos, labels = labels_pos, baseline = "zero", colors = ["teal", "cyan", "navy"], alpha = 0.7)
+    ax.stackplot(ds.coords["t"], data_neg, labels = labels_neg, baseline = "zero", colors = ["darkorange", "deeppink", "crimson"], alpha = 0.7)
+
+    ax.plot(ds.coords["t"], ds["hf_int_total_net"], lw = 2, ls = "--", c = "k", label = "Imbalance")
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Domain heat flow [W]")
+    ax.set_title("Heat balance")
+    
+    if ylims != (None, None):
+        ax.set_ylim(ylims)
+    fig.legend(bbox_to_anchor = (1.25,0.9), loc = "upper right")
+    ax.grid(lw = 0.5)
+    
 def plot_omp(da_list, legend = True, title = True, dpi = 150, **kwargs):
     """
     Wrap standard Xarray plotter for the outboard midplane
