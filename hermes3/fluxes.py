@@ -297,7 +297,7 @@ def calculate_target_fluxes(ds):
     return ds
         
 
-def calculate_radial_fluxes(ds):   
+def calculate_radial_fluxes(ds, force_neumann = False):   
     
     def zero_to_nan(x):
         return np.where(x==0, np.nan, x)
@@ -329,25 +329,34 @@ def calculate_radial_fluxes(ds):
         # Need to force guard cells to be the same as the final radial cells
         # Otherwise there are issues with extreme negative transport in the 
         # final radial cells, especially PFR and near targets.
-        Pd_fix = ds[f"P{name}"].copy()
-        Pd_fix[{"x":1}] = Pd_fix[{"x":2}]
-        Pd_fix[{"x":0}] = Pd_fix[{"x":2}]
-        Pd_fix[{"x":-1}] = Pd_fix[{"x":-3}]
-        Pd_fix[{"x":-2}] = Pd_fix[{"x":-3}]
-        
-        Nd_fix = ds[f"N{name}"].copy()
-        Nd_fix[{"x":1}] = Nd_fix[{"x":2}]
-        Nd_fix[{"x":0}] = Nd_fix[{"x":2}]
-        Nd_fix[{"x":-1}] = Nd_fix[{"x":-3}]
-        Nd_fix[{"x":-2}] = Nd_fix[{"x":-3}]
-        
-        Td_fix = ds[f"T{name}"].copy()
-        Td_fix[{"x":1}] = Td_fix[{"x":2}]
-        Td_fix[{"x":0}] = Td_fix[{"x":2}]
-        Td_fix[{"x":-1}] = Td_fix[{"x":-3}]
-        Td_fix[{"x":-2}] = Td_fix[{"x":-3}]
-        
-        Plim = Pd_fix.where(Pd_fix>0, 1e-8 * Pnorm)
+        if force_neumann is True:
+            Pd_fix = ds[f"P{name}"].copy()
+            Pd_fix[{"x":1}] = Pd_fix[{"x":2}]
+            Pd_fix[{"x":0}] = Pd_fix[{"x":2}]
+            Pd_fix[{"x":-1}] = Pd_fix[{"x":-3}]
+            Pd_fix[{"x":-2}] = Pd_fix[{"x":-3}]
+            
+            Nd_fix = ds[f"N{name}"].copy()
+            Nd_fix[{"x":1}] = Nd_fix[{"x":2}]
+            Nd_fix[{"x":0}] = Nd_fix[{"x":2}]
+            Nd_fix[{"x":-1}] = Nd_fix[{"x":-3}]
+            Nd_fix[{"x":-2}] = Nd_fix[{"x":-3}]
+            
+            Td_fix = ds[f"T{name}"].copy()
+            Td_fix[{"x":1}] = Td_fix[{"x":2}]
+            Td_fix[{"x":0}] = Td_fix[{"x":2}]
+            Td_fix[{"x":-1}] = Td_fix[{"x":-3}]
+            Td_fix[{"x":-2}] = Td_fix[{"x":-3}]
+            
+            Plim = Pd_fix.where(Pd_fix>0, 1e-8 * Pnorm)
+            Td = Td_fix
+            Nd = Nd_fix
+            
+        else:
+            
+            Plim = ds[f"P{name}"].where(ds[f"P{name}"]>0, 1e-8 * Pnorm)
+            Td = ds[f"T{name}"]
+            Nd = ds[f"N{name}"]
         
         # Plim = ds[f"P{name}"].where(ds[f"P{name}"]>0, 1e-8 * Pnorm) # Limit P to 1e-8 in normalised units
         
@@ -357,7 +366,7 @@ def calculate_radial_fluxes(ds):
         ds[f"hf_perp_conv_R_{name}"] = R #* 3/2
         
         # Perpendicular heat conduction
-        L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*Nd_fix, constants("q_e")*Td_fix)
+        L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*Nd, constants("q_e")*Td)
         ds[f"hf_perp_diff_L_{name}"] = L #* 3/2 
         ds[f"hf_perp_diff_R_{name}"] = R #* 3/2
         
@@ -397,14 +406,15 @@ def calculate_radial_fluxes(ds):
         # Need to force guard cells to be the same as the final radial cells
         # Otherwise there are issues with extreme negative transport in the 
         # final radial cells, especially PFR and near targets.
-        Pd_fix = ds[f"P{name}"].copy()
-        Pd_fix[{"x":1}] = Pd_fix[{"x":2}]
-        Pd_fix[{"x":0}] = Pd_fix[{"x":2}]
-        Pd_fix[{"x":-1}] = Pd_fix[{"x":-3}]
-        Pd_fix[{"x":-2}] = Pd_fix[{"x":-3}]
-        
-        Plim = Pd_fix.where(Pd_fix>0, 1e-8 * Pnorm)
-        # Plim = ds[f"P{name}"].where(ds[f"P{name}"]>0, 1e-8 * Pnorm) # Limit P to 1e-8 in normalised units
+        if force_neumann is True:
+            Pd_fix = ds[f"P{name}"].copy()
+            Pd_fix[{"x":1}] = Pd_fix[{"x":2}]
+            Pd_fix[{"x":0}] = Pd_fix[{"x":2}]
+            Pd_fix[{"x":-1}] = Pd_fix[{"x":-3}]
+            Pd_fix[{"x":-2}] = Pd_fix[{"x":-3}]
+            Plim = Pd_fix.where(Pd_fix>0, 1e-8 * Pnorm)
+        else:
+            Plim = ds[f"P{name}"].where(ds[f"P{name}"]>0, 1e-8 * Pnorm)
         
         L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*ds[f"N{name}"], np.log(Plim))
         ds[f"pf_perp_diff_L_{name}"] = L 

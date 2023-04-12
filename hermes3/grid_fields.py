@@ -22,7 +22,20 @@ def close_mesh(mesh):
     except:
         pass
     
-def impose_fields(source, destination):
+def impose_fields(source, destination,
+                  Nd_src_puff = 0,   # s-1
+                  Pd_src_puff = 0,   # Pa of pressure
+                  Ni_src_core = 0,   # s-1 of particles
+                  Pi_src_core = 0,   # Pa of pressure
+                  Pe_src_core = 0,   # Pa of pressure
+                  D_core = 0,    # m2s-1
+                  D_sol  = 0,    # ms2s-1
+                  chi_core = 0,   # m2s-1
+                  chi_sol = 0,    # m2s-1
+                  
+                  
+                  
+                  ):
     """
     Copy a mesh from source to destination and impose fields
     Hardcoded for now
@@ -33,19 +46,19 @@ def impose_fields(source, destination):
     mesh = make_new_mesh(source, destination)
     
     # Outboard D puff
-    Nd_src_puff = 1.2e21    # s-1
-    Pd_src_puff = 2/3 * 1.2e21 * 3 * constants("q_e")  #  3eV per particle (assume dissociated molecules). Remember this is pressure not energy
+    # Nd_src_puff = 1.2e21    # s-1
+    # Pd_src_puff = 2/3 * 1.2e21 * 3 * constants("q_e")  #  3eV per particle (assume dissociated molecules). Remember this is pressure not energy
 
     # Core particle/heat sources
-    Ni_src_core = 3e20    # s-1
-    Pi_src_core = 1e6 * 2/3   # W converted to pressure
-    Pe_src_core = 0.76e6 * 2/3   # W converted to pressure
+    # Ni_src_core = 3e20    # s-1
+    # Pi_src_core = 1e6 * 2/3   # W converted to pressure
+    # Pe_src_core = 0.76e6 * 2/3   # W converted to pressure
 
-    # Anomalous diffusion coefficients
-    D_core = 0.1
-    chi_core = 0.45
-    D_sol = 1
-    chi_sol = 3
+    # # Anomalous diffusion coefficients
+    # D_core = 0.1
+    # chi_core = 0.45
+    # D_sol = 1
+    # chi_sol = 3
     
     # Make regions
     puff_region = mesh.slices("symmetric_puff")(width=3, center_half_gap=1)
