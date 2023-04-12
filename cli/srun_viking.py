@@ -67,6 +67,7 @@ f"""#!/bin/bash
 #SBATCH --mail-type=BEGIN,END,FAIL               # Mail events (NONE, BEGIN, END, FAIL, ALL)
 #SBATCH --mail-user=mike.kryjak@york.ac.uk        # Where to send mail
 
+source /mnt/lustre/users/mjk557/bout.env
 mpirun -n {nodes*cores_per_node} /mnt/lustre/users/mjk557/hermes-3/{args.b}/hermes-3 -d {abscasepath} {restartappend}
 
 """
