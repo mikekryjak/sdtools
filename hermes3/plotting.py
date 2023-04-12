@@ -619,7 +619,7 @@ def plot_rz_grid(ds, ax, xlim = (None,None), ylim = (None,None)):
 def lineplot(
     cases,
     scale = "log",
-    colors = ["black", "red", "black", "red", "navy", "limegreen", "firebrick",  "limegreen", "magenta","cyan", "navy"],
+    colors = ["teal", "darkorange", "deeppink", "limegreen", "firebrick",  "limegreen", "magenta","cyan", "navy"],
     params = ["Td+", "Te", "Td", "Ne", "Nd"],
     regions = ["imp", "omp", "outer_lower"],
     ylims = (None,None),
@@ -651,12 +651,16 @@ def lineplot(
             ds = cases[name]
             if region == "omp":
                 region_ds[name] = ds.hermesm.select_region("outer_midplane_a")
+                xlabel = "Distance from separatrix [m]"
             elif region == "imp":
                 region_ds[name] = ds.hermesm.select_region("inner_midplane_a")
+                xlabel = "Distance from separatrix [m]"
             elif region == "outer_lower":
                 region_ds[name] = ds.hermesm.select_region("outer_lower_target")
+                xlabel = "Distance from separatrix [m]"
             elif region == "field_line":
                 region_ds[name] = ds.hermesm.select_custom_sol_ring(ds.metadata["ixseps1"], "outer_lower").squeeze()
+                xlabel = "Distance from midplane [m]"
             else:
                 raise Exception(f"Region {region} not found")
                 
@@ -667,7 +671,8 @@ def lineplot(
             for j, name in enumerate(cases.keys()):
                 
                 if region == "field_line":    # Poloidal
-                    xplot = region_ds[name].coords["theta"]
+                    m = region_ds[name].metadata
+                    xplot = region_ds[name].coords["theta"] - region_ds[name].coords["theta"][0]
                 else:    # Radial, 0 at sep
                     sep_R = region_ds[name].coords["R"][ds.metadata["ixseps1"]- ds.metadata["MXG"]]
                     xplot = region_ds[name].coords["R"] - sep_R
@@ -680,7 +685,7 @@ def lineplot(
                 axes[i].set_xlim(xlims)
             
             axes[i].grid(which="both", alpha = 0.2)
-            axes[i].set_xlabel("Distance from separatrix [m]")
+            axes[i].set_xlabel(xlabel)
             axes[i].set_yscale(scale)
             axes[i].set_title(f"{region}: {param}")
 
@@ -731,35 +736,71 @@ def camera_view(ax, loc, tokamak = "ST40"):
     
 def plot_perp_heat_fluxes(ds):
     """
-    Takes dataset of a single time slice
+    Plots poloidal integrals of radial heat fluxes
+    Plot is for LHS cell edges and then the outermost RHS cell edge is appended
+    This way zero radial flux appears as a "0" on both ends.
     """
+    lw = 1
     
     if ds.coords["t"].shape != ():
         raise Exception("Must supply single time slice")
     
     fig, ax = plt.subplots(figsize=(4,3), dpi = 150)
     d = ds.isel(x=slice(2,-2)).sum("theta")
-    d["hf_perp_tot_L_d+"].plot(ax = ax, marker = "o", label = "d+", ms = 2, c = "teal")
-    d["hf_perp_tot_L_e"].plot(ax = ax, marker = "o", label = "e", ms = 2, c = "darkorange")
-    d["hf_perp_tot_L_d"].plot(ax = ax, marker = "o", label = "d", ms = 2, c = "firebrick")
-    ax.set_title("Perpendicular heat fluxes")
-    ax.set_yscale("log")
+    
+    def append_rhs(x):
+        F = d[x]
+        rhs = d[x.replace("_L_", "_R_")][-1].values
+        return np.concatenate([F, [rhs]])
+    
+    Fi = append_rhs("hf_perp_tot_L_d+")
+    Fe = append_rhs("hf_perp_tot_L_e")
+    Fn = append_rhs("hf_perp_tot_L_d")
+    
+    ax.plot(range(len(Fi)), Fi,  marker = "o", label = f"d+", ms = 2, c = "teal", lw = lw)
+    ax.plot(range(len(Fe)), Fe,  marker = "o", label = f"e", ms = 2, c = "darkorange", lw = lw)
+    ax.plot(range(len(Fi)), Fn,  marker = "o", label = f"d", ms = 2, c = "firebrick", lw = lw)
+    
+    # d["hf_perp_tot_L_d+"].plot(ax = ax, marker = "o", label = "d+", ms = 2, c = "teal")
+    # d["hf_perp_tot_L_e"].plot(ax = ax, marker = "o", label = "e", ms = 2, c = "darkorange")
+    # d["hf_perp_tot_L_d"].plot(ax = ax, marker = "o", label = "d", ms = 2, c = "firebrick")
+    ax.set_xlabel("Radial index")
+    ax.set_ylabel("Heat flow [s-1]")
+    ax.set_title("Particle flow integral")
+    ax.set_yscale("symlog")
     ax.grid()
     ax.legend()
     
 def plot_perp_particle_fluxes(ds):
     """
-    Takes dataset of a single time slice
+    Plots poloidal integrals of radial particle fluxes
+    Plot is for LHS cell edges and then the outermost RHS cell edge is appended
+    This way zero radial flux appears as a "0" on both ends.
     """
+    
+    lw = 1
+    
+    def append_rhs(x):
+        F = d[x]
+        rhs = d[x.replace("_L_", "_R_")][-1].values
+        return np.concatenate([F, [rhs]])
     
     if ds.coords["t"].shape != ():
         raise Exception("Must supply single time slice")
     
     fig, ax = plt.subplots(figsize=(4,3), dpi = 150)
     d = ds.isel(x=slice(2,-2)).sum("theta")
-    d["pf_perp_diff_L_d+"].plot(ax = ax, marker = "o", label = "d+", ms = 2, c = "teal")
-    d["pf_perp_diff_L_d"].plot(ax = ax, marker = "o", label = "d", ms = 2, c = "firebrick")
-    ax.set_title("Perpendicular particle fluxes")
+    
+    Fi = append_rhs("pf_perp_diff_L_d+")
+    Fn = append_rhs("pf_perp_diff_L_d")
+    
+    Ft = Fi + Fn
+    ax.plot(range(len(Fi)), Fi,  marker = "o", label = f"d+", ms = 2, c = "teal", lw = lw)
+    ax.plot(range(len(Fi)), Fn,  marker = "o", label = f"d", ms = 2, c = "darkorange", lw = lw)
+    
+    ax.set_xlabel("Radial index")
+    ax.set_ylabel("Particle flow [s-1]")
+    ax.set_title("Particle flow integral")
     ax.grid()
     ax.legend()
     
