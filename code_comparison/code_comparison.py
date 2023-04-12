@@ -13,8 +13,11 @@ from collections import defaultdict
 
 sys.path.append(r'C:\Users\mikek\OneDrive\Project\python-packages')
 
-import gridtools.solps_python_scripts.setup
-from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d
+try:
+    import gridtools.solps_python_scripts.setup
+    from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d
+except:
+    print("Gridtools not found")
 
 
 
