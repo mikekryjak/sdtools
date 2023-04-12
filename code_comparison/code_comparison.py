@@ -688,7 +688,7 @@ def file_read(filename):
     return data
 
 
-def lineplot(
+def lineplot_compare(
     cases,
     mode = "log",
     colors = ["black", "red", "black", "red", "navy", "limegreen", "firebrick",  "limegreen", "magenta","cyan", "navy"],

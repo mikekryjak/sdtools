@@ -213,7 +213,7 @@ class Monitor2D():
         # Defaults:
         self.settings = {"all": {"xlim":(None, None), "ylim":(None, None), 
                                  "figure_aspect":0.9, "wspace_modifier":1, 
-                                 "view":None, "dpi":100}}
+                                 "view":None, "dpi":100, "clean_guards":True}}
         
         
         self.fig_size = 3.5
@@ -235,7 +235,7 @@ class Monitor2D():
             self.fig_height = 0.8 * self.fig_size * self.settings["all"]["figure_aspect"]
             self.wspace = 0.3
             
-        elif mode == "pcolor":
+        elif mode == "pcolor" or mode == "polygon":
             
             if self.settings["all"]["view"] == "lower_divertor":
                 
@@ -248,10 +248,7 @@ class Monitor2D():
                 
             self.fig_height = 1.8 * self.fig_size * self.settings["all"]["figure_aspect"]
             
-        
-            
-        
-        print(self.settings["all"])
+
         self.windows = windows
         num_rows = len(self.windows)
         
@@ -291,8 +288,16 @@ class Monitor2D():
         # Modify through inputs
         self.capture_setting_inputs(name)
         
+        
 
         settings = self.settings[name]
+        
+        # Select final timestep if one not provided
+        if "t" in self.ds.dims.keys():
+            self.ds[name] = self.ds[name].isel(t=-1)
+        
+        if self.settings["all"]["clean_guards"] is True:
+            self.ds[name] = self.ds[name].hermesm.clean_guards()
         
         if settings["vmin"] == None:
             settings["vmin"] = self.ds[name].min().values
@@ -306,7 +311,7 @@ class Monitor2D():
         if self.mode == "grid":
         
             norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
-            abs(self.ds[name].isel(t=-1)).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""}, vmin=settings["vmin"], vmax=settings["vmax"], norm = norm)
+            abs(self.ds[name]).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""}, vmin=settings["vmin"], vmax=settings["vmax"], norm = norm)
             ax.set_title(name)
 
             ax.set_ylabel(""); ax.set_xlabel("")
@@ -317,7 +322,12 @@ class Monitor2D():
             
             
         elif self.mode == "pcolor":
-            abs(self.ds[name].isel(t=-1)).bout.pcolormesh(ax = ax, cmap = "Spectral_r", logscale=settings["log"], vmin=settings["vmin"], vmax=settings["vmax"])#, cbar_kwargs={"label":""})
+            
+            data = abs(self.ds[name])
+            # if self.settings["all"]["clean_guards"] is True:
+            #     data = data.hermesm.clean_guards()
+                
+            data.bout.pcolormesh(ax = ax, cmap = "Spectral_r", logscale=settings["log"], vmin=settings["vmin"], vmax=settings["vmax"])#, cbar_kwargs={"label":""})
             ax.set_title(name)
 
             ax.set_ylabel(""); ax.set_xlabel("")
@@ -325,7 +335,17 @@ class Monitor2D():
             ax.grid(which="both", alpha = 0.3)
             # [ax.vlines(meta[x], self.ds["x"][0], self.ds["x"][-1], colors = "k") for x in ["jyseps1_1", "jyseps1_2", "jyseps2_1", "jyseps2_2"]]
             
-        
+        elif self.mode == "polygon":
+            data = abs(self.ds[name])
+            # if self.settings["all"]["clean_guards"] is True:
+            #     data = data.hermesm.clean_guards()
+                
+            data.bout.polygon(ax = ax, cmap = "Spectral_r", logscale=settings["log"], vmin=settings["vmin"], vmax=settings["vmax"])#, cbar_kwargs={"label":""})
+            ax.set_title(name)
+
+            ax.set_ylabel(""); ax.set_xlabel("")
+            ax.tick_params(axis="x", labelrotation = 0)
+            ax.grid(which="both", alpha = 0.3)
             
         elif self.mode == "omp_history":
             norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
@@ -596,6 +616,74 @@ def plot_rz_grid(ds, ax, xlim = (None,None), ylim = (None,None)):
     if ylim != (None,None):
         ax.set_ylim(ylim)
         
+def lineplot(
+    cases,
+    scale = "log",
+    colors = ["black", "red", "black", "red", "navy", "limegreen", "firebrick",  "limegreen", "magenta","cyan", "navy"],
+    params = ["Td+", "Te", "Td", "Ne", "Nd"],
+    regions = ["imp", "omp", "outer_lower"],
+    ylims = (None,None),
+    xlims = (None,None),
+    markersize = 2,
+    dpi = 120
+    ):
+    
+    marker = "o"
+    ms = markersize
+    lw = 1.5
+    set_ylims = dict()
+    set_yscales = dict()
+    
+    # Automatically select last timestep if none provided
+    for name in cases.keys():
+        if "t" in  cases[name].dims.keys():
+            cases[name] = cases[name].isel(t=-1)
+
+
+    for region in regions:
+
+        fig, axes = plt.subplots(1,len(params), dpi = dpi, figsize = (4.2*len(params),5), sharex = True)
+        fig.subplots_adjust(hspace = 0, wspace = 0.25, bottom = 0.25, left = 0.1, right = 0.9)
+        ls = "-"
+        
+        region_ds = dict()
+        for name in cases.keys():
+            ds = cases[name]
+            if region == "omp":
+                region_ds[name] = ds.hermesm.select_region("outer_midplane_a")
+            elif region == "imp":
+                region_ds[name] = ds.hermesm.select_region("inner_midplane_a")
+            elif region == "outer_lower":
+                region_ds[name] = ds.hermesm.select_region("outer_lower_target")
+            else:
+                raise Exception(f"Region {region} not found")
+                
+            
+        
+            
+        for i, param in enumerate(params):
+            for j, name in enumerate(cases.keys()):
+                sep_R = region_ds[name].coords["R"][ds.metadata["ixseps1"]- ds.metadata["MXG"]]
+                xplot = region_ds[name].coords["R"] - sep_R
+                axes[i].plot(xplot, region_ds[name][param], label = name, c = colors[j], marker = marker, ms = ms, lw = lw, ls = ls)
+                
+             
+            if ylims != (None, None):
+                axes[i].set_ylim(ylims)
+            if xlims != (None, None):
+                axes[i].set_xlim(xlims)
+            
+            axes[i].grid(which="both", alpha = 0.2)
+            axes[i].set_xlabel("Distance from separatrix [m]")
+            axes[i].set_yscale(scale)
+            axes[i].set_title(f"{region}: {param}")
+
+            
+        legend_items = []
+        for j, name in enumerate(cases.keys()):
+            legend_items.append(mpl.lines.Line2D([0], [0], color=colors[j], lw=2, ls = ls))
+            
+        fig.legend(legend_items, cases.keys(), ncol = len(cases), loc = "upper center", bbox_to_anchor=(0.5,0.15))
         
 def create_norm(logscale, norm, vmin, vmax):
     if logscale:
