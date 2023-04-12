@@ -655,6 +655,8 @@ def lineplot(
                 region_ds[name] = ds.hermesm.select_region("inner_midplane_a")
             elif region == "outer_lower":
                 region_ds[name] = ds.hermesm.select_region("outer_lower_target")
+            elif region == "field_line":
+                region_ds[name] = ds.hermesm.select_custom_sol_ring(ds.metadata["ixseps1"], "outer_lower").squeeze()
             else:
                 raise Exception(f"Region {region} not found")
                 
@@ -663,8 +665,12 @@ def lineplot(
             
         for i, param in enumerate(params):
             for j, name in enumerate(cases.keys()):
-                sep_R = region_ds[name].coords["R"][ds.metadata["ixseps1"]- ds.metadata["MXG"]]
-                xplot = region_ds[name].coords["R"] - sep_R
+                
+                if region == "field_line":    # Poloidal
+                    xplot = region_ds[name].coords["theta"]
+                else:    # Radial, 0 at sep
+                    sep_R = region_ds[name].coords["R"][ds.metadata["ixseps1"]- ds.metadata["MXG"]]
+                    xplot = region_ds[name].coords["R"] - sep_R
                 axes[i].plot(xplot, region_ds[name][param], label = name, c = colors[j], marker = marker, ms = ms, lw = lw, ls = ls)
                 
              

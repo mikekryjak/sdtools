@@ -49,6 +49,9 @@ class HermesDatasetAccessor(BoutDatasetAccessor):
 
     def select_custom_core_ring(self, i):
         return _select_custom_core_ring(self.data, i)
+    
+    def select_custom_sol_ring(self, i, region):
+        return _select_custom_sol_ring(self.data, i, region)
 
 
 def _select_region(ds, name):
@@ -257,22 +260,81 @@ def _select_region(ds, name):
     return selection
 
 
-def _select_custom_core_ring(self, i):
-    """
-    Creates custom SOL ring slice within the core.
-    i = 0 is at first domain cell.
-    i = -2 is at first inner guard cell.
-    i = ixseps - MXG is the separatrix.
-    """
+# def _select_custom_core_ring(self, i):
+#     """
+#     Creates custom SOL ring slice within the core.
+#     i = 0 is at first domain cell.
+#     i = -2 is at first inner guard cell.
+#     i = ixseps - MXG is the separatrix.
+#     """
 
-    if i > self.ixseps1 - self.MXG:
+#     if i > self.ixseps1 - self.MXG:
+#         raise Exception("i is too large!")
+
+#     selection = (
+#         slice(0 + self.MXG + i, 1 + self.MXG + i),
+#         np.r_[
+#             slice(self.j1_2g + 1, self.j2_2g + 1), slice(self.j1_1g + 1, self.j2_1g + 1)
+#         ],
+#     )
+
+#     return self.da.isel(x=selection[0], theta=selection[1])
+
+
+def _select_custom_sol_ring(ds, i, region):
+    """
+    Creates custom SOL ring slice beyond the separatrix.
+    args[0] = i = index of SOL ring (0 is separatrix, 1 is first SOL ring)
+    args[1] = region = all, inner, inner_lower, inner_upper, outer, outer_lower, outer_upper
+    
+    NOTE: INDEX HERE IS THE ACTUAL INDEX AS OPPOSED TO THE CUSTOM CORE RING
+    
+    TODO: CHECK THE OFFSETS ON X AXIS, THEY ARE POTENTIALLY WRONG
+    """
+    
+    m = ds.metadata
+    
+    # if i < self.ixseps1 - self.MXG*2 :
+    #     raise Exception("i is too small!")
+    if i > m["nx"] - m["MXG"]*2 :
         raise Exception("i is too large!")
-
-    selection = (
-        slice(0 + self.MXG + i, 1 + self.MXG + i),
-        np.r_[
-            slice(self.j1_2g + 1, self.j2_2g + 1), slice(self.j1_1g + 1, self.j2_1g + 1)
-        ],
-    )
-
-    return self.da.isel(x=selection[0], theta=selection[1])
+    
+    if m["topology"] == "connected-double-null":
+        
+        outer_midplane_a = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"]
+        outer_midplane_b = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"] + 1     
+        # inner_midplane_a = int((m.j2_1g - m.j1_1g) / 2) + m.j1_1g 
+        # inner_midplane_b = int((m.j2_1g - m.j1_1g) / 2) + m.j1_1g + 1               
+        
+        ny_inner = m["ny_inner"]
+        MYG = m["MYG"]
+        nyg = m["nyg"]
+        
+        # if region == "all":
+        #     selection = (slice(i+1,i+2), np.r_[slice(0+.MYG, .j2_2g + 1), slice(.j1_1g + 1, self.nyg - self.MYG)])
+        
+        # if region == "inner":
+        #     selection = (slice(i+1,i+2), slice(0+.MYG, .ny_inner + .MYG))
+        # if region == "inner_lower":
+        #     selection = (slice(i+1,i+2), slice(0+.MYG, inner_midplane_a +1))
+        # if region == "inner_upper":
+        #     selection = (slice(i+1,i+2), slice(inner_midplane_b, .ny_inner + .MYG))
+        
+        # if region == "outer":
+        #     selection = (slice(i+1,i+2), slice(.ny_inner + .MYG*3, .nyg - .MYG))
+        if region == "outer_lower":
+            selection = (slice(i+1,i+2), slice(outer_midplane_b, m["nyg"] - m["MYG"]))
+        elif region == "outer_upper":
+            selection = (slice(i+1,i+2), slice(ny_inner + MYG*3, outer_midplane_a+1))
+        else:
+            raise Exception(f"Region {region} not implemented")
+            
+    elif m["topology"] == "single-null":
+        
+        if region == "all":
+            selection = (slice(i+0,i+1), slice(0+MYG, nyg - MYG))
+            
+        else:
+            raise Exception(f"Region {region} not implemented")
+    
+    return ds.isel(x = selection[0], theta = selection[1])
