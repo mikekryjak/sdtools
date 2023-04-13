@@ -44,5 +44,14 @@ def select_custom_sol_ring(ds, i):
     sel = {"x":i, "theta":slice(ds.regions["lower_inner_pfr"].ylower_ind, ds.regions["lower_outer_pfr"].yupper_ind)}
     return ds[sel] 
     
+def make_cmap(cmap, N):
+    """
+    Extract discrete colors from a continuous colormap
     
+    Parameters
+    ----------
+    N = number of colors
+    cmap = Matplotlib colormap name
+    """
+    return plt.cm.get_cmap(cmap)(np.linspace(0, 1, N))
 
