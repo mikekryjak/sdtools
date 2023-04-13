@@ -116,7 +116,7 @@ def _select_region(ds, name):
     slices["all"] = (slice(None, None), slice(None, None))
     slices["all_noguards"] = (
         slice(MXG, -MXG),
-        np.r_[slice(MYG, ny_inner - MYG * 2), slice(ny_inner + MYG * 3, nyg - MYG)],
+        np.r_[slice(MYG, ny_inner + MYG), slice(ny_inner + MYG * 3, nyg - MYG)],
     )
 
     slices["core"] = (
