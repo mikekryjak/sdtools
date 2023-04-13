@@ -82,12 +82,21 @@ def calculate_heat_balance(ds, merge_targets = True):
         
         
     # Atomic reaction fluxes
-    ds[f"hf_int_rad_ex_e"] = (domain["Rd+_ex"] * domain["dv"]).sum(["x", "theta"]).squeeze()
-    ds[f"hf_int_rad_rec_e"] = (domain["Rd+_rec"] * domain["dv"]).sum(["x", "theta"]).squeeze()       
-                
-    ds["hf_int_rad_ex_net"] = ds[f"hf_int_rad_ex_e"]
-    ds[f"hf_int_rad_rec_net"] = ds[f"hf_int_rad_rec_e"]
+        
+    net_ex = 0
+    net_rec = 0
+    for ion in m["ion_species"]:
+        if f"R{ion}_ex" in domain.data_vars:
+            ds[f"hf_int_rad_ex_e"] = (domain[f"R{ion}_ex"] * domain["dv"]).sum(["x", "theta"]).squeeze()
+            net_ex +=  ds[f"hf_int_rad_ex_e"]
+            
+        if f"R{ion}_rec" in domain.data_vars:
+            ds[f"hf_int_rad_rec_e"] = (domain[f"R{ion}_rec"] * domain["dv"]).sum(["x", "theta"]).squeeze()       
+            net_rec += ds[f"hf_int_rad_rec_e"]
 
+    ds["hf_int_rad_ex_net"] = net_ex
+    ds[f"hf_int_rad_rec_net"] = net_rec
+    
     ds[f"hf_int_total_net"] = \
         ds["hf_int_src_net"] + ds["hf_int_core_net"] + ds["hf_int_sol_net"] + ds["hf_int_pfr_net"] \
             + ds["hf_int_targets_net"] + ds["hf_int_rad_ex_net"] + ds["hf_int_rad_rec_net"]
@@ -152,13 +161,18 @@ def calculate_particle_balance(ds):
 
     # Atomic reaction fluxes
     for ion in m["ion_species"]:
-        neutral = ion.split("+")[0]
-        ds[f"pf_int_iz_{ion}"] = (domain[f"S{ion}_iz"] * domain["dv"]).sum(["x", "theta"]).squeeze()
-        ds[f"pf_int_iz_{neutral}"] = ds[f"pf_int_iz_{ion}"] * -1
         
-        ds[f"pf_int_rec_{ion}"] = (domain[f"S{ion}_rec"] * domain["dv"]).sum(["x", "theta"]).squeeze()
-        ds[f"pf_int_rec_{neutral}"] = ds[f"pf_int_rec_{ion}"] * -1
+        if f"S{ion}_iz" in domain.data_vars:
+            neutral = ion.split("+")[0]
+            ds[f"pf_int_iz_{ion}"] = (domain[f"S{ion}_iz"] * domain["dv"]).sum(["x", "theta"]).squeeze()
+            ds[f"pf_int_iz_{neutral}"] = ds[f"pf_int_iz_{ion}"] * -1
+        
+        if f"S{ion}_rec" in domain.data_vars:
+            ds[f"pf_int_rec_{ion}"] = (domain[f"S{ion}_rec"] * domain["dv"]).sum(["x", "theta"]).squeeze()
+            ds[f"pf_int_rec_{neutral}"] = ds[f"pf_int_rec_{ion}"] * -1
 
+    # Note: no "net" ionisation or recombination since they net out to zero.
+    
     ds[f"pf_int_total_net"] = \
         ds["pf_int_src_net"] + ds["pf_int_core_net"] + ds["pf_int_sol_net"] + ds["pf_int_pfr_net"] \
             + ds["pf_int_targets_net"]
