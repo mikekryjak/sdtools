@@ -820,6 +820,19 @@ def plot_particle_balance(ds, ylims = (None, None)):
     data_neg = [ds["pf_int_targets_net"]]
     labels_neg = ["Targets"]
 
+    # Ignore first X time for ylim calculation
+    mins = []
+    maxs = []
+    for data in data_neg + data_pos:
+        tlen = len(data.coords["t"])
+        data = data.isel(t = slice(int(tlen*0.1), None))
+        mins.append(np.nanmin(data.values))
+        maxs.append(np.nanmax(data.values))
+        
+    max_magnitude = max( [abs(min(mins)), abs(max(maxs))] )
+    ymin = - max_magnitude * 1.2
+    ymax = max_magnitude * 1.2
+    
     ax.stackplot(ds.coords["t"], data_pos, labels = labels_pos, baseline = "zero", colors = ["teal", "cyan", "navy"], alpha = 0.7)
     ax.stackplot(ds.coords["t"], data_neg, labels = labels_neg, baseline = "zero", colors = ["darkorange"], alpha = 0.7)
 
@@ -830,6 +843,8 @@ def plot_particle_balance(ds, ylims = (None, None)):
     
     if ylims != (None, None):
         ax.set_ylim(ylims)
+    else:
+        ax.set_ylim(ymin,ymax)
     fig.legend(bbox_to_anchor = (1.25,0.9), loc = "upper right")
     ax.grid(lw = 0.5)
     
@@ -846,14 +861,28 @@ def plot_heat_balance(ds, ylims = (None, None)):
 
     data_neg = [ds["hf_int_targets_net"]]
     labels_neg = ["Targets"]
-    
+    print(type(data_neg))
     if "hf_int_rad_ex_e" in ds.data_vars:
-        data_neg = data_neg.append("hf_int_rad_ex_e")
-        labels_neg = labels_neg.append("Rad (ex)")
+        data_neg.append(ds["hf_int_rad_ex_e"])
+        labels_neg.append("Rad (ex)")
+        print(type(data_neg))
     if "hf_int_rad_rec_e" in ds.data_vars:
-        data_neg = data_neg.append("hf_int_rad_rec_e")
-        labels_neg = labels_neg.append("Rad (rec")
+        data_neg.append(ds["hf_int_rad_rec_e"])
+        labels_neg.append("Rad (rec")
 
+    # Ignore first X time for ylim calculation
+    mins = []
+    maxs = []
+    for data in data_neg + data_pos:
+        tlen = len(data.coords["t"])
+        data = data.isel(t = slice(int(tlen*0.1), None))
+        mins.append(np.nanmin(data.values))
+        maxs.append(np.nanmax(data.values))
+        
+    max_magnitude = max( [abs(min(mins)), abs(max(maxs))] )
+    ymin = - max_magnitude * 1.2
+    ymax = max_magnitude * 1.2
+    
 
     ax.stackplot(ds.coords["t"], data_pos, labels = labels_pos, baseline = "zero", colors = ["teal", "cyan", "navy"], alpha = 0.7)
     ax.stackplot(ds.coords["t"], data_neg, labels = labels_neg, baseline = "zero", colors = ["darkorange", "deeppink", "crimson"], alpha = 0.7)
@@ -863,8 +892,11 @@ def plot_heat_balance(ds, ylims = (None, None)):
     ax.set_ylabel("Domain heat flow [W]")
     ax.set_title("Heat balance")
     
+    
     if ylims != (None, None):
         ax.set_ylim(ylims)
+    else:
+        ax.set_ylim(ymin,ymax)
     fig.legend(bbox_to_anchor = (1.25,0.9), loc = "upper right")
     ax.grid(lw = 0.5)
     
