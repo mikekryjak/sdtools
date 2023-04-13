@@ -237,6 +237,10 @@ class Monitor2D():
             
         elif mode == "pcolor" or mode == "polygon":
             
+            # Select final timestep if one not provided
+            if "t" in self.ds.dims.keys():
+                self.ds = self.ds.isel(t=-1)
+            
             if self.settings["all"]["view"] == "lower_divertor":
                 
                 self.settings["all"]["figure_aspect"] = 0.5
@@ -281,7 +285,7 @@ class Monitor2D():
         
         # Default settings
         self.settings[name] = {
-            "log":True, "vmin":self.ds[name].min().values, "vmax":self.ds[name].max().values,
+            "log":False, "vmin":self.ds[name].min().values, "vmax":self.ds[name].max().values,
             }
         if "history" in self.mode:
             self.settings[name]["log"] = False
@@ -292,9 +296,7 @@ class Monitor2D():
 
         settings = self.settings[name]
         
-        # Select final timestep if one not provided
-        if "t" in self.ds.dims.keys():
-            self.ds[name] = self.ds[name].isel(t=-1)
+        
         
         if self.settings["all"]["clean_guards"] is True:
             self.ds[name] = self.ds[name].hermesm.clean_guards()
@@ -630,7 +632,7 @@ def lineplot(
     
     marker = "o"
     ms = markersize
-    lw = 1.5
+    lw = 2.5
     set_ylims = dict()
     set_yscales = dict()
     
@@ -842,8 +844,16 @@ def plot_heat_balance(ds, ylims = (None, None)):
     data_pos = [ds["hf_int_core_net"], ds["hf_int_sol_net"], ds["hf_int_src_net"]]
     labels_pos = ["Core", "SOL", "Source"]
 
-    data_neg = [ds["hf_int_targets_net"], ds["hf_int_rad_ex_e"], ds["hf_int_rad_rec_e"]]
-    labels_neg = ["Targets", "Rad (ex)", "Rad (rec)"]
+    data_neg = [ds["hf_int_targets_net"]]
+    labels_neg = ["Targets"]
+    
+    if "hf_int_rad_ex_e" in ds.data_vars:
+        data_neg = data_neg.append("hf_int_rad_ex_e")
+        labels_neg = labels_neg.append("Rad (ex)")
+    if "hf_int_rad_rec_e" in ds.data_vars:
+        data_neg = data_neg.append("hf_int_rad_rec_e")
+        labels_neg = labels_neg.append("Rad (rec")
+
 
     ax.stackplot(ds.coords["t"], data_pos, labels = labels_pos, baseline = "zero", colors = ["teal", "cyan", "navy"], alpha = 0.7)
     ax.stackplot(ds.coords["t"], data_neg, labels = labels_neg, baseline = "zero", colors = ["darkorange", "deeppink", "crimson"], alpha = 0.7)

@@ -204,8 +204,10 @@ def show_heat_balance_table(ds):
             for target in m["targets"]:
                 df.loc[target, species] = last[f"hf_int_{target}_{species}"]
         
-        df.loc["rad_ex", "e"] = last[f"hf_int_rad_ex_e"]
-        df.loc["rad_rec", "e"] = last[f"hf_int_rad_rec_e"]
+        if "hf_int_rad_ex_e" in last.data_vars:
+            df.loc["rad_ex", "e"] = last[f"hf_int_rad_ex_e"]
+        if "hf_int_rad_rec_e" in last.data_vars:
+            df.loc["rad_rec", "e"] = last[f"hf_int_rad_rec_e"]
         
     df["total"] = df.sum(axis=1)
     imbalance = df["total"].sum()
@@ -257,8 +259,10 @@ def show_particle_balance_table(ds):
                 df.loc[target, species] = last[f"pf_int_{target}_{species}"]
         
     for species in m["ion_species"] + m["neutral_species"]:
-        df.loc["iz", species] = last[f"pf_int_iz_{species}"]
-        df.loc["rec", species] = last[f"pf_int_rec_{species}"]
+        if f"pf_int_iz_{species}" in last.keys():
+            df.loc["iz", species] = last[f"pf_int_iz_{species}"]
+        if f"pf_int_rec_{species}" in last.keys():
+            df.loc["rec", species] = last[f"pf_int_rec_{species}"]
         
     df["total"] = df.sum(axis=1)
     imbalance = df["total"].sum()
