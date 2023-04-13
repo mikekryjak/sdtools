@@ -274,24 +274,30 @@ def calculate_target_fluxes(ds):
     # ds = ds.copy() # This avoids accidentally messing up rest of dataset
     m = ds.metadata
     
-    # Hardcoded for only one recycling ion species for now
-    ion = ds.options["recycling"]["species"]
+    if "recycling" in ds.options.keys():
+        ion = ds.options["recycling"]["species"]
+        recycling = True
+    else:
+        ion = m["ion_species"][0] # TODO: Fix this - currently hardcoding the first ion species...
+        recycling = False
+    
     
     for target in m["targets"]:
         ds[f"hf_{target}_e"], ds[f"hf_{target}_{ion}"],  ds[f"pf_{target}_{ion}"] = sheath_boundary_simple(ds, ion, 
                                                                                 target = target)
         
-        neutral = ds.metadata["recycle_pair"][ion]
-        ds[f"pf_{target}_{neutral}"] = -ds[f"pf_{target}_{ion}"] * ds.options[ion]["recycle_multiplier"]   # TODO generalise and check
-        ds[f"pf_{target}_{neutral}"].attrs.update(
-                {
-                "standard_name": f"target particle flux on {target} ({neutral})",
-                "long_name": f"target particle flux on {target} ({neutral})",
-                })
-        
-        # Assume neutral heat loss to target is zero for now
-        # TODO: fix this when neutral_gamma is used
-        ds[f"hf_{target}_{neutral}"] = xr.zeros_like(ds[f"hf_{target}_{ion}"])
+        if recycling is True:
+            neutral = ds.metadata["recycle_pair"][ion]
+            ds[f"pf_{target}_{neutral}"] = -ds[f"pf_{target}_{ion}"] * ds.options[ion]["recycle_multiplier"]   # TODO generalise and check
+            ds[f"pf_{target}_{neutral}"].attrs.update(
+                    {
+                    "standard_name": f"target particle flux on {target} ({neutral})",
+                    "long_name": f"target particle flux on {target} ({neutral})",
+                    })
+            
+            # Assume neutral heat loss to target is zero for now
+            # TODO: fix this when neutral_gamma is used
+            ds[f"hf_{target}_{neutral}"] = xr.zeros_like(ds[f"hf_{target}_{ion}"])
             
         
     return ds
