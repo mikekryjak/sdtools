@@ -339,10 +339,10 @@ def calculate_radial_fluxes(ds, force_neumann = False):
         ds[f"hf_perp_diff_L_{name}"] = L 
         ds[f"hf_perp_diff_R_{name}"] = R
 
-        # Perpendicular heat convection
+        # Perpendicular heat convection NOTE: 3/2 factor was initially omitted by accident
         L, R  =  Div_a_Grad_perp_upwind_fast(ds, constants("q_e") * ds[f"T{name}"] * ds[f"anomalous_D_{name}"], ds[f"N{name}"])
-        ds[f"hf_perp_conv_L_{name}"] = L 
-        ds[f"hf_perp_conv_R_{name}"] = R
+        ds[f"hf_perp_conv_L_{name}"] = L * 3/2
+        ds[f"hf_perp_conv_R_{name}"] = R * 3/2
 
         # Total
         ds[f"hf_perp_tot_L_{name}"] = ds[f"hf_perp_conv_L_{name}"] + ds[f"hf_perp_diff_L_{name}"]
@@ -384,15 +384,15 @@ def calculate_radial_fluxes(ds, force_neumann = False):
         
         # Plim = ds[f"P{name}"].where(ds[f"P{name}"]>0, 1e-8 * Pnorm) # Limit P to 1e-8 in normalised units
         
-        # Perpendicular heat diffusion
+        # Perpendicular heat diffusion NOTE: 3/2 factor was initially omitted by accident
         L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*ds[f"P{name}"], np.log(Plim))
-        ds[f"hf_perp_conv_L_{name}"] = L #* 3/2
-        ds[f"hf_perp_conv_R_{name}"] = R #* 3/2
+        ds[f"hf_perp_conv_L_{name}"] = L * 3/2
+        ds[f"hf_perp_conv_R_{name}"] = R * 3/2
         
-        # Perpendicular heat conduction
+        # Perpendicular heat conduction NOTE: this is actually energy not pressure like above, so no factor needed
         L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*Nd, constants("q_e")*Td)
-        ds[f"hf_perp_diff_L_{name}"] = L #* 3/2 
-        ds[f"hf_perp_diff_R_{name}"] = R #* 3/2
+        ds[f"hf_perp_diff_L_{name}"] = L 
+        ds[f"hf_perp_diff_R_{name}"] = R
         
         # Total
         ds[f"hf_perp_tot_L_{name}"] = ds[f"hf_perp_conv_L_{name}"] + ds[f"hf_perp_diff_L_{name}"]
