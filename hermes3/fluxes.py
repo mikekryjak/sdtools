@@ -539,6 +539,7 @@ def sheath_boundary_simple(bd, species, target,
     Ne = bd["Ne"]
     Te = bd["Te"]
     Ti = bd[f"T{species}"]
+    Vi = bd[f"V{species}"]
     
     if not include_convective:
         gamma_e = gamma_e - 2.5
@@ -575,7 +576,12 @@ def sheath_boundary_simple(bd, species, target,
     C_i = np.sqrt((sheath_ion_polytropic * qe * tisheath + Zi * qe * tesheath) / (AA * mp))
 
     vesheath = C_i  # Assuming no current
-
+    
+    # Allow to go supersonic based on final cell value
+    # Note in this function V is always positive, in Hermes-3 there is a vertical direction dependency
+    
+    vesheath = np.where(vesheath > abs(Vi.isel(theta=y)), vesheath, abs(Vi.isel(theta=y)))
+    
     # Parallel heat flux in W/m^2.
     # Note: Corrected for 5/2Pe convective thermal flux, and small electron kinetic energy flux
     # so gamma_e is the total *energy* flux coefficient.
