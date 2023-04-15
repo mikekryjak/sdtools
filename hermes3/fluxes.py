@@ -497,6 +497,7 @@ def sheath_boundary_simple(bd, species, target,
     """
     
     m = bd.metadata
+    bd = bd.isel(x = slice(m["MYG"], -m["MYG"])) # No radial guard cells allowed
     target_indices = dict()
     
     # TODO: Integrate with select_region
