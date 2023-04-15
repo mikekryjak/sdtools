@@ -1,4 +1,7 @@
 import pickle as pkl
+# import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
 
 def read_file(filename, quiet = False):
 # Reads a pickle file and returns it.
