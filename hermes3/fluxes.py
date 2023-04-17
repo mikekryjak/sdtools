@@ -2,6 +2,9 @@ import xarray as xr
 import numpy as np
 from hermes3.utils import *
 import pandas as pd
+import warnings
+warnings.simplefilter('ignore', RuntimeWarning)
+
 
 """
 Power in through X inner Pin = 162418.93698190025 W  [55238.53718922597 ion 107180.39979267426 electron]
