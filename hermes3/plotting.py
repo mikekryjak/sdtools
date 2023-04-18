@@ -20,6 +20,7 @@ class Monitor():
         
         self.case = case
         self.ds = self.case.ds
+        m = self.ds.metadata
         # self.windows = np.array(windows)
         self.windows = windows
         num_rows = len(self.windows)
@@ -27,6 +28,7 @@ class Monitor():
         self.noguards = case.ds.hermesm.select_region("all_noguards")
         self.core = case.ds.hermesm.select_region("core_noguards")
         self.sol = case.ds.hermesm.select_region("sol_noguards")
+        self.omp = case.ds.hermesm.select_region("outer_midplane_a").isel(x = slice(m["MYG"], -m["MYG"]))
         
         self.c = ["navy", "deeppink", "teal", "darkorange"]
         
@@ -48,6 +50,7 @@ class Monitor():
         
         legend = True
         xformat = True
+        m = self.ds.metadata
         
         if "cvode" in name:
             cvode = dict()
@@ -71,21 +74,24 @@ class Monitor():
                 ax.set_yscale("log")
 
 
-        elif name == "density":
+        elif name == "avg_density":
             self.core["Ne"].mean(["x", "theta"]).plot(ax = ax, label = "Ne core", ls = "--", c = self.c[0])
             self.core["Nd"].mean(["x", "theta"]).plot(ax = ax, label = "neut core", ls = "--", c = self.c[1])
             self.sol["Ne"].mean(["x", "theta"]).plot(ax = ax, label = "Ne sol", c = self.c[0])
             self.sol["Nd"].mean(["x", "theta"]).plot(ax = ax, label = "neut sol", c = self.c[1])
             ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
-            # ax.set_yscale("log")
+            ax.set_yscale("log")
             
-        elif name == "temperature":
+        elif name == "avg_temp":
             self.core["Td+"].mean(["x", "theta"]).plot(ax = ax, label = "Td+ core", ls = "--", c = self.c[0])
             self.core["Te"].mean(["x", "theta"]).plot(ax = ax, label = "Te core", ls = "--", c = self.c[1])
             self.sol["Td+"].mean(["x", "theta"]).plot(ax = ax, label = "Td+ sol", c = self.c[0])
             self.sol["Te"].mean(["x", "theta"]).plot(ax = ax, label = "Te sol", c = self.c[1])
             ax.set_yscale("log")
             ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
+            
+        elif name == "sep_density":
+            self.omp["Ne"].isel(x = m["ixseps1"]).plot(ax = ax, c = self.c[0])
             
         elif name == "radiation":
             (self.core["Rd+_ex"].mean(["x", "theta"])*-1).plot(ax = ax, label = "core", c = self.c[0])
@@ -376,41 +382,53 @@ class Monitor2D():
 
             
             
-def plot_ddt(case, smoothing = 1, dpi = 120, volume_weighted = True, ylims = (None,None), xlims = (None,None)):
+def plot_ddt(case, 
+             smoothing = 1, 
+             dpi = 120, 
+             volume_weighted = True, 
+             ylims = (None,None), 
+             xlims = (None,None)):
     """
     RMS of all the ddt parameters, which are convergence metrics.
     Inputs:
     smoothing: moving average period used for plot smoothing (default = 20. 1 is no smoothing)
     volume_weighted: weigh the ddt by cell volume
     """
+    ds = case.ds.hermesm.select_region("all_noguards")
+    
+
+        
+    
+    
     # Find parameters (species dependent)
     list_params = []
 
-    for var in case.ds.data_vars:
+    for var in ds.data_vars:
         if "ddt" in var and not any([x in var for x in []]):
             list_params.append(var)
     list_params.sort()
     
-    # Account for case if not enough timesteps for smoothing
-    if len(case.ds.coords["t"]) < smoothing:
-        smoothing = len(case.ds.coords) / 10
+    # Account for when if not enough timesteps for smoothing
+    if len(ds.coords["t"]) < smoothing:
+        smoothing = len(ds.coords) / 10
 
     res = dict()
     ma = dict()
+    
 
     for param in list_params:
 
         if volume_weighted:
-            res[param] = (case.ds[param] * case.ds.dv) / np.sum(case.ds.dv)    # Cell volume weighted
+            res[param] = (ds[param] * ds.dv) / np.sum(ds.dv)    # Cell volume weighted
         else:
-            res[param] = case.ds[param]
+            res[param] = ds[param]
         res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))    # Root mean square
         res[param] = np.convolve(res[param], np.ones(smoothing), "same")    # Moving average with window = smoothing
 
     fig, ax = plt.subplots(figsize = (5,4), dpi = dpi)
 
     for param in list_params:
-        ax.plot(case.ds.coords["t"], res[param], label = param, lw = 1)
+        ax.plot(ds.coords["t"], res[param], label = param, lw = 1)
         
     ax.set_yscale("log")
     ax.grid(which = "major", lw = 1)
