@@ -252,7 +252,7 @@ class Case:
         
         
     def guard_replace(self):
-
+        pass
         if self.is_2d == False:
             if self.ds.metadata["keep_yboundaries"] == 1:
                 # Replace inner guard cells with values at cell boundaries
@@ -266,14 +266,9 @@ class Case:
                     for var_name in self.ds.data_vars:
                         var = self.ds[var_name]
                         
-                        if "y" in var.dims:
-                            
-                            if "t" in var.dims:
-                                var[:, -2] = (var[:,-3] + var[:,-2])/2
-                                var[:, 1] = (var[:, 1] + var[:, 2])/2
-                            else:
-                                var[-2] = (var[-3] + var[-2])/2
-                                var[1] = (var[1] + var[2])/2 
+                        if "pos" in var.dims:
+                            var[{"pos":-2}] = (var[{"pos":-3}] + var[{"pos":-2}])/2
+                            var[{"pos":1}] = (var[{"pos":1}] + var[{"pos":2}])/2
                             
                 else:
                     raise Exception("Guards already replaced!")
