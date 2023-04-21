@@ -48,11 +48,9 @@ class SOLEDGEdata:
         
         
         if mode == "plot1d_omp":
-            
             self.process_plot1d(df, "omp")
             
         elif mode == "plot1d_imp":
-            
             self.process_plot1d(df, "imp")
             
         if mode == "wall_ntmpi":
@@ -75,9 +73,16 @@ class SOLEDGEdata:
                                             'Ppi':"Pd+",
                                             'Ppe':"Pe",
                                             'IRadi':"Rd+_ex",
+                                            "Nni":"Nd",
+                                            "Nmi":"Nd2",
+                                            "Tni":"Td",
+                                            "Tmi":"Td2",
+                                            "Pni":"Pd",
+                                            "vyni":"Vyd",
                                             "DIST":"x"})
         self.regions[name] = self.regions[name].set_index("x")
         self.regions[name].index.name = "pos"
+        
         
     def process_ring(self):
         """ 
@@ -402,7 +407,8 @@ def lineplot_compare(
             else:
                 if "T" in param or "N" in param and "outer_lower" not in region:
                     axes[i].set_yscale("log")
-               
+            xlims = (None,None)
+            ylims = (None,None)
             # Set ylims
             ymin = min(ymin)*0.8
             ymax = max(ymax)*1.2
