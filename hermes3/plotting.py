@@ -740,12 +740,19 @@ def create_norm(logscale, norm, vmin, vmax):
 
 
 def camera_view(ax, loc, tokamak = "ST40"):
+    """
+    Available views:
+    ---------
+    lower_outer, lower2
+    """
     
     lims = dict()
     if loc == "lower_outer":
         lims = dict(x = (0.45, 0.65), y = (-0.87, -0.7))
     elif loc == "lower2":
         lims = dict(x = (0.15, 0.66), y = (-0.87, -0.5))
+    elif loc == "lower_half":
+        lims = dict(x = (None,None), y = (-0.87, 0.1))
         
     else:
         raise Exception(f"Location {loc} not implemented yet")

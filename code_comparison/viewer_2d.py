@@ -4,17 +4,24 @@ import pandas as pd
 import scipy.signal
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import matplotlib.tri						as tri
 import xbout
 from matplotlib.widgets import RangeSlider, TextBox
 from .code_comparison import parse_solps
+import h5py
 
 sys.path.append(r'C:\Users\mikek\OneDrive\Project\python-packages')
+sys.path.append(r'C:\Users\mikek\OneDrive\Project\python-packages\soledge')
 
 try:
     import gridtools.solps_python_scripts.setup
     from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d
 except:
     print("Gridtools not found")
+    
+# SOLEDGE functions
+from files.load_plasma_files						import load_plasma_files
+from routines.h5_routines							import h5_read
 
 def name_parser(x, code):
     
@@ -23,11 +30,27 @@ def name_parser(x, code):
         "Te" : "te",
         "Td+" : "ti",   
         "Nd" : "pdenn",   # Combined atoms+molecules. Custom made by matteo. Atoms: pdena, Molecules: pdenm
-        "Td" : "tdena"    # Compare only atom temperature, ignore molecules (more physical)
+        "Td" : "tdena",    # Compare only atom temperature, ignore molecules (more physical)
+        "Sd+_iz" : "AMJUEL_H.4_2.1.5_3"
+    }
+    
+    soledge = {
+        "Ne" : "Dense",
+        "Te" : "Tempe",
+        "Nd+" : "Densi",
+        "Td+" : "Tempi",
+        "Vd+" : "velocityi",
+        "Pd+" : "Ppi",
+        "Pe" : "Ppe",
+        "Rd+_ex" : "IRadi",
+        "Nd" : "Nni",
+        "Td" : "Tni",
     }
     
     if code == "solps":
         return solps[x]
+    elif code == "soledge":
+        return soledge[x]
 
 class viewer_2d():
     """
@@ -73,6 +96,8 @@ class viewer_2d():
         else:
             self.min = None
             self.max = None
+        
+        norm = _create_norm(logscale, None, vmin, vmax)
 
         fig = plt.figure(dpi=dpi)
         fig.set_figheight(6)
@@ -101,20 +126,20 @@ class viewer_2d():
             
             model = cases[casename]
             
+            # HERMES PLOTTING------------------------------------
             if model["code"] == "hermes":
                 print(casename)
                 data = model["ds"][param].hermesm.clean_guards()
                 data.bout.polygon(ax = axes[i], 
-                                    add_colorbar = False, logscale = logscale, 
+                                    add_colorbar = False, norm = norm,
                                     separatrix = True, cmap = cmap, 
-                                    vmin = vmin, vmax = vmax, 
                                     antialias = False,
                                     linewidth = 0,
                                     )
-                axes[i].set_title(f"Hermes-3\{casename}\n{param}")
+                axes[i].set_title(f"Hermes-3\n{casename}\n{param}")
                 
+            # SOLPS PLOTTING------------------------------------
             elif model["code"] == "solps":
-                
                 if "param_override" in model.keys():
                     solps_name = model["param_override"]
                 else:
@@ -136,15 +161,26 @@ class viewer_2d():
                             vmin = vmin, 
                             vmax = vmax, 
                             plot_cbar = solps_cbar)
-                    axes[i].set_title(f"SOLPS\{casename}\n{solps_name}")
+                    axes[i].set_title(f"SOLPS\n{casename}\n{solps_name}")
                 
                 else:
                     axes[i].set_title(f"SOLPS\{casename}: {param} not found")
                     
-                    
-                # plot_2d(fig, axes[i], where = model["path"], what = name_parser(param,"solps"), cmap = "Spectral_r", scale = ("log" if logscale is True else "linear"), vmin = vmin, vmax = vmax, plot_cbar = False)
-                # axes[i].set_title(f"SOLPS\{casename}")
+            # SOLEDGE PLOTTING------------------------------------
+            elif model["code"] == "soledge":
+
+                try:
+                    soledge_name = name_parser(param, "soledge")
+                except:
+                    print(f"Parameter {param} not found in SOLEDGE")
+                    soledge_name = None
+            
+                if soledge_name != None:
+                    soledge_plot = SOLEDGEplot(path = model["path"], param = soledge_name)
+                    soledge_plot.plot(ax = axes[i], norm = norm)
                 
+                axes[i].set_title(f"SOLEDGE2D\n{casename}\nParameter = {soledge_name}")
+            # SET LIMITS------------------------------------
             if xlim != (None, None):
                 axes[i].set_xlim(xlim)
             else:
@@ -164,7 +200,6 @@ class viewer_2d():
         # Add colorbar
         if hermes_present is True:
             axes[-1] = fig.add_subplot(gs0a[0,-1])   
-            norm = xbout.plotting.utils._create_norm(logscale, None, vmin, vmax)
             sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
             cbar = plt.colorbar(mappable = sm, cax = axes[-1], label = param)
 
@@ -175,7 +210,7 @@ class viewer_2d():
                 orientation = "horizontal",
                 valinit = (self.min, self.max)
                 )
-            slider.on_changed(update)
+            
 
         artists = []
         
@@ -204,7 +239,7 @@ class viewer_2d():
                 fig.canvas.draw_idle()
                 fig.canvas.flush_events() # https://stackoverflow.com/questions/64789437/what-is-the-difference-between-figure-show-figure-canvas-draw-and-figure-canva
                 
-        
+        slider.on_changed(update)
 
             
         
@@ -224,6 +259,50 @@ class viewer_2d():
                 
         return np.max(max), np.min(min)
     
+class SOLEDGEplot():
+    """
+    Reads parameter data from SOLEDGE case
+    Finds min and max
+    Can plot it on a provided axis. Accepts a custom norm
+    Provide it a path to the case directory and parameter name in SOLEDGE convention
+    Parameter names are available in .Triangles.Vnames
+    """
+    def __init__(self, path, param):
+        
+        Plasmas = load_plasma_files(path, nZones=0, Evolution=0, iPlasmas=[0,1])
+        if param.endswith("e"):
+            # Electrons are index 0
+            species_idx = 0
+        elif param.endswith("i"):
+            # Ions and neutrals are index 1
+            species_idx = 1
+        else:
+            raise Exception("Parameter name must end in e or i")
+
+        # Extract parameter data and find ranges
+        iPar = Plasmas[species_idx][0].Triangles.VNames.index(param)	
+        self.plot_data = Plasmas[1][0].Triangles.Values[iPar]
+        self.vmin = min(self.plot_data)
+        self.vmax = max(self.plot_data)
+        
+        # Return to reasonable units
+        # if "Temp" in param:
+        #     self.plot_data *= 1e-3
+        
+        # Extract geom and make triangulation
+        if_tri	 = h5py.File(os.path.join(path,"triangles.h5"), "r")
+        TriKnots = h5_read(if_tri,"triangles/tri_knots")
+        TriKnots = TriKnots - 1 										#Matlab/Fortan to python indexes
+        self.R		 = h5_read(if_tri,"knots/R")*0.01
+        self.Z		 = h5_read(if_tri,"knots/Z")*0.01
+        if_tri.close()
+        self.TripTriang = tri.Triangulation(self.R, self.Z, triangles=TriKnots)
+        
+        
+        
+    def plot(self, ax, norm = None, cmap = "Spectral_r"):
+        ax.tripcolor(self.TripTriang, self.plot_data, norm = norm, cmap = cmap,  linewidth=0)
+        # ax.tripcolor(self.R, self.Z, self.plot_data, norm = norm, cmap = cmap,antialiaseds = True, linewidth=0)
     
 class viewer_2d_next():
     """
@@ -416,3 +495,26 @@ class viewer_2d_next():
                 min.append(case["ds"][self.param].values.min())
                 
         return np.max(max), np.min(min)
+    
+    
+def _create_norm(logscale, norm, vmin, vmax):
+    if logscale:
+        if norm is not None:
+            raise ValueError(
+                "norm and logscale cannot both be passed at the same time."
+            )
+        if vmin * vmax > 0:
+            # vmin and vmax have the same sign, so can use standard log-scale
+            norm = mpl.colors.LogNorm(vmin=vmin, vmax=vmax)
+        else:
+            # vmin and vmax have opposite signs, so use symmetrical logarithmic scale
+            if not isinstance(logscale, bool):
+                linear_scale = logscale
+            else:
+                linear_scale = 1.0e-5
+            linear_threshold = min(abs(vmin), abs(vmax)) * linear_scale
+            norm = mpl.colors.SymLogNorm(linear_threshold, vmin=vmin, vmax=vmax)
+    elif norm is None:
+        norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+
+    return norm
