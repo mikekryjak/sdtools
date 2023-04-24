@@ -51,7 +51,7 @@ def calculate_heat_balance(ds, merge_targets = True):
     for species in m["species"]:
         ds[f"hf_int_src_{species}"] = (domain[f"P{species}_src"] * domain["dv"]).sum(["x", "theta"]).squeeze() * 3/2
         ds[f"hf_int_core_{species}"] = core[f"hf_perp_tot_L_{species}"].sum("theta").squeeze()
-        ds[f"hf_int_sol_{species}"] = sol[f"hf_perp_tot_R_{species}"].sum("theta").squeeze()
+        ds[f"hf_int_sol_{species}"] = sol[f"hf_perp_tot_R_{species}"].sum("theta").squeeze() * -1 # Positive flow at SOL leaves model
         ds[f"hf_int_pfr_{species}"] = pfr[f"hf_perp_tot_L_{species}"].sum("theta").squeeze()
         
         for place in list_places:
@@ -215,11 +215,15 @@ def show_heat_balance_table(ds):
     df["total"] = df.sum(axis=1)
     imbalance = df["total"].sum()
     imbalance_frac = imbalance / (df["total"]["source"] + df["total"]["core"])
-
+    total_in = df["total"][df["total"]>0].sum()
+    total_out = df["total"][df["total"]<0].sum()
+    
     # print(f"Recycling fraction: {frec:.2%}")
     print(f"Domain volume: {ds['dv'].sum():.3e} [m3]")
+    print(f"Power in: {total_in*1e-6:,.3f} [MW]")
+    print(f"Power out: {total_out*1e-6:,.3f} [MW]")
     print(f"Power imbalance: {imbalance*1e-6:,.3f} [MW]")
-    print(f"Power imbalance as frac of core + source: {imbalance_frac:.2%}")
+    print(f"Power imbalance as frac of power in: {imbalance_frac:.2%}")
     print("---------------------------------------")
     print(f"Total fluxes in [MW]:")
     table = df.copy()*1e-6 # For display only
