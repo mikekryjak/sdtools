@@ -793,7 +793,7 @@ def plot_perp_heat_fluxes(ds):
     # d["hf_perp_tot_L_d"].plot(ax = ax, marker = "o", label = "d", ms = 2, c = "firebrick")
     ax.set_xlabel("Radial index")
     ax.set_ylabel("Heat flow [s-1]")
-    ax.set_title("Particle flow integral")
+    ax.set_title("Radial heat flow integral")
     ax.set_yscale("symlog")
     ax.grid()
     ax.legend()
