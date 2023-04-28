@@ -236,7 +236,7 @@ def parse_solps(param, loc):
         "Te" : "te3",
         "Td+" : "ti3",
         "Ne" : "ne3",
-        "Nd" : "dnb23",
+        "Nd" : "dab23",
         "Td" : "tab23",
         "Sd+_iz" : "AMJUEL_H.4_2.1.5_3" ,
     }
@@ -369,7 +369,8 @@ def lineplot_compare(
         fig, axes = plt.subplots(1,len(params), dpi = dpi, figsize = (4.2*len(params),5), sharex = True)
         fig.subplots_adjust(hspace = 0, wspace = 0.25, bottom = 0.25, left = 0.1, right = 0.9)
         
-        linestyles = {"Hermes-3" : "-", "SOLEDGE2D" : ":", "SOLPS" : "--"}
+        linestyles = {"Hermes-3" : "-", "SOLEDGE2D" : "--", "SOLPS" : "--"}
+
 
         
         for i, param in enumerate(params):
@@ -412,6 +413,14 @@ def lineplot_compare(
             # Set ylims
             ymin = min(ymin)*0.8
             ymax = max(ymax)*1.2
+            
+            if "Td+" in param:
+                ymin *= 0.4
+            if "Td" in param:
+                ymin *= 0.9
+            # if "Nd" in param:
+            #     ymax *= 10
+
             axes[i].set_ylim(ymin,ymax) 
             
 
@@ -450,11 +459,11 @@ def lineplot_compare(
         legend_items = []
         for j, name in enumerate(cases.keys()):
             if "SOLPS" in name:
-                ls = "--"
+                ls = linestyles["SOLPS"]
             elif "SOLEDGE" in name:
-                ls = ":"
+                ls = linestyles["SOLEDGE2D"]
             else:
-                ls = "-"
+                ls = linestyles["Hermes-3"]
             legend_items.append(mpl.lines.Line2D([0], [0], color=colors[j], lw=2, ls = ls))
             
         fig.legend(legend_items, cases.keys(), ncol = len(cases), loc = "upper center", bbox_to_anchor=(0.5,0.15))
