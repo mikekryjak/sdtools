@@ -21,6 +21,7 @@ except:
     
 # SOLEDGE functions
 from files.load_plasma_files						import load_plasma_files
+from files.load_soledge_mesh_file				import load_soledge_mesh_file
 from routines.h5_routines							import h5_read
 
 def name_parser(x, code):
@@ -70,6 +71,7 @@ class viewer_2d():
                  ylim = (None,None),
                  logscale = True,
                  dpi = 120,
+                 wspace = 0.05,
                  cmap = "Spectral_r"):
         
         hermes_present = False
@@ -108,7 +110,7 @@ class viewer_2d():
                                         ncols=num_cases+1, nrows=2,
                                         width_ratios = [1]*num_cases + [0.1], # cbar, empty space, control,
                                         height_ratios = [0.95, 0.05],
-                                        wspace = 0.05
+                                        wspace = wspace
                                         )
     
         
@@ -136,7 +138,7 @@ class viewer_2d():
                                     antialias = False,
                                     linewidth = 0,
                                     )
-                axes[i].set_title(f"Hermes-3\n{casename}\n{param}")
+                axes[i].set_title(f"Hermes-3\n{casename}")#\n{param}")
                 
             # SOLPS PLOTTING------------------------------------
             elif model["code"] == "solps":
@@ -156,7 +158,7 @@ class viewer_2d():
                     plot_2d(fig, axes[i], 
                             where = model["path"], 
                             what = solps_name, 
-                            cmap = "Spectral_r", 
+                            cmap = cmap, 
                             scale = ("log" if logscale is True else "linear"), 
                             vmin = vmin, 
                             vmax = vmax, 
@@ -177,9 +179,9 @@ class viewer_2d():
             
                 if soledge_name != None:
                     soledge_plot = SOLEDGEplot(path = model["path"], param = soledge_name)
-                    soledge_plot.plot(ax = axes[i], norm = norm)
+                    soledge_plot.plot(ax = axes[i], norm = norm, cmap = cmap)
                 
-                axes[i].set_title(f"SOLEDGE2D\n{casename}\nParameter = {soledge_name}")
+                axes[i].set_title(f"SOLEDGE2D\n{casename}")#\nParameter") = {soledge_name}")
             # SET LIMITS------------------------------------
             if xlim != (None, None):
                 axes[i].set_xlim(xlim)
@@ -239,7 +241,7 @@ class viewer_2d():
                 fig.canvas.draw_idle()
                 fig.canvas.flush_events() # https://stackoverflow.com/questions/64789437/what-is-the-difference-between-figure-show-figure-canvas-draw-and-figure-canva
                 
-        slider.on_changed(update)
+        # slider.on_changed(update)
 
             
         
@@ -298,11 +300,54 @@ class SOLEDGEplot():
         if_tri.close()
         self.TripTriang = tri.Triangulation(self.R, self.Z, triangles=TriKnots)
         
+        # Extract mesh for eqb 
+        self.Config = load_soledge_mesh_file(os.path.join(path,"mesh.h5"))
         
         
-    def plot(self, ax, norm = None, cmap = "Spectral_r"):
+        
+    def plot(self, ax, norm = None, sep = True, cmap = "Spectral_r"):
         ax.tripcolor(self.TripTriang, self.plot_data, norm = norm, cmap = cmap,  linewidth=0)
+        ax.set_aspect("equal")
+        if sep is True:
+            
+            lw = 2
+            c = "w"
+            lhs, rhs = self._get_rz_sep()
+            ax.plot(lhs["R"], lhs["Z"], lw = lw, c = c)
+            ax.plot(rhs["R"], rhs["Z"], lw = lw, c = c)
         # ax.tripcolor(self.R, self.Z, self.plot_data, norm = norm, cmap = cmap,antialiaseds = True, linewidth=0)
+    
+    def _get_rz_sep(self):
+
+        """
+        Queries grid regions to obtain separatrix R and Z coordinates
+        Extends to the equilibium boundary
+        Requires a Config (grid/eqb) file with MagZones computed
+        Returns lhs and rhs for each of the sides of the separatrix for easy contiguous line plots
+        Those are dicts with keys R and Z for the respective coords
+        """
+        Config = self.Config
+        sep = dict()
+        sep["UOT"] = Config.MagZones[2].north
+        sep["UIT"] = Config.MagZones[3].north
+        sep["LIT"] = Config.MagZones[4].north
+        sep["LOT"] = Config.MagZones[5].north
+
+        sep["ISEP"] = Config.MagZones[0].north
+        sep["OSEP"] = Config.MagZones[1].north
+
+        lhs = dict()
+        rhs = dict()
+        for coord in ["R", "Z"]:
+            # lhs[coord] = np.
+            lhs[coord] = sep["LIT"].__dict__[coord]
+            lhs[coord] = np.concatenate([lhs[coord], sep["ISEP"].__dict__[coord]])
+            lhs[coord] = np.concatenate([lhs[coord], sep["UIT"].__dict__[coord]])
+            rhs[coord] = sep["UOT"].__dict__[coord]
+            rhs[coord] = np.concatenate([rhs[coord], sep["OSEP"].__dict__[coord]])
+            rhs[coord] = np.concatenate([rhs[coord], sep["LOT"].__dict__[coord]])
+            
+        return lhs, rhs
     
 class viewer_2d_next():
     """
