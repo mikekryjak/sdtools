@@ -594,6 +594,20 @@ class Case:
             "long_name": "Recombination ion source (d+)"
         },
         
+        "Sd+_feedback": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units": "m-3s-1",
+            "standard_name": "density source",
+            "long_name": "Upstream density feedback source"
+        },
+        
+        "density_source_shape_d+": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units": "m-3s-1",
+            "standard_name": "density source shape",
+            "long_name": "Upstream density feedback source shape"
+        },
+        
         "NVd+": {
             "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"],
             "units": "kgms-1",
