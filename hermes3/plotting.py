@@ -394,7 +394,12 @@ def plot_ddt(case,
     smoothing: moving average period used for plot smoothing (default = 20. 1 is no smoothing)
     volume_weighted: weigh the ddt by cell volume
     """
-    ds = case.ds.hermesm.select_region("all_noguards")
+    
+    if case.is_2d:
+        ds = case.ds.hermesm.select_region("all_noguards")
+    else:
+        # No guard cells at all
+        ds = case.ds.isel(pos=slice(2,-2))
     
 
         
@@ -422,10 +427,16 @@ def plot_ddt(case,
             res[param] = (ds[param] * ds.dv) / np.sum(ds.dv)    # Cell volume weighted
         else:
             res[param] = ds[param]
-        res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))    # Root mean square
+            
+        if case.is_2d:
+            res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))    # Root mean square
+        else:
+            res[param] = np.sqrt(np.mean(res[param]**2, axis = 1))    # Root mean square
         res[param] = np.convolve(res[param], np.ones(smoothing), "same")    # Moving average with window = smoothing
 
     fig, ax = plt.subplots(figsize = (5,4), dpi = dpi)
+    fig.subplots_adjust(right=0.8)
+
 
     for param in list_params:
         ax.plot(ds.coords["t"], res[param], label = param, lw = 1)
