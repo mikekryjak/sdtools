@@ -908,8 +908,8 @@ class Case:
             "standard_name" : "cross-sectional area",
             "long_name" : "Cell parallel cross-sectional area"})
         
-        self.ds["dV"] = self.ds.J * self.ds.dy
-        self.ds["dV"].attrs.update({
+        self.ds["dv"] = self.ds.J * self.ds.dy
+        self.ds["dv"].attrs.update({
             "conversion" : 1,
             "units" : "m3",
             "standard_name" : "cell volume",
