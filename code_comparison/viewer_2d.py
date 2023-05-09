@@ -30,9 +30,10 @@ def name_parser(x, code):
         "Ne" : "ne",
         "Te" : "te",
         "Td+" : "ti",   
-        "Nd" : "pdenn",   # Combined atoms+molecules. Custom made by matteo. Atoms: pdena, Molecules: pdenm
+        "Nd" : "pdena",   # Combined atoms+molecules. Custom made by matteo. Atoms: pdena, Molecules: pdenm
         "Td" : "tdena",    # Compare only atom temperature, ignore molecules (more physical)
-        "Sd+_iz" : "AMJUEL_H.4_2.1.5_3"
+        "Sd+_iz" : "AMJUEL_H.4_2.1.5_3",
+        # "R" : "b2ra"
     }
     
     soledge = {
@@ -43,7 +44,8 @@ def name_parser(x, code):
         "Vd+" : "velocityi",
         "Pd+" : "Ppi",
         "Pe" : "Ppe",
-        "Rd+_ex" : "IRadi",
+        "Rd+_ex" : "IRadi",   # Assumes only ions 
+        "R" : "TotRadi",
         "Nd" : "Nni",
         "Td" : "Tni",
     }
