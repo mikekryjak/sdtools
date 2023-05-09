@@ -578,6 +578,13 @@ class Case:
             "standard_name": "recombination radiation (d+)",
             "long_name": "Recombination radiation (d+)"
         },
+        
+        "Rar": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "argon radiation",
+            "long_name": "Argon radiation"
+        },
 
 
         "Sd+_iz": {
@@ -606,6 +613,27 @@ class Case:
             "units": "kgms-1",
             "standard_name": "neutral momentum",
             "long_name": "Neutral momentum (d+)"
+        },
+
+        "Fdd+_cx": {
+            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"] * m["Omega_ci"],
+            "units": "kgm-3s-2",
+            "standard_name": "CX momentum transfer",
+            "long_name": "CX momentum transfer"
+        },
+        
+        "Fd+_iz": {
+            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"] * m["Omega_ci"],
+            "units": "kgm-3s-2",
+            "standard_name": "IZ momentum transfer",
+            "long_name": "IZ momentum transfer"
+        },
+        
+        "Fd+_rec": {
+            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"] * m["Omega_ci"],
+            "units": "kgm-3s-2",
+            "standard_name": "Rec momentum transfer",
+            "long_name": "Rec momentum transfer"
         },
         
         "Vd": {
