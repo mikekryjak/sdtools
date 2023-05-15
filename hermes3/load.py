@@ -252,7 +252,7 @@ class Case:
         
         
     def guard_replace(self):
-
+        pass
         if self.is_2d == False:
             if self.ds.metadata["keep_yboundaries"] == 1:
                 # Replace inner guard cells with values at cell boundaries
@@ -266,14 +266,9 @@ class Case:
                     for var_name in self.ds.data_vars:
                         var = self.ds[var_name]
                         
-                        if "y" in var.dims:
-                            
-                            if "t" in var.dims:
-                                var[:, -2] = (var[:,-3] + var[:,-2])/2
-                                var[:, 1] = (var[:, 1] + var[:, 2])/2
-                            else:
-                                var[-2] = (var[-3] + var[-2])/2
-                                var[1] = (var[1] + var[2])/2 
+                        if "pos" in var.dims:
+                            var[{"pos":-2}] = (var[{"pos":-3}] + var[{"pos":-2}])/2
+                            var[{"pos":1}] = (var[{"pos":1}] + var[{"pos":2}])/2
                             
                 else:
                     raise Exception("Guards already replaced!")
@@ -583,6 +578,13 @@ class Case:
             "standard_name": "recombination radiation (d+)",
             "long_name": "Recombination radiation (d+)"
         },
+        
+        "Rar": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "argon radiation",
+            "long_name": "Argon radiation"
+        },
 
 
         "Sd+_iz": {
@@ -599,6 +601,20 @@ class Case:
             "long_name": "Recombination ion source (d+)"
         },
         
+        "Sd+_feedback": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units": "m-3s-1",
+            "standard_name": "density source",
+            "long_name": "Upstream density feedback source"
+        },
+        
+        "density_source_shape_d+": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units": "m-3s-1",
+            "standard_name": "density source shape",
+            "long_name": "Upstream density feedback source shape"
+        },
+        
         "NVd+": {
             "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"],
             "units": "kgms-1",
@@ -611,6 +627,27 @@ class Case:
             "units": "kgms-1",
             "standard_name": "neutral momentum",
             "long_name": "Neutral momentum (d+)"
+        },
+
+        "Fdd+_cx": {
+            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"] * m["Omega_ci"],
+            "units": "kgm-3s-2",
+            "standard_name": "CX momentum transfer",
+            "long_name": "CX momentum transfer"
+        },
+        
+        "Fd+_iz": {
+            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"] * m["Omega_ci"],
+            "units": "kgm-3s-2",
+            "standard_name": "IZ momentum transfer",
+            "long_name": "IZ momentum transfer"
+        },
+        
+        "Fd+_rec": {
+            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"] * m["Omega_ci"],
+            "units": "kgm-3s-2",
+            "standard_name": "Rec momentum transfer",
+            "long_name": "Rec momentum transfer"
         },
         
         "Vd": {
@@ -913,8 +950,8 @@ class Case:
             "standard_name" : "cross-sectional area",
             "long_name" : "Cell parallel cross-sectional area"})
         
-        self.ds["dV"] = self.ds.J * self.ds.dy
-        self.ds["dV"].attrs.update({
+        self.ds["dv"] = self.ds.J * self.ds.dy
+        self.ds["dv"].attrs.update({
             "conversion" : 1,
             "units" : "m3",
             "standard_name" : "cell volume",

@@ -23,11 +23,18 @@ class HermesDataArrayAccessor(BoutDataArrayAccessor):
     def clean_guards(self):
         """
         Set guard cell values to np.nan
-        Implemented only for x guards for now
+        Implemented for both 
         """
         xguards = _select_region(self.data, "xguards")
         ds = self.data.copy()
         ds[{"x": xguards[0], "theta": xguards[1]}] = np.nan
+        
+        # Clear target guards if they are there
+        if self.data.metadata["MYG"] > 0:
+            for name in self.data.metadata["targets"]:
+                yguards = _select_region(self.data, f"{name}_target_guards")
+                ds[{"x": yguards[0], "theta": yguards[1]}] = np.nan
+            
         return ds
 
     def plot_omp(self):
@@ -198,18 +205,32 @@ def _select_region(ds, name):
     )
     slices["outer_lower_target"] = (slice(None, None), slice(nyg - MYG - 1, nyg - MYG))
 
-    slices["inner_lower_target_guard"] = (slice(None, None), slice(MYG - 1, MYG))
-    slices["inner_upper_target_guard"] = (
+    slices["inner_lower_target_inner_guards"] = (slice(None, None), slice(MYG - 1, MYG))
+    slices["inner_upper_target_inner_guards"] = (
         slice(None, None),
         slice(ny_inner + MYG, ny_inner + MYG + 1),
     )
-    slices["outer_upper_target_guard"] = (
+    slices["outer_upper_target_inner_guards"] = (
         slice(None, None),
         slice(ny_inner + MYG * 3 - 1, ny_inner + MYG * 3),
     )
-    slices["outer_lower_target_guard"] = (
+    slices["outer_lower_target_inner_guards"] = (
         slice(None, None),
         slice(nyg - MYG, nyg - MYG + 1),
+    )
+    
+    slices["inner_lower_target_guards"] = (slice(None, None), slice(0, MYG))
+    slices["inner_upper_target_guards"] = (
+        slice(None, None),
+        slice(ny_inner + MYG, ny_inner + MYG * 2),
+    )
+    slices["outer_upper_target_guards"] = (
+        slice(None, None),
+        slice(ny_inner + MYG * 2, ny_inner + MYG * 3),
+    )
+    slices["outer_lower_target_guards"] = (
+        slice(None, None),
+        slice(nyg - MYG, nyg),
     )
     
     slices["inner_lower"] = (slice(None, None), slice(MYG, j1_1g+1))

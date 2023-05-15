@@ -397,7 +397,12 @@ def plot_ddt(case,
     smoothing: moving average period used for plot smoothing (default = 20. 1 is no smoothing)
     volume_weighted: weigh the ddt by cell volume
     """
-    ds = case.ds.hermesm.select_region("all_noguards")
+    
+    if case.is_2d:
+        ds = case.ds.hermesm.select_region("all_noguards")
+    else:
+        # No guard cells at all
+        ds = case.ds.isel(pos=slice(2,-2))
     
 
         
@@ -425,10 +430,16 @@ def plot_ddt(case,
             res[param] = (ds[param] * ds.dv) / np.sum(ds.dv)    # Cell volume weighted
         else:
             res[param] = ds[param]
-        res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))    # Root mean square
+            
+        if case.is_2d:
+            res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))    # Root mean square
+        else:
+            res[param] = np.sqrt(np.mean(res[param]**2, axis = 1))    # Root mean square
         res[param] = np.convolve(res[param], np.ones(smoothing), "same")    # Moving average with window = smoothing
 
     fig, ax = plt.subplots(figsize = (5,4), dpi = dpi)
+    fig.subplots_adjust(right=0.8)
+
 
     for param in list_params:
         ax.plot(ds.coords["t"], res[param], label = param, lw = 1)
@@ -743,12 +754,19 @@ def create_norm(logscale, norm, vmin, vmax):
 
 
 def camera_view(ax, loc, tokamak = "ST40"):
+    """
+    Available views:
+    ---------
+    lower_outer, lower2
+    """
     
     lims = dict()
     if loc == "lower_outer":
         lims = dict(x = (0.45, 0.65), y = (-0.87, -0.7))
     elif loc == "lower2":
         lims = dict(x = (0.15, 0.66), y = (-0.87, -0.5))
+    elif loc == "lower_half":
+        lims = dict(x = (None,None), y = (-0.87, 0.1))
         
     else:
         raise Exception(f"Location {loc} not implemented yet")
@@ -789,7 +807,7 @@ def plot_perp_heat_fluxes(ds):
     # d["hf_perp_tot_L_d"].plot(ax = ax, marker = "o", label = "d", ms = 2, c = "firebrick")
     ax.set_xlabel("Radial index")
     ax.set_ylabel("Heat flow [s-1]")
-    ax.set_title("Particle flow integral")
+    ax.set_title("Radial heat flow integral")
     ax.set_yscale("symlog")
     ax.grid()
     ax.legend()
