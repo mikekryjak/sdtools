@@ -45,7 +45,7 @@ def name_parser(x, code):
         "Pd+" : "Ppi",
         "Pe" : "Ppe",
         "Rd+_ex" : "IRadi",   # Assumes only ions 
-        "R" : "TotRadi",
+        "Rtot" : "TotRadi",
         "Nd" : "Nni",
         "Td" : "Tni",
     }
