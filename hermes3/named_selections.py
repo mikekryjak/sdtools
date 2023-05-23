@@ -10,7 +10,7 @@ class Target():
 
         data["dr"] = data["dx"] / (data["R"] * data["Bpxy"])
         self.last = case.ds.hermesm.select_region(f"{target_name}_target")
-        self.guard = case.ds.hermesm.select_region(f"{target_name}_target_guard")
+        self.guard = case.ds.hermesm.select_region(f"{target_name}_target_guards")
 
         def bndry_val(param):
             return (self.last[param].values + self.guard[param].values)/2
