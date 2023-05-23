@@ -10,8 +10,10 @@ from matplotlib.widgets import RangeSlider, TextBox
 from .code_comparison import parse_solps
 import h5py
 
-sys.path.append(r'C:\Users\mikek\OneDrive\Project\python-packages')
-sys.path.append(r'C:\Users\mikek\OneDrive\Project\python-packages\soledge')
+onedrive_path = onedrive_path = str(os.getcwd()).split("OneDrive")[0] + "OneDrive"
+sys.path.append(os.path.join(onedrive_path, r"Project\python-packages\sdtools"))
+sys.path.append(os.path.join(onedrive_path, r"Project\python-packages\soledge"))
+sys.path.append(os.path.join(onedrive_path, r"Project\python-packages"))
 
 try:
     import gridtools.solps_python_scripts.setup
