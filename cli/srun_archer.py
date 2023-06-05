@@ -16,6 +16,7 @@ parser.add_argument("casepath", type=str, help = "Case to run")
 parser.add_argument("-b", type=str, help = "Branch (build folder name)")
 parser.add_argument("-c", type=str, help = "Number of cores")
 parser.add_argument("-t", type=str, help = "Time in hh:mm:ss")
+parser.add_argument("-N", type=str, help = "Number of nodes")
 parser.add_argument("-restart", action="store_true", help = "Restart?")
 parser.add_argument("-append", action="store_true", help = "Append?")
 
@@ -44,22 +45,24 @@ if args.restart == False and args.append == False:
     restartappend = ""
 
 jobname = casename
-nodes = 1
-cores = args.c
+nodes = args.N
+cores_per_node = int(int(args.c) / int(args.N))
 partition = "standard"
-s
+
 
 slurmcommand = \
 f"""#!/bin/bash 
 #SBATCH --job-name={jobname}
-#SBATCH --nodes=1
-#SBATCH --tasks-per-node={cores}
+#SBATCH --nodes={nodes}
+#SBATCH --tasks-per-node={cores_per_node}
 #SBATCH --account=e281-bout
 #SBATCH --partition={partition}
 #SBATCH --qos=standard
 #SBATCH --time={args.t}
 #SBATCH -o /work/e281/e281/mkryjak/slurmlogs/{jobname}.out
 #SBATCH -e /work/e281/e281/mkryjak/slurmlogs/{jobname}.err
+#SBATCH --mail-type=BEGIN,END,FAIL               # Mail events (NONE, BEGIN, END, FAIL, ALL)
+#SBATCH --mail-user=mike.kryjak@york.ac.uk        # Where to send mail
 
 # Set the number of threads to 1
 #   This prevents any threaded system libraries from automatically 

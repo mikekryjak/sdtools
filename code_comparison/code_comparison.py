@@ -369,7 +369,7 @@ def lineplot_compare(
         fig, axes = plt.subplots(1,len(params), dpi = dpi, figsize = (4.2*len(params),5), sharex = True)
         fig.subplots_adjust(hspace = 0, wspace = 0.25, bottom = 0.25, left = 0.1, right = 0.9)
         
-        linestyles = {"Hermes-3" : "-", "SOLEDGE2D" : "--", "SOLPS" : "--"}
+        linestyles = {"Hermes-3" : "-", "SOLEDGE2D" : "dashdot", "SOLPS" : "--"}
 
 
         

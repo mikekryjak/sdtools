@@ -90,8 +90,11 @@ class Monitor():
             ax.set_yscale("log")
             ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
             
-        elif name == "sep_density":
+        elif name == "sep_ne":
             self.omp["Ne"].isel(x = m["ixseps1"]).plot(ax = ax, c = self.c[0])
+            
+        elif name == "sep_te":
+            self.omp["Te"].isel(x = m["ixseps1"]).plot(ax = ax, c = self.c[0])
             
         elif name == "radiation":
             (self.core["Rd+_ex"].mean(["x", "theta"])*-1).plot(ax = ax, label = "core", c = self.c[0])
