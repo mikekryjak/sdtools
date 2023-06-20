@@ -975,8 +975,7 @@ def plot_density_feedback_controller(ds):
     ds["density_feedback_src_i_d+"].plot(ax = axes[1], c = "purple", label = "I")
     
     ds["density_feedback_src_mult_d+"].plot(ax = axes[1], c = colors[0], ls = ":", label = "Total")
-    
-    ds["density_feedback_error_relative_d+"].plot(ax = axes[2])
+
 
     # pflux.plot(ax=axes[2])
     axes[0].set_title("Upstream density")
