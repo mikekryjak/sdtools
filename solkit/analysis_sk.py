@@ -8,13 +8,12 @@ import matplotlib as mpl
 import os, sys, pathlib
 import traceback
 import platform
-import colorcet as cc
 from scipy import stats
 from boututils.datafile import DataFile
 from boutdata.collect import collect
 from boutdata.data import BoutData
 import xbout
-from sk_plotting_functions_new import *
+from .sk_plotting_functions_new import *
 
 
 class SKDeck:

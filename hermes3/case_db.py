@@ -5,7 +5,7 @@ class CaseDB():
     Find all simulations and grids in the provided directories
     store their paths in dictionaries casepaths and gridpaths
     """
-    def __init__(self, case_dir = r"C:\Users\mikek\OneDrive\Project\collab\tech\cases\st40",
+    def __init__(self, case_dir = r"C:\Users\mikek\OneDrive\Project\collab\tech\cases",
                        grid_dir = r"C:\Users\mikek\OneDrive\Project\collab\tech\grid"):
         
         self.casepaths = dict()

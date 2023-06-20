@@ -6,7 +6,114 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from boututils.datafile import DataFile
 from boututils.boutarray import BoutArray
+import shutil
+from hermes3.utils import *
 
+
+def make_new_mesh(source, destination):
+    # Create new grid from an existing one, read it in and create the Field object
+    shutil.copy(source, destination)
+    return Mesh(destination)
+    
+def close_mesh(mesh):
+    try:
+        mesh.close()
+        del mesh
+    except:
+        pass
+    
+def impose_fields(source, destination,
+                  Nd_src_puff = 0,   # s-1
+                  Pd_src_puff = 0,   # Pa of pressure
+                  Ni_src_core = 0,   # s-1 of particles
+                  Pi_src_core = 0,   # Pa of pressure
+                  Pe_src_core = 0,   # Pa of pressure
+                  D_core = 0,    # m2s-1
+                  D_sol  = 0,    # ms2s-1
+                  chi_core = 0,   # m2s-1
+                  chi_sol = 0,    # m2s-1
+                  
+                  
+                  
+                  ):
+    """
+    Copy a mesh from source to destination and impose fields
+    Hardcoded for now
+    """
+    
+    # close_mesh()
+    
+    mesh = make_new_mesh(source, destination)
+    
+    # Outboard D puff
+    # Nd_src_puff = 1.2e21    # s-1
+    # Pd_src_puff = 2/3 * 1.2e21 * 3 * constants("q_e")  #  3eV per particle (assume dissociated molecules). Remember this is pressure not energy
+
+    # Core particle/heat sources
+    # Ni_src_core = 3e20    # s-1
+    # Pi_src_core = 1e6 * 2/3   # W converted to pressure
+    # Pe_src_core = 0.76e6 * 2/3   # W converted to pressure
+
+    # # Anomalous diffusion coefficients
+    # D_core = 0.1
+    # chi_core = 0.45
+    # D_sol = 1
+    # chi_sol = 3
+    
+    # Make regions
+    puff_region = mesh.slices("symmetric_puff")(width=3, center_half_gap=1)
+    core_edge_region = mesh.slices("core_edge")
+    core_region = mesh.slices("core")
+    sol_region = mesh.slices("sol")
+    pfr_region = mesh.slices("pfr")
+    fields = dict()
+    
+    fields["Nd_src"] = Field("Nd_src", mesh)
+    fields["Nd_src"].set_value(puff_region, Nd_src_puff, make_per_volume = True)
+
+    fields["Pd_src"] = Field("Pd_src", mesh)
+    fields["Pd_src"].set_value(puff_region, Pd_src_puff, make_per_volume = True)
+
+    fields["Nd+_src"] = Field("Nd+_src", mesh)
+    fields["Nd+_src"].set_value(core_edge_region, Ni_src_core, make_per_volume = True)
+
+    fields["Pd+_src"] = Field("Pd+_src", mesh)
+    fields["Pd+_src"].set_value(core_edge_region, Pi_src_core, make_per_volume = True)
+
+    fields["Pe_src"] = Field("Pe_src", mesh)
+    fields["Pe_src"].set_value(core_edge_region, Pe_src_core, make_per_volume = True)
+
+    fields["D_d+"] = Field("D_d+", mesh)
+    fields["D_d+"].set_value(core_region, D_core, make_per_volume = False)
+    fields["D_d+"].set_value(sol_region, D_sol, make_per_volume = False)
+    fields["D_d+"].set_value(pfr_region, D_sol, make_per_volume = False)
+
+    fields["D_e"] = Field("D_e", mesh)
+    fields["D_e"].set_value(core_region, D_core, make_per_volume = False)
+    fields["D_e"].set_value(sol_region, D_sol, make_per_volume = False)
+    fields["D_e"].set_value(pfr_region, D_sol, make_per_volume = False)
+
+    fields["chi_d+"] = Field("chi_d+", mesh)
+    fields["chi_d+"].set_value(core_region, chi_core, make_per_volume = False)
+    fields["chi_d+"].set_value(sol_region, chi_sol, make_per_volume = False)
+    fields["chi_d+"].set_value(pfr_region, chi_sol, make_per_volume = False)
+
+    fields["chi_e"] = Field("chi_e", mesh)
+    fields["chi_e"].set_value(core_region, chi_core, make_per_volume = False)
+    fields["chi_e"].set_value(sol_region, chi_sol, make_per_volume = False)
+    fields["chi_e"].set_value(pfr_region, chi_sol, make_per_volume = False)
+    
+    for field_name in fields.keys():
+        
+        if "D_" in field_name or "chi_" in field_name:
+            mesh.write_field(fields[field_name], dtype = "Field2D")
+        else:
+            mesh.write_field(fields[field_name], dtype = "Field3D")
+        
+        fields[field_name].plot()
+        
+    close_mesh(mesh)
+        
 
 class Mesh():
     """ 
@@ -96,9 +203,38 @@ class Mesh():
                 raise Exception("i is too large!")
             
             return (slice(0+self.MXG+i,1+self.MXG+i), np.r_[slice(self.j1_2g + 1, self.j2_2g + 1), slice(self.j1_1g + 1, self.j2_1g + 1)])
+        
+        def symmetric_puff(width, center_half_gap):
+            """
+            Select region meant for setting outboard neutral puff.
+            The region is a poloidal row of cells in the radial coordinate
+            of the final radial fluid cell.
+            There are two puffs symmetric about the midplane axis.
             
+            Parameters:
+                - width: size of each puff region in no. of cells
+                - center_half_gap: half of the gap between the puffs in no. of cells
+            """
+            
+            # width = 3
+            # center_half_gap = 1
+
+            midplane_a = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g
+            midplane_b = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1
+
+            selection =  (-self.MXG-1, 
+                        np.r_[
+                            slice(midplane_b+center_half_gap, midplane_b+center_half_gap+width),
+                            slice(midplane_b-center_half_gap-width, midplane_b-center_half_gap),
+                            ])
+            return selection
+            # return self.ds.isel(x = selection[0], theta = selection[1])
+                
 
         slices = dict()
+        
+        slices["custom_core_ring"] = custom_core_ring
+        slices["symmetric_puff"] = symmetric_puff
 
         slices["all"] = (slice(None,None), slice(None,None))
         slices["all_noguards"] = (slice(self.MXG,-self.MXG), np.r_[slice(self.MYG,self.ny_inner-self.MYG*2), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
@@ -120,7 +256,7 @@ class Mesh():
         
         slices["sol_edge"] = (slice(-1 - self.MXG,- self.MXG), np.r_[slice(self.j1_1g + 1, self.j2_1g + 1), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
         
-        slices["custom_core_ring"] = custom_core_ring
+        
         
         slices["inner_lower_target"] = (slice(None,None), slice(self.MYG, self.MYG + 1))
         slices["inner_upper_target"] = (slice(None,None), slice(self.ny_inner+self.MYG -1, self.ny_inner+self.MYG))
@@ -290,8 +426,21 @@ class Field():
         self.mesh = mesh
         self.data = np.zeros_like(self.mesh.Rxy)    # Copy any array from existing grid as a template
 
-
-    def plot(self):
+    def set_value(self, region, value, make_per_volume = True):
+        
+        cell_volumes = self.mesh.dv[region]
+        total_volume = cell_volumes.sum()
+        
+        if make_per_volume is True:
+            value = value * (cell_volumes/total_volume)  # Split between all the cells in region according to their volumes
+            value = value / cell_volumes   # Make on a per volume basis
+            
+        self.data[region] = value
+        
+        
+        
+        
+    def plot(self, dpi = 80):
 
         plt.style.use("default")
 
@@ -304,7 +453,7 @@ class Field():
         colors = [cmap(x) for x in fieldnorm.flatten()]
         norm = mpl.colors.Normalize(vmin=0, vmax=np.max(field))
 
-        fig, axes = plt.subplots(1,3, figsize = (10,6), gridspec_kw={'width_ratios': [5,2.0, 0.3]}, dpi = 110)
+        fig, axes = plt.subplots(1,3, figsize = (10,6), gridspec_kw={'width_ratios': [5,2.0, 0.3]}, dpi = dpi)
         fig.subplots_adjust(wspace=0.3)
         fig.suptitle(self.name)
 

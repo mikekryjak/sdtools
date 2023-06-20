@@ -13,10 +13,12 @@ import time
 
 parser = argparse.ArgumentParser(description = "Run case")
 parser.add_argument("casepath", type=str, help = "Case to run")
-parser.add_argument("--b", type=str, help = "Branch (build folder name)")
-parser.add_argument("--c", type=str, help = "Number of cores")
-parser.add_argument("--restart", action="store_true", help = "Restart?")
-parser.add_argument("--append", action="store_true", help = "Append?")
+parser.add_argument("-b", type=str, help = "Branch (build folder name)")
+parser.add_argument("-c", type=str, help = "Number of cores")
+parser.add_argument("-t", type=str, help = "Time in hh:mm:ss")
+parser.add_argument("-N", type=str, help = "Number of nodes")
+parser.add_argument("-restart", action="store_true", help = "Restart?")
+parser.add_argument("-append", action="store_true", help = "Append?")
 
 
 args = parser.parse_args()
@@ -43,23 +45,32 @@ if args.restart == False and args.append == False:
     restartappend = ""
 
 jobname = casename
-nodes = 1
-cores = args.c
-partition = "nodes"
-time = "48:00:00"
+nodes = args.N
+cores_per_node = int(int(args.c) / int(args.N))
+partition = "standard"
+
 
 slurmcommand = \
 f"""#!/bin/bash 
-#SBATCH -J {jobname}
-#SBATCH -N {nodes}
-#SBATCH --tasks-per-node={cores}
-#SBATCH -p {partition}
-#SBATCH --time={time}
-#SBATCH -o /mnt/lustre/users/mjk557/cases/slurmlogs/{jobname}.out
-#SBATCH -e /mnt/lustre/users/mjk557/cases/slurmlogs/{jobname}.err
+#SBATCH --job-name={jobname}
+#SBATCH --nodes={nodes}
+#SBATCH --tasks-per-node={cores_per_node}
+#SBATCH --account=e281-bout
+#SBATCH --partition={partition}
+#SBATCH --qos=standard
+#SBATCH --time={args.t}
+#SBATCH -o /work/e281/e281/mkryjak/slurmlogs/{jobname}.out
+#SBATCH -e /work/e281/e281/mkryjak/slurmlogs/{jobname}.err
+#SBATCH --mail-type=BEGIN,END,FAIL               # Mail events (NONE, BEGIN, END, FAIL, ALL)
+#SBATCH --mail-user=mike.kryjak@york.ac.uk        # Where to send mail
 
-mpirun -n {nodes*cores} /mnt/lustre/users/mjk557/hermes-3/{args.b}/hermes-3 -d {abscasepath} {restartappend}
+# Set the number of threads to 1
+#   This prevents any threaded system libraries from automatically 
+#   using threading.
+export OMP_NUM_THREADS=1
 
+source /work/e281/e281/mkryjak/bout.env
+srun --distribution=block:block --hint=nomultithread /work/e281/e281/mkryjak/hermes-3/{args.b}/hermes-3 -d {abscasepath} {restartappend}
 """
 
 with open(runscriptpath, "w") as f:
