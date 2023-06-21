@@ -9,6 +9,7 @@ import xbout
 from matplotlib.widgets import RangeSlider, TextBox
 from .code_comparison import parse_solps
 import h5py
+import netCDF4 as nc
 
 onedrive_path = onedrive_path = str(os.getcwd()).split("OneDrive")[0] + "OneDrive"
 sys.path.append(os.path.join(onedrive_path, r"Project\python-packages\sdtools"))
@@ -18,6 +19,7 @@ sys.path.append(os.path.join(onedrive_path, r"Project\python-packages"))
 try:
     import gridtools.solps_python_scripts.setup
     from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d
+    from gridtools.solps_python_scripts.read_b2fgmtry import *
 except:
     print("Gridtools not found")
     
@@ -545,6 +547,93 @@ class viewer_2d_next():
                 
         return np.max(max), np.min(min)
     
+    
+class SOLPSplot():
+    """ 
+    Wrapper for plotting SOLPS data from a balance file
+    """
+    def __init__(self, path, data):
+        bal = nc.Dataset(os.path.join(path, "balance.nc"))
+        g = read_b2fgmtry(where=path)
+        
+        crx = bal["crx"]
+        cry = bal["cry"]
+
+        # Following SOLPS convention: X poloidal, Y radial
+        Nx = crx.shape[2]
+        Ny = crx.shape[1]
+        
+        
+        # In hermes-3 and needed for plot: lower left, lower right, upper right, upper left, lower left
+        # SOLPS crx structure: lower left, lower right, upper left, upper right
+        # So translating crx is gonna be 0, 1, 3, 2, 0
+        # crx is [corner, Y(radial), X(poloidal)]
+        idx = [np.array([0, 1, 3, 2, 0])]
+
+        # Make polygons
+        patches = []
+        for i in range(Nx):
+            for j in range(Ny):
+                p = mpl.patches.Polygon(
+                    np.concatenate([crx[:,j,i][tuple(idx)], cry[:,j,i][tuple(idx)]]).reshape(2,5).T,
+                    
+                    fill=False,
+                    closed=True,
+                )
+                patches.append(p)
+        self.patches = patches
+        # Get data
+        self.data = data
+        self.min = self.data.min()
+        self.max = self.data.max()
+        self.variables = bal.variables
+        
+
+    def plot(self, 
+             ax = None,
+             fig = None,
+             norm = None, 
+             cmap = "Spectral_r",
+             antialias = False,
+             linecolor = "k",
+             linewidth = 0,
+             vmin = None,
+             vmax = None,
+             logscale = False):
+        
+        if vmin == None:
+            vmin = self.min
+        if vmax == None:
+            vmax = self.max
+        if norm == None:
+            norm = xbout.plotting.utils._create_norm(logscale, norm, vmin, vmax)
+        if ax == None:
+            fig, ax = plt.subplots(dpi = 150)
+            
+
+        logscale = False
+
+
+        cmap = "Spectral_r"
+
+        # Polygon colors
+        
+        colors = self.data.transpose().flatten()
+        polys = mpl.collections.PatchCollection(
+            self.patches, alpha = 1, norm = norm, cmap = cmap, 
+            antialiaseds = antialias,
+            edgecolors = linecolor,
+            linewidths = linewidth,
+            joinstyle = "bevel")
+
+        polys.set_array(colors)
+        
+        fig.colorbar(polys)
+        ax.add_collection(polys)
+        ax.set_aspect("equal")
+                
+
+        
     
 def _create_norm(logscale, norm, vmin, vmax):
     if logscale:
