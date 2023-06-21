@@ -58,6 +58,8 @@ def name_parser(x, code):
         return solps[x]
     elif code == "soledge":
         return soledge[x]
+    else:
+        raise Exception(f"Unknown code: {code}")
 
 class viewer_2d():
     """
@@ -311,7 +313,14 @@ class SOLEDGEplot():
         
         
         
-    def plot(self, ax, norm = None, sep = True, cmap = "Spectral_r"):
+    def plot(self, ax, norm = None, vmin = None, vmax = None, logscale = True, sep = True, cmap = "Spectral_r"):
+        
+        self.vmin = min(self.plot_data) if vmin is None else vmin
+        self.vmax = max(self.plot_data) if vmax is None else vmax
+            
+        if norm is None:
+            norm = _create_norm(logscale, norm, self.vmin, self.vmax)
+            
         ax.tripcolor(self.TripTriang, self.plot_data, norm = norm, cmap = cmap,  linewidth=0)
         ax.set_aspect("equal")
         if sep is True:
@@ -552,8 +561,17 @@ class SOLPSplot():
     """ 
     Wrapper for plotting SOLPS data from a balance file
     """
-    def __init__(self, path, data):
+    def __init__(self, path, data = None, param = None):
+           
         bal = nc.Dataset(os.path.join(path, "balance.nc"))
+        if param != None:
+            
+            self.data = bal[param][:]
+        elif data != None:
+            self.data = data
+        else:
+            raise Exception("Provide either the data or the parameter name")
+
         g = read_b2fgmtry(where=path)
         
         crx = bal["crx"]
@@ -583,7 +601,6 @@ class SOLPSplot():
                 patches.append(p)
         self.patches = patches
         # Get data
-        self.data = data
         self.min = self.data.min()
         self.max = self.data.max()
         self.variables = bal.variables
@@ -599,7 +616,8 @@ class SOLPSplot():
              linewidth = 0,
              vmin = None,
              vmax = None,
-             logscale = False):
+             logscale = False,
+             alpha = 1):
         
         if vmin == None:
             vmin = self.min
@@ -620,7 +638,7 @@ class SOLPSplot():
         
         colors = self.data.transpose().flatten()
         polys = mpl.collections.PatchCollection(
-            self.patches, alpha = 1, norm = norm, cmap = cmap, 
+            self.patches, alpha = alpha, norm = norm, cmap = cmap, 
             antialiaseds = antialias,
             edgecolors = linecolor,
             linewidths = linewidth,
@@ -628,7 +646,8 @@ class SOLPSplot():
 
         polys.set_array(colors)
         
-        fig.colorbar(polys)
+        if fig != None:
+            fig.colorbar(polys)
         ax.add_collection(polys)
         ax.set_aspect("equal")
                 
