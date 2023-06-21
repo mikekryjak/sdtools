@@ -368,7 +368,7 @@ def lineplot_compare(
         set_yscales = {
         "omp" : {"Td+": "log", "Te": "log", "Ne": "log", "Nd": "log"},
         "imp" : {"Td+": "log", "Te": "log", "Ne": "log", "Nd": "log"},
-        "outer_lower" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ne": "log", "Nd": "log"},
+        "outer_lower" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ne": "linear", "Nd": "log"},
         }
         
         xlims = (None, None)
@@ -380,7 +380,7 @@ def lineplot_compare(
         fig, axes = plt.subplots(1,len(params), dpi = dpi, figsize = (4.2*len(params),5), sharex = True)
         fig.subplots_adjust(hspace = 0, wspace = 0.25, bottom = 0.25, left = 0.1, right = 0.9)
         
-        linestyles = {"Hermes-3" : "-", "SOLEDGE2D" : "dashdot", "SOLPS" : "--"}
+        linestyles = {"Hermes-3" : "-", "SOLEDGE2D" : ":", "SOLPS" : "--"}
 
 
         
@@ -423,7 +423,11 @@ def lineplot_compare(
             ylims = (None,None)
             # Set ylims
             ymin = min(ymin)*0.8
-            ymax = max(ymax)*1.2
+            ymax = max(ymax)*1.5
+            
+            units = {
+                "Ne":"m-3", "Nd":"m-3",
+                "Te":"eV", "Td+" : "eV", "Td" : "eV"}
             
             if "Td+" in param:
                 ymin *= 0.4
@@ -432,7 +436,10 @@ def lineplot_compare(
             # if "Nd" in param:
             #     ymax *= 10
 
-            axes[i].set_ylim(ymin,ymax) 
+            axes[i].set_ylim(ymin,ymax)
+            
+            if param in units:
+                axes[i].set_ylabel(units[param]) 
             
 
             # ymin = []; ymax = []
@@ -455,7 +462,7 @@ def lineplot_compare(
             if xlims != (None, None):
                 axes[i].set_xlim(xlims)
             
-            axes[i].grid(which="both", alpha = 0.2)
+            axes[i].grid(which="both", color = "k", alpha = 0.05, lw = 0.5)
             axes[i].set_xlabel("Distance from separatrix [m]")
             # axes[i].legend()
             axes[i].set_title(f"{region}: {param}")
