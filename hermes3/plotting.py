@@ -956,3 +956,34 @@ def plot_omp(da_list, legend = True, title = True, dpi = 150, **kwargs):
     else:
         ax.set_title("")
     
+
+def plot_density_feedback_controller(ds):
+    """
+    Plot the upstream density, and the feedback signal breakdown
+    """
+    fig, axes = plt.subplots(1,3, figsize=(4.5*3, 3.5), dpi = 120)
+    fig.subplots_adjust(wspace=0.3, bottom = 0.2)
+    colors = ["teal", "darkorange", "firebrick", "deeppink", "green", "navy"]
+
+        
+    ds = ds.isel(pos=slice(2,-1))
+    particle_count = ((ds["Ne"] + ds["Nd"])*ds["dv"]).sum("pos")
+    ds["Ne"].isel(pos=0).plot(ax = axes[0], c = colors[0])
+    # ds["densi"]
+    
+    ds["density_feedback_src_p_d+"].plot(ax = axes[1], c = "darkorange", label = "P")
+    ds["density_feedback_src_i_d+"].plot(ax = axes[1], c = "purple", label = "I")
+    
+    ds["density_feedback_src_mult_d+"].plot(ax = axes[1], c = colors[0], ls = ":", label = "Total")
+
+
+    # pflux.plot(ax=axes[2])
+    axes[0].set_title("Upstream density")
+    axes[1].set_title("Signal breakdown")
+    axes[1].legend()
+    axes[2].set_title("Relative error")
+    axes[1].set_ylabel("-")
+
+
+    for ax in axes:
+        ax.grid()
