@@ -57,31 +57,40 @@ class SOLEDGEdata:
             self.wallring = df
             self.process_ring()
 
-        self.derive_variables()
+        # self.derive_variables()
             
     def process_plot1d(self, df, name):
         """ 
         Process the csv file named "plot1d" which has radial profiles at the OMP.
         """
-        self.regions[name] = df
-        self.regions[name] = self.regions[name].rename(columns = {
-                                            'Dense' : "Ne", 
-                                            'Tempe':"Te", 
-                                            'Densi':"Nd+", 
-                                            'Tempi':"Td+",
-                                            'velocityi':"Vd+",
-                                            'Ppi':"Pd+",
-                                            'Ppe':"Pe",
-                                            'IRadi':"Rd+_ex",
-                                            "Nni":"Nd",
-                                            "Nmi":"Nd2",
-                                            "Tni":"Td",
-                                            "Tmi":"Td2",
-                                            "Pni":"Pd",
-                                            "vyni":"Vyd",
-                                            "DIST":"x"})
-        self.regions[name] = self.regions[name].set_index("x")
-        self.regions[name].index.name = "pos"
+        df = df.rename(columns = {
+                            'Dense' : "Ne", 
+                            'Tempe':"Te", 
+                            'Densi':"Nd+", 
+                            'Tempi':"Td+",
+                            'velocityi':"Vd+",
+                            'Ppi':"Pd+",
+                            'Ppe':"Pe",
+                            'IRadi':"Rd+_ex",
+                            "Nni":"Nd",
+                            "Nmi":"Nd2",
+                            "Tni":"Td",
+                            "Tmi":"Td2",
+                            "Pni":"Pd",
+                            "vyni":"Vyd",
+                            "DIST":"x"})
+        df = df.set_index("x")
+        df.index.name = "pos"
+        
+        # Merge with existing data if it exists
+        if name in self.regions:
+            if all(df.index == self.regions[name].index):
+                new_cols = df.columns.difference(self.regions[name].columns)
+                self.regions[name] = pd.merge(self.regions[name], df[new_cols], left_index = True, right_index = True)
+            else:
+                raise Exception(f"Positions in the two {name} dataframes not matching")
+        else:
+            self.regions[name] = df
         
         
     def process_ring(self):
@@ -125,8 +134,10 @@ class SOLEDGEdata:
         
     def derive_variables(self):
         for region in self.regions.keys():
-            self.regions[region]["Pe"] = self.regions[region]["Ne"] * self.regions[region]["Te"] * constants("q_e")
-            self.regions[region]["Pd+"] = self.regions[region]["Ne"] * self.regions[region]["Td+"] * constants("q_e")
+            if "Te" in self.regions[region].keys():
+                self.regions[region]["Pe"] = self.regions[region]["Ne"] * self.regions[region]["Te"] * constants("q_e")
+            if "Td+" in self.regions[region].keys():
+                self.regions[region]["Pd+"] = self.regions[region]["Ne"] * self.regions[region]["Td+"] * constants("q_e")
             
 
 class SOLPSdata:
