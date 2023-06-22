@@ -313,12 +313,12 @@ def lineplot_compare(
     params = ["Td+", "Te", "Td", "Ne", "Nd"],
     regions = ["imp", "omp", "outer_lower"],
     ylims = (None,None),
-    dpi = 120
+    dpi = 120,
+    lw = 1.5
     ):
     
     marker = "o"
     ms = 0
-    lw = 1.5
     set_ylims = dict()
     set_yscales = dict()
 
@@ -389,11 +389,13 @@ def lineplot_compare(
             ymin = []; ymax = []
             
             for j, name in enumerate(cases.keys()):
-                code = cases[name].code
+                case = cases[name]["data"]
+                color = cases[name]["color"]
+                code = case.code
                 ls = linestyles[code]
                 
-                if region in cases[name].regions.keys():   # Is region available?
-                    data = cases[name].regions[region]
+                if region in case.regions.keys():   # Is region available?
+                    data = case.regions[region]
                     
                     if param in data.columns:   # If the parameter is available already, it's probaby custom made.
                         parsed_param = param
@@ -406,12 +408,12 @@ def lineplot_compare(
                     
                     if parsed_param != None and parsed_param in data.columns:    # Is parameter available?
                         # print(f"Plotting {code}, {region}, {param}, {parsed_param}")
-                        axes[i].plot(data.index, data[parsed_param], label = name, c = colors[j], marker = marker, ms = ms, lw = lw, ls = ls)
+                        axes[i].plot(data.index, data[parsed_param], label = name, c = color, marker = marker, ms = ms, lw = lw, ls = ls)
                         
                         # Collect min and max for later
                         if code != "SOLEDGE2D":
-                            ymin.append(cases[name].regions[region][parsed_param].min())
-                            ymax.append(cases[name].regions[region][parsed_param].max())
+                            ymin.append(case.regions[region][parsed_param].min())
+                            ymax.append(case.regions[region][parsed_param].max())
                     
             # Set yscales
             if param in set_yscales[region].keys():
@@ -482,7 +484,7 @@ def lineplot_compare(
                 ls = linestyles["SOLEDGE2D"]
             else:
                 ls = linestyles["Hermes-3"]
-            legend_items.append(mpl.lines.Line2D([0], [0], color=colors[j], lw=2, ls = ls))
+            legend_items.append(mpl.lines.Line2D([0], [0], color=cases[name]["color"], lw=2, ls = ls))
             
         fig.legend(legend_items, cases.keys(), ncol = len(cases), loc = "upper center", bbox_to_anchor=(0.5,0.15))
         
