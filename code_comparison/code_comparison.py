@@ -314,7 +314,8 @@ def lineplot_compare(
     regions = ["imp", "omp", "outer_lower"],
     ylims = (None,None),
     dpi = 120,
-    lw = 1.5
+    lw = 1.5,
+    set_xlim = True
     ):
     
     marker = "o"
@@ -461,20 +462,25 @@ def lineplot_compare(
              
             if ylims != (None, None):
                 axes[i].set_ylim(ylims)
-            if xlims != (None, None):
-                axes[i].set_xlim(xlims)
+                
+            if set_xlim is True:
+                
+                if xlims != (None, None):
+                    axes[i].set_xlim(xlims)
+                    
+                if region == "omp":
+                    axes[i].set_xlim(-0.06, 0.05)
+                elif region == "imp":
+                    axes[i].set_xlim(-0.11, 0.09)
+                elif region == "outer_lower":
+                    axes[i].set_xlim(-0.05, 0.1)
             
             axes[i].grid(which="both", color = "k", alpha = 0.05, lw = 0.5)
             axes[i].set_xlabel("Distance from separatrix [m]")
             # axes[i].legend()
             axes[i].set_title(f"{region}: {param}")
             
-            if region == "omp":
-                axes[i].set_xlim(-0.06, 0.05)
-            elif region == "imp":
-                axes[i].set_xlim(-0.11, 0.09)
-            elif region == "outer_lower":
-                axes[i].set_xlim(-0.05, 0.1)
+            
             
         legend_items = []
         for j, name in enumerate(cases.keys()):
