@@ -1,7 +1,46 @@
 import pickle as pkl
-# import matplotlib as mpl
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+import os, sys
+
+
+class HiddenPrints:
+    """
+    Suppress printing by:
+    with HiddenPrints():
+        ...
+    """
+    def __enter__(self):
+        self._original_stdout = sys.stdout
+        sys.stdout = open(os.devnull, 'w')
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stdout.close()
+        sys.stdout = self._original_stdout
+        
+def create_norm(logscale, norm, vmin, vmax):
+    if logscale:
+        if norm is not None:
+            raise ValueError(
+                "norm and logscale cannot both be passed at the same time."
+            )
+        if vmin * vmax > 0:
+            # vmin and vmax have the same sign, so can use standard log-scale
+            norm = mpl.colors.LogNorm(vmin=vmin, vmax=vmax)
+        else:
+            # vmin and vmax have opposite signs, so use symmetrical logarithmic scale
+            if not isinstance(logscale, bool):
+                linear_scale = logscale
+            else:
+                linear_scale = 1.0e-5
+            linear_threshold = min(abs(vmin), abs(vmax)) * linear_scale
+            norm = mpl.colors.SymLogNorm(linear_threshold, vmin=vmin, vmax=vmax)
+    elif norm is None:
+        norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+
+    return norm
+
 
 def read_file(filename, quiet = False):
 # Reads a pickle file and returns it.
