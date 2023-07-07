@@ -16,6 +16,7 @@ sys.path.append(os.path.join(onedrive_path, r"Project\python-packages\sdtools"))
 sys.path.append(os.path.join(onedrive_path, r"Project\python-packages\soledge"))
 sys.path.append(os.path.join(onedrive_path, r"Project\python-packages"))
 
+from hermes3.utils import *
 try:
     import gridtools.solps_python_scripts.setup
     from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d
@@ -55,9 +56,17 @@ def name_parser(x, code):
     }
     
     if code == "solps":
-        return solps[x]
+        if x in solps:
+            return solps[x]
+        else:
+            raise Exception(f"Unknown variable: {x}")
+        
     elif code == "soledge":
-        return soledge[x]
+        if x in soledge:
+            return soledge[x]
+        else:
+            raise Exception(f"Unknown variable: {x}")
+        
     else:
         raise Exception(f"Unknown code: {code}")
 
@@ -82,51 +91,61 @@ class viewer_2d():
                  wspace = 0.05,
                  cmap = "Spectral_r"):
         
-        hermes_present = False
-        for case in cases.keys():
-            if cases[case]["code"] == "hermes":
-                hermes_present = True
-        self.param = param
+        plots = []
+        for case in cases:
+            if case["code"] == "hermes":
+                plots.append(HermesPlot(case["ds"], param = param))
+            
+            elif case["code"] == "solps":
+                plots.append(SOLPSplot(case["path"], param = param))
+                
+            elif case["code"] == "soledge":
+                plots.append(SOLEDGEplot(case["path"], param = param))
         self.cases = cases
-        num_cases = len(cases.keys())
+        self.plots = plots
+        num_cases = len(cases)
         
 
         # Find ranges if not provided
-        if hermes_present is True:
-            self.max, self.min = self.find_ranges()
+        vlims = {"min":[], "max":[]}
+        Rlims = {"min":[], "max":[]}
+        Zlims = {"min":[], "max":[]}
+
+        for plot in plots:
+            vlims["min"].append(plot.vmin)
+            vlims["max"].append(plot.vmax)
+            Rlims["min"].append(plot.Rlim[0]); Rlims["max"].append(plot.Rlim[1])
+            Zlims["min"].append(plot.Zlim[0]); Zlims["max"].append(plot.Zlim[1])
             
-            if vmin == None:
-                vmin = self.min
-            else:
-                self.min = vmin
-            if vmax == None:
-                vmax = self.max
-            else:
-                self.max = vmax
-        else:
-            self.min = None
-            self.max = None
+       
+        # Get color limits
+        self.min = min(vlims["min"]) if vmin == None else vmin
+        self.max = max(vlims["max"]) if vmax == None else vmax
+        norm = create_norm(logscale, None, self.min, self.max)
         
-        norm = _create_norm(logscale, None, vmin, vmax)
+        # Get plot size
+        Rmin = min(Rlims["min"]); Rmax = max(Rlims["max"])
+        Zmin = min(Zlims["min"]); Zmax = max(Zlims["max"])
+        box_width = Rmax - Rmin
+        box_height = Zmax - Zmin
+        box_aspect_ratio = box_height / box_width
 
         fig = plt.figure(dpi=dpi)
-        fig.set_figheight(6)
-        fig.set_figwidth(num_cases*4)
+        scale = 3
+        fig.set_figwidth(1 * scale * num_cases)
+        fig.set_figheight(1 * scale * box_aspect_ratio)
 
         # Plot grid
         gs0a = mpl.gridspec.GridSpec(
-                                        ncols=num_cases+1, nrows=2,
-                                        width_ratios = [1]*num_cases + [0.1], # cbar, empty space, control,
-                                        height_ratios = [0.95, 0.05],
+                                        ncols=num_cases, nrows=2,
+                                        width_ratios = [1]*num_cases,
+                                        height_ratios = [0.90, 0.1],
                                         wspace = wspace
                                         )
-    
-        
 
-        axes = [None]*(num_cases+3)
+        axes = [None]*(num_cases)
 
-
-        for i, casename in enumerate(cases.keys()):
+        for i, plot in enumerate(plots):
             
             # All plots after the first one share x and y axes
             if i == 0:
@@ -134,62 +153,10 @@ class viewer_2d():
             else:
                 axes[i] = fig.add_subplot(gs0a[i], sharex=axes[0], sharey=axes[0])
             
-            model = cases[casename]
+            case = cases[i]
+            plot.plot(ax = axes[i], norm = norm, cmap = cmap, separatrix = True)
+            axes[i].set_title(f"{case['code']}: {case['name']}")
             
-            # HERMES PLOTTING------------------------------------
-            if model["code"] == "hermes":
-                print(casename)
-                data = model["ds"][param].hermesm.clean_guards()
-                data.bout.polygon(ax = axes[i], 
-                                    add_colorbar = False, norm = norm,
-                                    separatrix = True, cmap = cmap, 
-                                    antialias = False,
-                                    linewidth = 0,
-                                    )
-                axes[i].set_title(f"Hermes-3\n{casename}")#\n{param}")
-                
-            # SOLPS PLOTTING------------------------------------
-            elif model["code"] == "solps":
-                if "param_override" in model.keys():
-                    solps_name = model["param_override"]
-                else:
-                    try:
-                        solps_name = name_parser(param,"solps")
-                        
-                    except:
-                        print(f"Parameter {param} not found in SOLPS")
-                        solps_name = None
-                    
-                solps_cbar = False if hermes_present is True else True
-                
-                if solps_name != None:
-                    plot_2d(fig, axes[i], 
-                            where = model["path"], 
-                            what = solps_name, 
-                            cmap = cmap, 
-                            scale = ("log" if logscale is True else "linear"), 
-                            vmin = vmin, 
-                            vmax = vmax, 
-                            plot_cbar = solps_cbar)
-                    axes[i].set_title(f"SOLPS\n{casename}\n{solps_name}")
-                
-                else:
-                    axes[i].set_title(f"SOLPS\{casename}: {param} not found")
-                    
-            # SOLEDGE PLOTTING------------------------------------
-            elif model["code"] == "soledge":
-
-                try:
-                    soledge_name = name_parser(param, "soledge")
-                except:
-                    print(f"Parameter {param} not found in SOLEDGE")
-                    soledge_name = None
-            
-                if soledge_name != None:
-                    soledge_plot = SOLEDGEplot(path = model["path"], param = soledge_name)
-                    soledge_plot.plot(ax = axes[i], norm = norm, cmap = cmap)
-                
-                axes[i].set_title(f"SOLEDGE2D\n{casename}")#\nParameter") = {soledge_name}")
             # SET LIMITS------------------------------------
             if xlim != (None, None):
                 axes[i].set_xlim(xlim)
@@ -208,14 +175,16 @@ class viewer_2d():
                 axes[i].tick_params(axis="y", which="both", left=False,labelleft=False)
                 
         # Add colorbar
-        if hermes_present is True:
-            axes[-1] = fig.add_subplot(gs0a[0,-1])   
-            sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
-            cbar = plt.colorbar(mappable = sm, cax = axes[-1], label = param)
+        sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+        cax = fig.add_axes([
+            axes[-1].get_position().x1+0.01,
+            axes[-1].get_position().y0,0.02,
+            axes[-1].get_position().height])
+        plt.colorbar(mappable = sm, cax=cax, label = param) # Similar to fig.colorbar(im, cax = cax)
 
-        if hermes_present is True:
-            slider = RangeSlider(
-                fig.add_axes([0.2, 0.05, 0.5, 0.1]), "Colour limits",   # left, bottom, width, height
+        # Add slider
+        slider = RangeSlider(
+                fig.add_axes([0.3, 0.12, 0.5, 0.1]), "Colour limits",   # left, bottom, width, height
                 self.min, self.max,
                 orientation = "horizontal",
                 valinit = (self.min, self.max)
@@ -239,7 +208,7 @@ class viewer_2d():
             cbar.norm.vmax = val[1]
                 
             for i, artist in enumerate(artists):
-                if cases[list(cases.keys())[i]]["code"] == "solps" and logscale == True:
+                if logscale == True:
                     artist.norm.vmin = np.log10(val[0])
                     artist.norm.vmax = np.log10(val[1])
                 else:
@@ -249,7 +218,7 @@ class viewer_2d():
                 fig.canvas.draw_idle()
                 fig.canvas.flush_events() # https://stackoverflow.com/questions/64789437/what-is-the-difference-between-figure-show-figure-canvas-draw-and-figure-canva
                 
-        # slider.on_changed(update)
+        slider.on_changed(update)
 
             
         
@@ -269,6 +238,25 @@ class viewer_2d():
                 
         return np.max(max), np.min(min)
     
+class HermesPlot():
+    """
+    Wrapper around Hermes to provide identical functionality to SOLEDGE and SOLPS plots
+    """
+    def __init__(self, ds, param, clean_guards = True):
+        self.dataarray = ds[param]
+        if clean_guards is True:
+            self.dataarray = self.dataarray.hermesm.clean_guards()
+            
+        self.data = self.dataarray.values
+        self.vmin = np.nanmin(self.data)
+        self.vmax = np.nanmax(self.data)
+        self.Rlim = [ds["R"].values.min(), ds["R"].values.max()]
+        self.Zlim = [ds["Z"].values.min(), ds["Z"].values.max()]
+        
+    def plot(self, ax, **kwargs):
+        self.dataarray.bout.polygon(ax = ax, add_colorbar = False, **kwargs)
+        
+        
 class SOLEDGEplot():
     """
     Reads parameter data from SOLEDGE case
@@ -279,7 +267,10 @@ class SOLEDGEplot():
     """
     def __init__(self, path, param):
         
-        Plasmas = load_plasma_files(path, nZones=0, Evolution=0, iPlasmas=[0,1])
+        soledgeparam = name_parser(param, "soledge")
+        
+        with HiddenPrints():
+            Plasmas = load_plasma_files(path, nZones=0, Evolution=0, iPlasmas=[0,1])
         if param.endswith("e"):
             # Electrons are index 0
             species_idx = 0
@@ -290,40 +281,52 @@ class SOLEDGEplot():
             raise Exception("Parameter name must end in e or i")
 
         # Extract parameter data and find ranges
-        iPar = Plasmas[species_idx][0].Triangles.VNames.index(param)	
-        self.plot_data = Plasmas[1][0].Triangles.Values[iPar]
-        self.vmin = min(self.plot_data)
-        self.vmax = max(self.plot_data)
+        iPar = Plasmas[species_idx][0].Triangles.VNames.index(soledgeparam)	
+        self.data = Plasmas[1][0].Triangles.Values[iPar]
+        self.vmin = min(self.data)
+        self.vmax = max(self.data)
+        
         
         # Return to reasonable units
         # if "Temp" in param:
         #     self.plot_data *= 1e-3
         
         # Extract geom and make triangulation
-        if_tri	 = h5py.File(os.path.join(path,"triangles.h5"), "r")
-        TriKnots = h5_read(if_tri,"triangles/tri_knots")
-        TriKnots = TriKnots - 1 										#Matlab/Fortan to python indexes
-        self.R		 = h5_read(if_tri,"knots/R")*0.01
-        self.Z		 = h5_read(if_tri,"knots/Z")*0.01
-        if_tri.close()
-        self.TripTriang = tri.Triangulation(self.R, self.Z, triangles=TriKnots)
+        with HiddenPrints():
+            if_tri	 = h5py.File(os.path.join(path,"triangles.h5"), "r")
+            TriKnots = h5_read(if_tri,"triangles/tri_knots", messages = 0)
+            TriKnots = TriKnots - 1 										#Matlab/Fortan to python indexes
+            self.R		 = h5_read(if_tri,"knots/R", messages = 0)*0.01
+            self.Z		 = h5_read(if_tri,"knots/Z", messages = 0)*0.01
+            if_tri.close()
+            self.TripTriang = tri.Triangulation(self.R, self.Z, triangles=TriKnots)
         
-        # Extract mesh for eqb 
-        self.Config = load_soledge_mesh_file(os.path.join(path,"mesh.h5"))
+            # Extract mesh for eqb 
+            self.Config = load_soledge_mesh_file(os.path.join(path,"mesh.h5"))
+            
+        self.Rlim = [self.R.min(), self.R.max()]
+        self.Zlim = [self.Z.min(), self.Z.max()]
         
         
         
-    def plot(self, ax, norm = None, vmin = None, vmax = None, logscale = True, sep = True, cmap = "Spectral_r"):
+    def plot(self, ax, 
+             norm = None,
+             vmin = None, 
+             vmax = None, 
+             logscale = True, 
+             separatrix = True, 
+             cmap = "Spectral_r"):
         
-        self.vmin = min(self.plot_data) if vmin is None else vmin
-        self.vmax = max(self.plot_data) if vmax is None else vmax
+        self.vmin = min(self.data) if vmin is None else vmin
+        self.vmax = max(self.data) if vmax is None else vmax
             
         if norm is None:
             norm = _create_norm(logscale, norm, self.vmin, self.vmax)
             
-        ax.tripcolor(self.TripTriang, self.plot_data, norm = norm, cmap = cmap,  linewidth=0)
+        
+        ax.tripcolor(self.TripTriang, self.data, norm = norm, cmap = cmap,  linewidth=0)
         ax.set_aspect("equal")
-        if sep is True:
+        if separatrix is True:
             
             lw = 2
             c = "w"
@@ -364,6 +367,148 @@ class SOLEDGEplot():
             
         return lhs, rhs
     
+class SOLPSplot():
+    """ 
+    Wrapper for plotting SOLPS data from a balance file
+    """
+    def __init__(self, path, data = None, param = None):
+           
+        solpsparam = name_parser(param, "solps")
+        bal = nc.Dataset(os.path.join(path, "balance.nc"))
+        if param != None:
+            self.data = bal[solpsparam][:]
+            if any([x in param for x in ["Te", "Td+", "Td"]]):
+                self.data /= constants("q_e")   # Convert K -> eV
+        elif data != None:
+            self.data = data
+        else:
+            raise Exception("Provide either the data or the parameter name")
+
+        g = read_b2fgmtry(where=path)
+        self.g = g
+        
+        crx = bal["crx"]
+        cry = bal["cry"]
+
+        # Following SOLPS convention: X poloidal, Y radial
+        Nx = crx.shape[2]
+        Ny = crx.shape[1]
+        
+        
+        # In hermes-3 and needed for plot: lower left, lower right, upper right, upper left, lower left
+        # SOLPS crx structure: lower left, lower right, upper left, upper right
+        # So translating crx is gonna be 0, 1, 3, 2, 0
+        # crx is [corner, Y(radial), X(poloidal)]
+        idx = [np.array([0, 1, 3, 2, 0])]
+
+        # Make polygons
+        patches = []
+        for i in range(Nx):
+            for j in range(Ny):
+                p = mpl.patches.Polygon(
+                    np.concatenate([crx[:,j,i][tuple(idx)], cry[:,j,i][tuple(idx)]]).reshape(2,5).T,
+                    
+                    fill=False,
+                    closed=True,
+                )
+                patches.append(p)
+        self.patches = patches
+        # Get data
+        self.vmin = self.data.min()
+        self.vmax = self.data.max()
+        self.Rlim = [crx[0,:,:].max(), crx[0,:,:].min()]
+        self.Zlim = [cry[0,:,:].max(), cry[0,:,:].min()]
+        self.variables = bal.variables
+        
+
+    def plot(self, 
+             ax = None,
+             fig = None,
+             norm = None, 
+             cmap = "Spectral_r",
+             antialias = False,
+             linecolor = "k",
+             linewidth = 0,
+             vmin = None,
+             vmax = None,
+             logscale = False,
+             alpha = 1,
+             separatrix = True):
+        
+        if vmin == None:
+            vmin = self.vmin
+        if vmax == None:
+            vmax = self.vmax
+        if norm == None:
+            norm = xbout.plotting.utils._create_norm(logscale, norm, vmin, vmax)
+        if ax == None:
+            fig, ax = plt.subplots(dpi = 150)
+            
+
+        logscale = False
+
+
+        cmap = "Spectral_r"
+
+        # Polygon colors
+        
+        colors = self.data.transpose().flatten()
+        polys = mpl.collections.PatchCollection(
+            self.patches, alpha = alpha, norm = norm, cmap = cmap, 
+            antialiaseds = antialias,
+            edgecolors = linecolor,
+            linewidths = linewidth,
+            joinstyle = "bevel")
+
+        polys.set_array(colors)
+        
+        if fig != None:
+            fig.colorbar(polys)
+        ax.add_collection(polys)
+        ax.set_aspect("equal")
+        
+        if separatrix is True:
+            self.plot_separatrix(ax = ax)
+                
+    def plot_separatrix(self, ax):
+
+        # Author: Matteo Moscheni
+        # E-mail: matteo.moscheni@tokamakenergy.co.uk
+        # February 2022
+
+        # try:    b2fgmtry = load_pickle(where = where, verbose = False, what = "b2fgmtry")
+        # except: b2fgmtry = read_b2fgmtry(where = where, verbose = False, save = True)
+        b2fgmtry = self.g
+        colour = "white"
+
+        iy = int(b2fgmtry['ny'] / 2)
+
+        if len(b2fgmtry['rightcut']) == 2:
+            ix_mid = int((b2fgmtry['rightcut'][1] + b2fgmtry['leftcut'][1]) / 2 - 1)
+
+            for ix in range(ix_mid - 2):
+                x01 = [b2fgmtry['crx'][ix,iy,0], b2fgmtry['crx'][ix,iy,1]]
+                y01 = [b2fgmtry['cry'][ix,iy,0], b2fgmtry['cry'][ix,iy,1]]
+                ax.plot(x01, y01, c = colour, lw = 2)
+
+            for ix in range(ix_mid, b2fgmtry['nx']):
+                x01 = [b2fgmtry['crx'][ix,iy,0], b2fgmtry['crx'][ix,iy,1]]
+                y01 = [b2fgmtry['cry'][ix,iy,0], b2fgmtry['cry'][ix,iy,1]]
+                ax.plot(x01, y01, c = colour, lw = 2)
+        else:
+            for ix in range(b2fgmtry['nx']):
+                x01 = [b2fgmtry['crx'][ix,iy,0], b2fgmtry['crx'][ix,iy,1]]
+                y01 = [b2fgmtry['cry'][ix,iy,0], b2fgmtry['cry'][ix,iy,1]]
+                ax.plot(x01, y01, c = colour, lw = 2)
+
+        return
+        
+
+
+
+
+
+
 class viewer_2d_next():
     """
     Pass a case:
@@ -557,121 +702,3 @@ class viewer_2d_next():
         return np.max(max), np.min(min)
     
     
-class SOLPSplot():
-    """ 
-    Wrapper for plotting SOLPS data from a balance file
-    """
-    def __init__(self, path, data = None, param = None):
-           
-        bal = nc.Dataset(os.path.join(path, "balance.nc"))
-        if param != None:
-            
-            self.data = bal[param][:]
-        elif data != None:
-            self.data = data
-        else:
-            raise Exception("Provide either the data or the parameter name")
-
-        g = read_b2fgmtry(where=path)
-        
-        crx = bal["crx"]
-        cry = bal["cry"]
-
-        # Following SOLPS convention: X poloidal, Y radial
-        Nx = crx.shape[2]
-        Ny = crx.shape[1]
-        
-        
-        # In hermes-3 and needed for plot: lower left, lower right, upper right, upper left, lower left
-        # SOLPS crx structure: lower left, lower right, upper left, upper right
-        # So translating crx is gonna be 0, 1, 3, 2, 0
-        # crx is [corner, Y(radial), X(poloidal)]
-        idx = [np.array([0, 1, 3, 2, 0])]
-
-        # Make polygons
-        patches = []
-        for i in range(Nx):
-            for j in range(Ny):
-                p = mpl.patches.Polygon(
-                    np.concatenate([crx[:,j,i][tuple(idx)], cry[:,j,i][tuple(idx)]]).reshape(2,5).T,
-                    
-                    fill=False,
-                    closed=True,
-                )
-                patches.append(p)
-        self.patches = patches
-        # Get data
-        self.min = self.data.min()
-        self.max = self.data.max()
-        self.variables = bal.variables
-        
-
-    def plot(self, 
-             ax = None,
-             fig = None,
-             norm = None, 
-             cmap = "Spectral_r",
-             antialias = False,
-             linecolor = "k",
-             linewidth = 0,
-             vmin = None,
-             vmax = None,
-             logscale = False,
-             alpha = 1):
-        
-        if vmin == None:
-            vmin = self.min
-        if vmax == None:
-            vmax = self.max
-        if norm == None:
-            norm = xbout.plotting.utils._create_norm(logscale, norm, vmin, vmax)
-        if ax == None:
-            fig, ax = plt.subplots(dpi = 150)
-            
-
-        logscale = False
-
-
-        cmap = "Spectral_r"
-
-        # Polygon colors
-        
-        colors = self.data.transpose().flatten()
-        polys = mpl.collections.PatchCollection(
-            self.patches, alpha = alpha, norm = norm, cmap = cmap, 
-            antialiaseds = antialias,
-            edgecolors = linecolor,
-            linewidths = linewidth,
-            joinstyle = "bevel")
-
-        polys.set_array(colors)
-        
-        if fig != None:
-            fig.colorbar(polys)
-        ax.add_collection(polys)
-        ax.set_aspect("equal")
-                
-
-        
-    
-def _create_norm(logscale, norm, vmin, vmax):
-    if logscale:
-        if norm is not None:
-            raise ValueError(
-                "norm and logscale cannot both be passed at the same time."
-            )
-        if vmin * vmax > 0:
-            # vmin and vmax have the same sign, so can use standard log-scale
-            norm = mpl.colors.LogNorm(vmin=vmin, vmax=vmax)
-        else:
-            # vmin and vmax have opposite signs, so use symmetrical logarithmic scale
-            if not isinstance(logscale, bool):
-                linear_scale = logscale
-            else:
-                linear_scale = 1.0e-5
-            linear_threshold = min(abs(vmin), abs(vmax)) * linear_scale
-            norm = mpl.colors.SymLogNorm(linear_threshold, vmin=vmin, vmax=vmax)
-    elif norm is None:
-        norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
-
-    return norm
