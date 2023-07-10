@@ -32,6 +32,48 @@ def save_last10s_subset(solps_path, destination_path):
             dfs[key] = pd.DataFrame(solps[key])
 
     file_write(dfs, destination_path)
+    
+    
+def name_parser(x, code):
+    
+    solps = {
+        "Ne" : "ne",
+        "Te" : "te",
+        "Td+" : "ti",   
+        "Nd" : "pdena",   # Combined atoms+molecules. Custom made by matteo. Atoms: pdena, Molecules: pdenm
+        "Td" : "tdena",    # Compare only atom temperature, ignore molecules (more physical)
+        "Sd+_iz" : "AMJUEL_H.4_2.1.5_3",
+        # "R" : "b2ra"
+    }
+    
+    soledge = {
+        "Ne" : "Dense",
+        "Te" : "Tempe",
+        "Nd+" : "Densi",
+        "Td+" : "Tempi",
+        "Vd+" : "velocityi",
+        "Pd+" : "Ppi",
+        "Pe" : "Ppe",
+        "Rd+_ex" : "IRadi",   # Assumes only ions 
+        "Rtot" : "TotRadi",
+        "Nd" : "Nni",
+        "Td" : "Tni",
+    }
+    
+    if code == "solps":
+        if x in solps:
+            return solps[x]
+        else:
+            raise Exception(f"Unknown variable: {x}")
+        
+    elif code == "soledge":
+        if x in soledge:
+            return soledge[x]
+        else:
+            raise Exception(f"Unknown variable: {x}")
+        
+    else:
+        raise Exception(f"Unknown code: {code}")
 
 class SOLEDGEdata:
     """
