@@ -8,6 +8,7 @@ import matplotlib.tri						as tri
 import xbout
 from matplotlib.widgets import RangeSlider, TextBox
 from .code_comparison import parse_solps
+from code_comparison.code_comparison import *
 import h5py
 import netCDF4 as nc
 
