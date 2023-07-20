@@ -44,31 +44,68 @@ from solps_python_scripts.read_b2fgmtry import read_b2fgmtry
 
 
 class SOLPScase():
-    def __init__(path):
+    def __init__(self, path):
+        
         bal = self.bal = nc.Dataset(os.path.join(path, "balance.nc"))
         g = self.g = read_b2fgmtry(where=path)
+        self.params = list(self.bal.variables.keys())
+        
+        # Get cell centre coordinates
+        self.g["R"] = np.mean(g["crx"], axis=2)
+        self.g["Z"] = np.mean(g["cry"], axis=2)
         
         # Set up geometry
+        
         omp = int((g["rightcut"][0] + g["rightcut"][1])/2) + 1
         imp = int((g["leftcut"][0] + g["leftcut"][1])/2) + 1
         upper_break = int(imp + (omp - imp)/2) - 2
         sep = min(g["topcut"][0], g["topcut"][1]) +1
-
-        crx = g["crx"]
-        cry = g["cry"]
-        fig, ax = plt.subplots(dpi = 160)
+        
+        self.g["sep"] = sep
+        self.g["imp"] = imp
+        self.g["upper_break"] = upper_break
+        self.g["sep"] = sep
 
         # poloidal, radial, corners
-        # p1 = [imp, slice(None,None), 0]
-
-        sol_ring = 1
+        # p = [imp, slice(None,None), 0]
 
         s = {} # slices
-        s["imp"] = [imp, slice(None,None), 0]
-        s["omp"] = [omp, slice(None,None), 0]
-        s["outer"] = [slice(upper_break,None), sep + sol_ring, 0]
-        s["outer_lower"] = [slice(omp,None), sep + sol_ring, 0]
-        s["outer_upper"] = [slice(upper_break, omp), sep + sol_ring, 0]
-        s["inner"] = [slice(None, upper_break-1), sep + sol_ring, 0]
-        s["inner_lower"] = [slice(None, imp+1), sep + sol_ring, 0]
-        s["inner_upper"] = [slice(imp, upper_break-1), sep + sol_ring, 0]
+        s["imp"] = [imp, slice(None,None)]
+        s["omp"] = [omp, slice(None,None)]
+        s["outer"] = [slice(upper_break,None), sep]
+        s["outer_lower"] = [slice(omp,None), sep]
+        s["outer_upper"] = [slice(upper_break, omp), sep]
+        s["inner"] = [slice(None, upper_break-1), sep]
+        s["inner_lower"] = [slice(None, imp+1), sep]
+        s["inner_upper"] = [slice(imp, upper_break-1), sep]
+        self.s = s
+        
+        # bal.close()
+        
+    def get_1d_radial_data(
+        self,
+        param,
+        region = "omp",
+        verbose = False
+    ):
+        """
+        Returns OMP or IMP data from the balance file
+        Note that the balance file shape is a transpose of the geometry shape (e.g. crx)
+        and contains guard cells.        
+        """
+        
+        if any([region in name for name in ["omp", "imp"]]):
+            p = self.s[region] 
+        else:
+            raise Exception(f"Unrecognised region: {region}")
+    
+        df = pd.DataFrame()
+        df["dist"] = self.g["R"][p[0], p[1]] - self.g["R"][p[0], self.g["sep"]] 
+        df["R"] = self.g["R"][p[0], p[1]]
+        df["Z"] = self.g["Z"][p[0], p[1]]
+        df[param] = self.bal[param][:].transpose()[p[0], 1:-1] # Drop guard cells
+        
+        return df
+        
+        
+        
