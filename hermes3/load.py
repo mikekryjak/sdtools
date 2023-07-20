@@ -620,6 +620,27 @@ class Case:
             "standard_name": "argon radiation",
             "long_name": "Argon radiation"
         },
+        
+        "Rc": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "argon radiation",
+            "long_name": "Argon radiation"
+        },
+        
+        "Rne": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "argon radiation",
+            "long_name": "Argon radiation"
+        },
+        
+        "Rn": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "argon radiation",
+            "long_name": "Argon radiation"
+        },
 
 
         "Sd+_iz": {

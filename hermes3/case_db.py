@@ -1,12 +1,20 @@
 from pathlib import Path
+import os
 
 class CaseDB():
     """ 
     Find all simulations and grids in the provided directories
-    store their paths in dictionaries casepaths and gridpaths
+    store their paths in dictionaries casepaths and gridpaths.
+    Defaults to a hardcoded relative OneDrive path
     """
-    def __init__(self, case_dir = r"C:\Users\mikek\OneDrive\Project\collab\tech\cases",
-                       grid_dir = r"C:\Users\mikek\OneDrive\Project\collab\tech\grid"):
+    def __init__(self, case_dir = None,
+                       grid_dir = None):
+        
+        
+        # Set default paths
+        onedrive_path = onedrive_path = str(os.getcwd()).split("OneDrive")[0] + "OneDrive"
+        case_dir = os.path.join(onedrive_path, r"Project\collab\tech\cases") if case_dir == None else case_dir
+        grid_dir = os.path.join(onedrive_path, r"Project\collab\tech\grid") if grid_dir == None else grid_dir
         
         self.casepaths = dict()
         self.gridpaths = dict()

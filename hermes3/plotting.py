@@ -659,7 +659,8 @@ def lineplot(
     ylims = (None,None),
     xlims = (None,None),
     markersize = 2,
-    dpi = 120
+    dpi = 120,
+    clean_guards = True
     ):
     
     marker = "o"
@@ -710,7 +711,13 @@ def lineplot(
                 else:    # Radial, 0 at sep
                     sep_R = region_ds[name].coords["R"][ds.metadata["ixseps1"]- ds.metadata["MXG"]]
                     xplot = region_ds[name].coords["R"] - sep_R
-                axes[i].plot(xplot, region_ds[name][param], label = name, c = colors[j], marker = marker, ms = ms, lw = lw, ls = ls)
+                    
+                data = region_ds[name][param]
+                
+                if clean_guards is True:
+                    data = data.hermesm.clean_guards()
+                
+                axes[i].plot(xplot, data, label = name, c = colors[j], marker = marker, ms = ms, lw = lw, ls = ls)
                 
              
             if ylims != (None, None):
