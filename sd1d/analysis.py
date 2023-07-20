@@ -8,7 +8,6 @@ import matplotlib as mpl
 import os, sys
 import traceback
 import platform
-import colorcet as cc
 from scipy import stats
 from boututils.datafile import DataFile
 from boutdata.collect import collect
@@ -95,7 +94,7 @@ class Case:
         else:
             self.ion_eqn = False
 
-        if "Pe" not in self.missing_vars or "Pd" not in self.missing_vars:
+        if "Pd+" in self.missing_vars:
             self.ion_eqn = True
         else:
             self.ion_eqn = False
@@ -132,11 +131,14 @@ class Case:
             self.norm_data["Nn"] = self.norm_data["Nd"]
             self.norm_data["Vi"] = self.norm_data["Vd+"]
             self.norm_data["NVi"] = self.norm_data["NVd+"] * constants("mass_p") / (constants("mass_p")*2) # Originally [kgm2s-1], then divide by mass_i to get flux.
-            self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
+            if "Pd+" in self.norm_data.keys():
+                self.norm_data["P"] = self.norm_data["Pe"] + self.norm_data["Pd+"]
+            else:
+                self.norm_data["P"] = self.norm_data["Pe"]
             self.norm_data["S"] = self.norm_data["SNd+"]
             
-            
-            self.norm_data["Ti"] = self.norm_data["Td+"]
+            if "Pd+" in self.norm_data.keys():
+                self.norm_data["Ti"] = self.norm_data["Td+"]
             
             if "Rd+_rec" in self.norm_data.keys():
                 self.norm_data["Rex"] = self.norm_data["Rd+_ex"]
@@ -299,11 +301,11 @@ class Case:
         dnorm["Nn_avg"] = sum(dnorm["Nn"] * self.dV)/sum(self.dy)
         dnorm["Ntot_avg"] = dnorm["Ne_avg"] + dnorm["Nn_avg"]
 
-        if self.hermes:
+        if self.hermes and "Pd+" in self.norm_data.keys():
             dnorm["SEd+"] = dnorm["SPd+"] * 3/2
 
-        else:
-            dnorm["ESource"] = dnorm["PeSource"] * 3/2 # Is this right?
+        # else:
+        #     dnorm["ESource"] = dnorm["PeSource"] * 3/2 # Is this right?
 
         if self.evolve_nvn:
             dnorm["dynamic_n"] = norm["NVn"]**2 / norm["Nn"] * self.Pnorm
@@ -2433,6 +2435,8 @@ def library():
     # Process parameters
     lib["P"]["name"] = "Plasma pressure"
     lib["P"]["unit"] = "Pa"
+    lib["Pe"]["name"] = "Electron pressure"
+    lib["Pe"]["unit"] = "Pa"
     lib["Te"]["name"] = "Plasma temperature"
     lib["Te"]["unit"] = "eV"
     lib["Ti"]["name"] = "Ion temperature"
