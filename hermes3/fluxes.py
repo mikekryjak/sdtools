@@ -2,6 +2,9 @@ import xarray as xr
 import numpy as np
 from hermes3.utils import *
 import pandas as pd
+import warnings
+warnings.simplefilter('ignore', RuntimeWarning)
+
 
 """
 Power in through X inner Pin = 162418.93698190025 W  [55238.53718922597 ion 107180.39979267426 electron]
@@ -26,9 +29,87 @@ Particle throughput time: 0.05228062823230518 s
 ------------
 """
 
+def calculate_heat_balance(ds, merge_targets = True):
 
-def calculate_particle_balance(ds, display = True):
+    m = ds.metadata
+    core = ds.hermesm.select_region("core_edge")
+    sol = ds.hermesm.select_region("sol_edge")
+    pfr = ds.hermesm.select_region("pfr_edge")
+    domain = ds.hermesm.select_region("all_noguards")
+    domain_volume = domain["dv"].values.sum()
+
+    df = pd.DataFrame()
+    hf = dict()
+
+    # Radial and edge fluxes
+    # The summing is clunky but there's apparently no other way in Xarray!
+    net = dict()
+    list_places = ["src", "core", "sol", "pfr"]
+    for place in list_places:
+        net[f"hf_int_{place}_net"] = 0
+
+    for species in m["species"]:
+        ds[f"hf_int_src_{species}"] = (domain[f"P{species}_src"] * domain["dv"]).sum(["x", "theta"]).squeeze() * 3/2
+        ds[f"hf_int_core_{species}"] = core[f"hf_perp_tot_L_{species}"].sum("theta").squeeze()
+        ds[f"hf_int_sol_{species}"] = sol[f"hf_perp_tot_R_{species}"].sum("theta").squeeze() * -1 # Positive flow at SOL leaves model
+        ds[f"hf_int_pfr_{species}"] = pfr[f"hf_perp_tot_L_{species}"].sum("theta").squeeze()
+        
+        for place in list_places:
+            net[f"hf_int_{place}_net"] += ds[f"hf_int_{place}_{species}"]
+            
+    for place in list_places:
+        ds[f"hf_int_{place}_net"] = net[f"hf_int_{place}_net"]
+
+
+    # Target fluxes
+    for target_name in m["targets"]:
+        net[target_name] = 0
+    net["targets"] = 0
+
+    for species in m["ion_species"]+m["neutral_species"]+["e"]:
+        net[f"targets_{species}"] = 0
+        for target_name in m["targets"]:
+            ds[f"hf_int_{target_name}_{species}"] = ds[f"hf_{target_name}_{species}"].sum("x").squeeze()
+            net[target_name] += ds[f"hf_int_{target_name}_{species}"] 
+            net[f"targets_{species}"]  += ds[f"hf_int_{target_name}_{species}"] 
+            
+            
+        ds[f"hf_int_targets_{species}"] = net[f"targets_{species}"]
+            
     
+    for target_name in m["targets"]:
+        ds[f"hf_int_{target_name}_net"] = net[target_name]
+        net["targets"] += net[target_name]
+        
+    ds[f"hf_int_targets_net"] = net["targets"]
+        
+        
+    # Atomic reaction fluxes
+        
+    net_ex = 0
+    net_rec = 0
+    for ion in m["ion_species"]:
+        if f"R{ion}_ex" in domain.data_vars:
+            ds[f"hf_int_rad_ex_e"] = (domain[f"R{ion}_ex"] * domain["dv"]).sum(["x", "theta"]).squeeze()
+            net_ex +=  ds[f"hf_int_rad_ex_e"]
+            
+        if f"R{ion}_rec" in domain.data_vars:
+            ds[f"hf_int_rad_rec_e"] = (domain[f"R{ion}_rec"] * domain["dv"]).sum(["x", "theta"]).squeeze()       
+            net_rec += ds[f"hf_int_rad_rec_e"]
+
+    ds["hf_int_rad_ex_net"] = net_ex
+    ds[f"hf_int_rad_rec_net"] = net_rec
+    
+    ds[f"hf_int_total_net"] = \
+        ds["hf_int_src_net"] + ds["hf_int_core_net"] + ds["hf_int_sol_net"] + ds["hf_int_pfr_net"] \
+            + ds["hf_int_targets_net"] + ds["hf_int_rad_ex_net"] + ds["hf_int_rad_rec_net"]
+            
+            
+    return ds
+
+
+
+def calculate_particle_balance(ds):
     m = ds.metadata
     
     core = ds.hermesm.select_region("core_edge")
@@ -37,117 +118,299 @@ def calculate_particle_balance(ds, display = True):
     domain = ds.hermesm.select_region("all_noguards").squeeze()
     domain_volume = domain["dv"].values.sum()
 
-    heavy_species = m["ion_species"] + m["neutral_species"]
-
     df = pd.DataFrame()
-
-    # for species in heavy_species:
-    #     df.loc["core", species] = 
-
     pf = dict()
-    hf = dict()
 
-    # pf_total = dict()
+    # Radial and edge fluxes
+    # The summing is clunky but there's apparently no other way in Xarray!
+    net = dict()
+    list_places = ["src", "core", "sol", "pfr"]
+    for place in list_places:
+        net[f"pf_int_{place}_net"] = 0
 
-    for species in heavy_species:
-        pf[species] = dict()
-        # Radial fluxes
-        pf[species]["source"] = (domain[f"S{species}_src"] * domain["dv"]).sum(["x", "theta"]).squeeze()
-        pf[species]["core"] = core[f"pf_perp_diff_L_{species}"].sum("theta").squeeze()
-        pf[species]["sol"] = sol[f"pf_perp_diff_R_{species}"].sum("theta").squeeze()
-        pf[species]["pfr"] = pfr[f"pf_perp_diff_L_{species}"].sum("theta").squeeze()
+    for species in m["ion_species"] + m["neutral_species"]:
+        ds[f"pf_int_src_{species}"] = (domain[f"S{species}_src"] * domain["dv"]).sum(["x", "theta"]).squeeze()
+        ds[f"pf_int_core_{species}"] = core[f"pf_perp_diff_L_{species}"].sum("theta").squeeze()
+        ds[f"pf_int_sol_{species}"] = sol[f"pf_perp_diff_R_{species}"].sum("theta").squeeze()
+        ds[f"pf_int_pfr_{species}"] = pfr[f"pf_perp_diff_L_{species}"].sum("theta").squeeze()
+        
+        for place in list_places:
+            net[f"pf_int_{place}_net"] += ds[f"pf_int_{place}_{species}"]
+            
+    for place in list_places:
+        ds[f"pf_int_{place}_net"] = net[f"pf_int_{place}_net"]
+        
+        
+    # Target fluxes
+    for target_name in m["targets"]:
+        net[target_name] = 0
+    net["targets"] = 0
 
-        # Target fluxes
+    for species in m["ion_species"]+m["neutral_species"]:
+        net[f"targets_{species}"] = 0
         for target_name in m["targets"]:
-            pf[species][target_name] = ds[f"pf_{target_name}_{species}"].sum("x").squeeze()
+            ds[f"pf_int_{target_name}_{species}"] = ds[f"pf_{target_name}_{species}"].sum("x").squeeze()
+            net[target_name] += ds[f"pf_int_{target_name}_{species}"]
+            net[f"targets_{species}"] += ds[f"pf_int_{target_name}_{species}"]
+            
+        ds[f"pf_int_targets_{species}"] = net[f"targets_{species}"]
+            
+    for target_name in m["targets"]:
+        ds[f"pf_int_{target_name}_net"] = net[target_name]
+        net["targets"] += net[target_name]
+        
+    ds[f"pf_int_targets_net"] = net["targets"]
 
-    for species in m["ion_species"]:      
-        # Atomic reaction fluxes
-        pf[species]["iz"] = (domain["Sd+_iz"] * domain["dv"]).sum(["x", "theta"]).squeeze()
-        pf[species]["rec"] = (domain["Sd+_rec"] * domain["dv"]).sum(["x", "theta"]).squeeze()
+
+    # Atomic reaction fluxes
+    for ion in m["ion_species"]:
         
-        neutral = species.replace("+","")
+        if f"S{ion}_iz" in domain.data_vars:
+            neutral = ion.split("+")[0]
+            ds[f"pf_int_iz_{ion}"] = (domain[f"S{ion}_iz"] * domain["dv"]).sum(["x", "theta"]).squeeze()
+            ds[f"pf_int_iz_{neutral}"] = ds[f"pf_int_iz_{ion}"] * -1
         
-        # Neutral partner has opposite fluxes
-        pf[neutral]["iz"] = pf[species]["iz"] * -1
-        pf[neutral]["rec"] = pf[species]["rec"] * -1
-        
-    pf_last = dict()
+        if f"S{ion}_rec" in domain.data_vars:
+            ds[f"pf_int_rec_{ion}"] = (domain[f"S{ion}_rec"] * domain["dv"]).sum(["x", "theta"]).squeeze()
+            ds[f"pf_int_rec_{neutral}"] = ds[f"pf_int_rec_{ion}"] * -1
+
+    # Note: no "net" ionisation or recombination since they net out to zero.
+    
+    ds[f"pf_int_total_net"] = \
+        ds["pf_int_src_net"] + ds["pf_int_core_net"] + ds["pf_int_sol_net"] + ds["pf_int_pfr_net"] \
+            + ds["pf_int_targets_net"]
+            
+    return ds
+    
+def show_heat_balance_table(ds):
+    print("---------------------------------------")
+    print("HEAT BALANCE")
+    print("---------------------------------------")
 
     df = pd.DataFrame()
-    for species in pf.keys():
-        pf_last[species] = dict()
-        for loc in pf[species].keys():
-            pf_last[species][loc] = pf[species][loc].values[-1]
-            
-    df = pd.DataFrame.from_dict(pf_last)
-    df["total"] = df["d+"] + df["d"] 
+    m = ds.metadata
 
-    totals = pd.DataFrame(columns = df.columns)
-    totals.loc["total"] = df.sum(axis=0)
-    totals.loc["total(frac)"] = totals.loc["total"] / df.loc[["source", "core"], :].sum(axis=0)
-
-    target_total = np.sum([pf_last["d+"][x] for x in m["targets"]])
-
-    frec = (pf_last["d+"]["core"] + pf_last["d+"]["source"]) / target_total
-
-    if display is True:
-        print(f"Recycling fraction: {frec:.2%}")
-        print(f"Domain volume: {domain['dv'].sum():.3e}")
-        display(pd.concat([df,totals]))
-    
+    if f"hf_int_{m['targets'][0]}" in ds.data_vars:
+        merge_targets = False
     else:
-        return pf
+        merge_targets = True
+
+    last = ds.isel(t=-1)
+    for species in m["species"]:
+        df.loc["source", species] = last[f"hf_int_src_{species}"]
+        df.loc["core", species] = last[f"hf_int_core_{species}"]
+        df.loc["sol", species] = last[f"hf_int_sol_{species}"]
+        df.loc["pfr", species] = last[f"hf_int_pfr_{species}"]
+        if merge_targets is True:
+            df.loc["targets", species] = last[f"hf_int_targets_{species}"]
+        else:
+            for target in m["targets"]:
+                df.loc[target, species] = last[f"hf_int_{target}_{species}"]
+        
+        if "hf_int_rad_ex_e" in last.data_vars:
+            df.loc["rad_ex", "e"] = last[f"hf_int_rad_ex_e"]
+        if "hf_int_rad_rec_e" in last.data_vars:
+            df.loc["rad_rec", "e"] = last[f"hf_int_rad_rec_e"]
+        
+    df["total"] = df.sum(axis=1)
+    imbalance = df["total"].sum()
+    imbalance_frac = imbalance / (df["total"]["source"] + df["total"]["core"])
+    total_in = df["total"][df["total"]>0].sum()
+    total_out = df["total"][df["total"]<0].sum()
     
-    
+    # print(f"Recycling fraction: {frec:.2%}")
+    print(f"Domain volume: {ds['dv'].sum():.3e} [m3]")
+    print(f"Power in: {total_in*1e-6:,.3f} [MW]")
+    print(f"Power out: {total_out*1e-6:,.3f} [MW]")
+    print(f"Power imbalance: {imbalance*1e-6:,.3f} [MW]")
+    print(f"Power imbalance as frac of power in: {imbalance_frac:.2%}")
+    print("---------------------------------------")
+    print(f"Total fluxes in [MW]:")
+    table = df.copy()*1e-6 # For display only
+
+    def styler(s):
+        if abs(s) < 0.01 or pd.isna(s):
+            c =  "color: lightgrey"
+        else:
+            c =  "color: black"
+
+        return c
+        
+    ts = table.style.format("{:.2f}")
+    ts = ts.applymap(styler)
+    display(ts)
+
+def show_particle_balance_table(ds):
+    print("---------------------------------------")
+    print("PARTICLE BALANCE")
+    print("---------------------------------------")
+
+    df = pd.DataFrame()
+    m = ds.metadata
+
+    if f"pf_int_{m['targets'][0]}" in ds.data_vars:
+        merge_targets = False
+    else:
+        merge_targets = True
+
+    last = ds.isel(t=-1)
+    for species in m["ion_species"] + m["neutral_species"]:
+        df.loc["source", species] = last[f"pf_int_src_{species}"]
+        df.loc["core", species] = last[f"pf_int_core_{species}"]
+        df.loc["sol", species] = last[f"pf_int_sol_{species}"]
+        df.loc["pfr", species] = last[f"pf_int_pfr_{species}"]
+        if merge_targets is True:
+            df.loc["targets", species] = last[f"pf_int_targets_{species}"]
+        else:
+            for target in m["targets"]:
+                df.loc[target, species] = last[f"pf_int_{target}_{species}"]
+        
+    for species in m["ion_species"] + m["neutral_species"]:
+        if f"pf_int_iz_{species}" in last.keys():
+            df.loc["iz", species] = last[f"pf_int_iz_{species}"]
+        if f"pf_int_rec_{species}" in last.keys():
+            df.loc["rec", species] = last[f"pf_int_rec_{species}"]
+        
+    df["total"] = df.sum(axis=1)
+    imbalance = df["total"].sum()
+    imbalance_frac = imbalance / (df["total"]["source"] + df["total"]["core"])
+
+    # print(f"Recycling fraction: {frec:.2%}")
+    print(f"Domain volume: {ds['dv'].sum():.3e} [m3]")
+    print(f"Particle imbalance: {imbalance:,.3e} [s-1]")
+    print(f"Particle imbalance as frac of core + source: {imbalance_frac:.2%}")
+    print("---------------------------------------")
+    print(f"Total fluxes in [s-1]:")
+    table = df.copy() # For display only
+
+    def styler(s):
+        if abs(s) < 0.01 or pd.isna(s):
+            c =  "color: lightgrey"
+        else:
+            c =  "color: black"
+
+        return c
+        
+    ts = table.style.format("{:.2e}")
+    ts = ts.applymap(styler)
+    display(ts)
 
 def calculate_target_fluxes(ds):
     # ds = ds.copy() # This avoids accidentally messing up rest of dataset
-
+    m = ds.metadata
     
-    for target in ds.metadata["targets"]:
-        ds[f"hf_{target}_e"], ds[f"hf_{target}_d+"],  ds[f"pf_{target}_d+"] = sheath_boundary_simple(ds, "d+", 
+    if "recycling" in ds.options.keys():
+        ion = ds.options["recycling"]["species"]
+        recycling = True
+    else:
+        ion = m["ion_species"][0] # TODO: Fix this - currently hardcoding the first ion species...
+        recycling = False
+    
+    
+    for target in m["targets"]:
+        ds[f"hf_{target}_e"], ds[f"hf_{target}_{ion}"],  ds[f"pf_{target}_{ion}"] = sheath_boundary_simple(ds, ion, 
                                                                                 target = target)
         
-        species = "d"
-        ds[f"pf_{target}_d"] = -ds[f"pf_{target}_d+"] * ds.options["d+"]["recycle_multiplier"]   # TODO generalise and check
-        ds[f"pf_{target}_d"].attrs.update(
-                {
-                "standard_name": f"target particle flux on {target} ({species})",
-                "long_name": f"target particle flux on {target} ({species})",
-                })
-        
+        if recycling is True:
+            neutral = ds.metadata["recycle_pair"][ion]
+            ds[f"pf_{target}_{neutral}"] = -ds[f"pf_{target}_{ion}"] * ds.options[ion]["recycle_multiplier"]   # TODO generalise and check
+            ds[f"pf_{target}_{neutral}"].attrs.update(
+                    {
+                    "standard_name": f"target particle flux on {target} ({neutral})",
+                    "long_name": f"target particle flux on {target} ({neutral})",
+                    })
+            
+            # Assume neutral heat loss to target is zero for now
+            # TODO: fix this when neutral_gamma is used
+            ds[f"hf_{target}_{neutral}"] = xr.zeros_like(ds[f"hf_{target}_{ion}"])
+            
         
     return ds
         
 
-def calculate_radial_fluxes(ds):   
+def calculate_radial_fluxes(ds, force_neumann = False):   
     
     def zero_to_nan(x):
         return np.where(x==0, np.nan, x)
 
+    m = ds.metadata
+    Pnorm = m["Nnorm"] * m["Tnorm"] * constants("q_e")
 
 
+    # HEAT FLUXES---------------------------------
     
-    for name in ds.metadata["charged_species"]:
+    for name in m["charged_species"]:
         
-        # Perpendicular heat fluxes
+        # Perpendicular heat diffusion (conduction)
         L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"N{name}"] * ds[f"anomalous_Chi_{name}"], constants("q_e") * ds[f"T{name}"])
         ds[f"hf_perp_diff_L_{name}"] = L 
         ds[f"hf_perp_diff_R_{name}"] = R
 
+        # Perpendicular heat convection NOTE: 3/2 factor was initially omitted by accident
         L, R  =  Div_a_Grad_perp_upwind_fast(ds, constants("q_e") * ds[f"T{name}"] * ds[f"anomalous_D_{name}"], ds[f"N{name}"])
-        ds[f"hf_perp_conv_L_{name}"] = L 
-        ds[f"hf_perp_conv_R_{name}"] = R
+        ds[f"hf_perp_conv_L_{name}"] = L * 3/2
+        ds[f"hf_perp_conv_R_{name}"] = R * 3/2
 
+        # Total
         ds[f"hf_perp_tot_L_{name}"] = ds[f"hf_perp_conv_L_{name}"] + ds[f"hf_perp_diff_L_{name}"]
-        ds[f"hf_perp_tot_R_{name}"] = ds[f"hf_perp_conv_R_{name}"] + ds[f"hf_perp_diff_R_{name}"]
+        ds[f"hf_perp_tot_R_{name}"] = ds[f"hf_perp_conv_R_{name}"] + ds[f"hf_perp_diff_R_{name}"]      
+        
+    for name in m["neutral_species"]:
+        
+        # Need to force guard cells to be the same as the final radial cells
+        # Otherwise there are issues with extreme negative transport in the 
+        # final radial cells, especially PFR and near targets.
+        if force_neumann is True:
+            Pd_fix = ds[f"P{name}"].copy()
+            Pd_fix[{"x":1}] = Pd_fix[{"x":2}]
+            Pd_fix[{"x":0}] = Pd_fix[{"x":2}]
+            Pd_fix[{"x":-1}] = Pd_fix[{"x":-3}]
+            Pd_fix[{"x":-2}] = Pd_fix[{"x":-3}]
+            
+            Nd_fix = ds[f"N{name}"].copy()
+            Nd_fix[{"x":1}] = Nd_fix[{"x":2}]
+            Nd_fix[{"x":0}] = Nd_fix[{"x":2}]
+            Nd_fix[{"x":-1}] = Nd_fix[{"x":-3}]
+            Nd_fix[{"x":-2}] = Nd_fix[{"x":-3}]
+            
+            Td_fix = ds[f"T{name}"].copy()
+            Td_fix[{"x":1}] = Td_fix[{"x":2}]
+            Td_fix[{"x":0}] = Td_fix[{"x":2}]
+            Td_fix[{"x":-1}] = Td_fix[{"x":-3}]
+            Td_fix[{"x":-2}] = Td_fix[{"x":-3}]
+            
+            Plim = Pd_fix.where(Pd_fix>0, 1e-8 * Pnorm)
+            Td = Td_fix
+            Nd = Nd_fix
+            
+        else:
+            
+            Plim = ds[f"P{name}"].where(ds[f"P{name}"]>0, 1e-8 * Pnorm)
+            Td = ds[f"T{name}"]
+            Nd = ds[f"N{name}"]
+        
+        # Plim = ds[f"P{name}"].where(ds[f"P{name}"]>0, 1e-8 * Pnorm) # Limit P to 1e-8 in normalised units
+        
+        # Perpendicular heat diffusion NOTE: 3/2 factor was initially omitted by accident
+        L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*ds[f"P{name}"], np.log(Plim))
+        ds[f"hf_perp_conv_L_{name}"] = L * 3/2
+        ds[f"hf_perp_conv_R_{name}"] = R * 3/2
+        
+        # Perpendicular heat conduction NOTE: this is actually energy not pressure like above, so no factor needed
+        L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*Nd, constants("q_e")*Td)
+        ds[f"hf_perp_diff_L_{name}"] = L 
+        ds[f"hf_perp_diff_R_{name}"] = R
+        
+        # Total
+        ds[f"hf_perp_tot_L_{name}"] = ds[f"hf_perp_conv_L_{name}"] + ds[f"hf_perp_diff_L_{name}"]
+        ds[f"hf_perp_tot_R_{name}"] = ds[f"hf_perp_conv_R_{name}"] + ds[f"hf_perp_diff_R_{name}"]   
+        
 
+    for name in m["neutral_species"] + m["charged_species"]:
         # Add metadata
         for side in ["L", "R"]:
-            
-            # Heat fluxes
             for kind in ["diff", "conv", "tot"]:
+                
                 da = ds[f"hf_perp_{kind}_{side}_{name}"]
                 da.attrs["units"] = "W"
                 da.attrs["standard_name"] = f"Perpendicular heat flux ({name})"
@@ -160,30 +423,44 @@ def calculate_radial_fluxes(ds):
                 da.attrs["conversion"] = ""
                          
     
-    # Perpendicular particle fluxes
+    # PARTICLE FLUXES---------------------------------
        
-    for name in ds.metadata["charged_species"]:   
+    for name in m["charged_species"]:   
         # L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"anomalous_D_{name}"] * ds[f"N{name}"] / ds[f"N{name}"], ds[f"N{name}"])
         L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"anomalous_D_{name}"], ds[f"N{name}"])
         ds[f"pf_perp_diff_L_{name}"] = L 
         ds[f"pf_perp_diff_R_{name}"] = R
         
         
-    for name in ds.metadata["neutral_species"]:
-        P = xr.apply_ufunc(zero_to_nan, ds[f"P{name}"], dask = "allowed")
+    for name in m["neutral_species"]:
         
-        L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"Dnn{name}"]*ds[f"N{name}"], np.log(P))
+        # Need to force guard cells to be the same as the final radial cells
+        # Otherwise there are issues with extreme negative transport in the 
+        # final radial cells, especially PFR and near targets.
+        if force_neumann is True:
+            Pd_fix = ds[f"P{name}"].copy()
+            Pd_fix[{"x":1}] = Pd_fix[{"x":2}]
+            Pd_fix[{"x":0}] = Pd_fix[{"x":2}]
+            Pd_fix[{"x":-1}] = Pd_fix[{"x":-3}]
+            Pd_fix[{"x":-2}] = Pd_fix[{"x":-3}]
+            Plim = Pd_fix.where(Pd_fix>0, 1e-8 * Pnorm)
+        else:
+            Plim = ds[f"P{name}"].where(ds[f"P{name}"]>0, 1e-8 * Pnorm)
+        
+        L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*ds[f"N{name}"], np.log(Plim))
         ds[f"pf_perp_diff_L_{name}"] = L 
         ds[f"pf_perp_diff_R_{name}"] = R
         
         
-    for name in ds.metadata["neutral_species"] + ds.metadata["charged_species"]:
+        
+    for name in m["neutral_species"] + m["charged_species"]:
         for side in ["L", "R"]:
                 for kind in ["diff"]:
                     da = ds[f"pf_perp_{kind}_{side}_{name}"]
                     da.attrs["units"] = "s-1"
                     da.attrs["standard_name"] = f"Perpendicular particle flux ({name})"
                 
+                    kind_long = {"diff":"diffusive", "conv":"convective", "tot":"total"}[kind]
                     side_long = {"L":"LHS cell face", "R":"RHS cell face"}[side]
                     
                     da.attrs["long_name"] = f"Perpendicular diffusive particle flux on {side_long} ({name})"
@@ -192,7 +469,7 @@ def calculate_radial_fluxes(ds):
                 
                 
         
-    # for name in ds.metadata["neutral_species"]:
+    # for name in m["neutral_species"]:
         
         
     return ds
@@ -227,15 +504,20 @@ def sheath_boundary_simple(bd, species, target,
     """
     
     m = bd.metadata
+    bd = bd.isel(x = slice(m["MYG"], -m["MYG"])) # No radial guard cells allowed
     target_indices = dict()
     
+    # TODO: Integrate with select_region
     if m["keep_yboundaries"] == 0:
         target_indices["inner_lower"] = dict(y = 0, y2 = 1, yg = None)
         target_indices["outer_lower"] = dict(y = -1, y2 = -2, yg = None)
         target_indices["inner_upper"] = dict(y = m["ny_inner"]-1, y2 = m["ny_inner"]-2, yg = None)
         target_indices["outer_upper"] = dict(y = m["ny_inner"]+1, y2 = m["ny_inner"]+2, yg = None)
     else:
-        raise Exception("Not implemented for when guard cells are present")
+        target_indices["inner_lower"] = dict(y = m["MYG"], y2 = m["MYG"]+1, yg = m["MYG"]-1)
+        target_indices["outer_lower"] = dict(y = -m["MYG"]-1, y2 = -m["MYG"]-2, yg = -m["MYG"])
+        target_indices["inner_upper"] = dict(y = m["ny_inner"] + m["MYG"]-1, y2 = m["ny_inner"], yg = m["ny_inner"] + m["MYG"])
+        target_indices["outer_upper"] = dict(y = m["ny_inner"] + m["MYG"]*3, y2 = m["ny_inner"]+m["MYG"]*3+1, yg = m["ny_inner"] + m["MYG"]*3 - 1)
     
     idx = target_indices[target]
     y = idx["y"]
@@ -265,6 +547,7 @@ def sheath_boundary_simple(bd, species, target,
     Ne = bd["Ne"]
     Te = bd["Te"]
     Ti = bd[f"T{species}"]
+    Vi = bd[f"V{species}"]
     
     if not include_convective:
         gamma_e = gamma_e - 2.5
@@ -301,7 +584,12 @@ def sheath_boundary_simple(bd, species, target,
     C_i = np.sqrt((sheath_ion_polytropic * qe * tisheath + Zi * qe * tesheath) / (AA * mp))
 
     vesheath = C_i  # Assuming no current
-
+    
+    # Allow to go supersonic based on final cell value
+    # Note in this function V is always positive, in Hermes-3 there is a vertical direction dependency
+    
+    vesheath = np.where(vesheath > abs(Vi.isel(theta=y)), vesheath, abs(Vi.isel(theta=y)))
+    
     # Parallel heat flux in W/m^2.
     # Note: Corrected for 5/2Pe convective thermal flux, and small electron kinetic energy flux
     # so gamma_e is the total *energy* flux coefficient.
@@ -320,6 +608,31 @@ def sheath_boundary_simple(bd, species, target,
 
     # Ion flux [s-1]
     pf_i = nesheath * vesheath * dx.isel(theta=y) * dz.isel(theta=y) * (J.isel(theta=y) + J.isel(theta=yg)) / (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=yg)))
+    
+    # Diagnostic prints
+    # if target == "outer_lower":
+    #     factor = (J.isel(theta=y) + J.isel(theta=yg)) #/ (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=yg)))
+        
+        # print(nesheath.isel(t=-1).mean().values)
+        # print(vesheath.isel(t=-1).mean().values)
+        # print(dx.mean().values)
+        # print(g_22.isel(theta=y).mean().values)
+        # print(g_22.isel(theta=yg).mean().values)
+        
+        # print(J.isel(theta=y).mean().values)
+        # print(J.isel(theta=yg).mean().values)
+        
+        # print(dx.isel(theta=y).mean().values)
+        # print(dx.isel(theta=yg).mean().values)
+        
+        # print(dz.mean().values)
+        # print(factor.mean().values)
+
+        # print(J.isel(theta=y).mean().values)
+        # print(f"nesheath: {nesheath.isel(t=-1).sum():.3e}")
+        # print(f"vesheath: {vesheath.isel(t=-1).sum():.3e}")
+        # print(f"dx: {dx.isel(t=-1).sum():.3e}")
+        # print(f"dz: {dz.isel(t=-1).sum():.3e}")
     
     # Negative means leaving the model
     hf_e *= -1
@@ -484,11 +797,114 @@ def Div_a_Grad_perp_upwind_fast(ds, a, f):
     dy = ds["dy"]
     dz = ds["dz"]
     
-    # shift(x=-1) returns array of x[i+1]s because it moves the array 1 step towards start
-    # So this is equivalent to (f[i+1] - f[i]) * (J[i]*g11[i] - J[i+1]*g11[i+1]) / (dx[i] + dx[i+1])
+    # f = f[i], fp = f[i+1]
+    ap = a.shift(x=-1)
+    fp = f.shift(x=-1)
+    Jp = J.shift(x=-1)
+    g11p = g11.shift(x=-1)
+    dxp = dx.shift(x=-1)
+    
 
-    gradient = (f.shift(x=-1) - f) * (J*g11 + J.shift(x=-1)*g11.shift(x=-1)) / (dx + dx.shift(x=-1))
-    flux = -gradient * 0.5 * (a + a.shift(x=-1))
+    gradient = (fp - f) * (J*g11 + Jp*g11p) / (dx + dxp)
+    
+    # Upwind scheme: if gradient positive, yield a[i+1]. If gradient negative, yield a[i]
+    # xr.where: where true, yield a, else yield something else
+    flux = -gradient * a.where(gradient<0, ap)
+    flux *= dy * dz
+    
+    F_R = flux
+    F_L = flux.shift(x=1)  # the shift of 1 index to get F_L because the left flux at cell X is the same as the right flux at cell X-1.
+    
+    return F_L, F_R
+
+
+
+def Div_a_Grad_perp_fast_broken(ds, a, f):
+    """
+    MK: Tried to reproduce what's in the code.
+    Gives nonsense answers, not sure why.
+    ----------
+    -
+    
+    """
+    result = xr.zeros_like(a)
+    J = ds["J"]
+    g11 = ds["g11"]
+    dx = ds["dx"]
+    dy = ds["dy"]
+    dz = ds["dz"]
+    
+    # f = f[i], fp = f[i+1]
+    ap = a.shift(x=-1)
+    fp = f.shift(x=-1)
+    Jp = J.shift(x=-1)
+    g11p = g11.shift(x=-1)
+    dxp = dx.shift(x=-1)
+    resultp = result.shift(x=-1)
+    
+    # fout = 0.5 * (a + ap) * (J*g11 + Jp*g11p) * (fp - f)/(dx + dxp)
+    fout = (fp - f) * (J*g11 + Jp*g11p) / (dx + dxp) * 0.5 * (a + ap)
+    result -= fout #/ (dx*J) # No need to divide by length since we want flux
+    resultp += fout #/ (dxp*Jp)
+    
+    result *= dy*dz
+    
+    
+    
+    F_R = result
+    F_L = result.shift(x=1)  # the shift of 1 index to get F_L because the left flux at cell X is the same as the right flux at cell X-1.
+    
+    return F_L, F_R
+
+def Div_a_Grad_perp_fast(ds, a, f):
+    """
+    AUTHOR: M KRYJAK 30/03/2023
+    Reproduction of Div_a_Grad_perp from fv_ops.cxx in Hermes-3
+    This is used in neutral parallel transport operators but not in 
+    plasma anomalous diffusion
+    
+    Parameters
+    ----------
+    bd : xarray.Dataset
+        Dataset with the simulation results for geometrical info
+    a : np.array
+        First term in the derivative equation, e.g. chi * N
+    f : np.array
+        Second term in the derivative equation, e.g. q_e * T
+    
+    Returns
+    ----------
+    Tuple of two quantities:
+    (F_L, F_R)
+    These are the flow into the cell from the left (x-1),
+    and the flow out of the cell to the right (x+1). 
+    NOTE: *NOT* the flux; these are already integrated over cell boundaries
+
+    Example
+    ----------
+    -
+    
+    """
+    result = xr.zeros_like(a)
+    J = ds["J"]
+    g11 = ds["g11"]
+    dx = ds["dx"]
+    dy = ds["dy"]
+    dz = ds["dz"]
+    
+    # f = f[i], fp = f[i+1]
+    ap = a.shift(x=-1)
+    fp = f.shift(x=-1)
+    Jp = J.shift(x=-1)
+    g11p = g11.shift(x=-1)
+    dxp = dx.shift(x=-1)
+    resultp = result.shift(x=-1)
+    
+    gradient = (fp - f) * (J*g11 + Jp*g11p) / (dx + dxp)
+    
+    # Upwind scheme: if gradient positive, yield a[i+1]. If gradient negative, yield a[i]
+    # xr.where: where true, yield a, else yield something else
+    flux = -gradient * 0.5 * (a + ap)
     flux *= dy * dz
     
     F_R = flux

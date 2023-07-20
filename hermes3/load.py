@@ -17,6 +17,7 @@ import xbout
 from hermes3.utils import *
 from hermes3.named_selections import *
 from hermes3.plotting import *
+from hermes3.fluxes import *
 
 
 class Load:
@@ -152,6 +153,9 @@ class Case:
             self.extract_1d_tokamak_geometry()
             # self.clean_guards()
             self.guard_replace()
+            
+        # self.ds = calculate_radial_fluxes(ds)
+        # self.ds = calculate_target_fluxes(ds)
 
     
 
@@ -163,8 +167,8 @@ class Case:
         
 
         if unnormalise_geom == False:
-            list_skip = ["dx", "dy", "J"]
-            print("--> dx, dy and J will not be unnormalised")
+            list_skip = ["g11", "g_22", "dx", "dy", "J"]
+            print("--> g11, g_22, dx, dy and J will not be unnormalised")
         else:
             list_skip = []
 
@@ -178,6 +182,7 @@ class Case:
 
     def derive_vars(self):
         ds = self.ds
+        m = ds.metadata
         
         # From Hypnotoad trim_yboundaries() in compare_grid_files
         if ds.metadata["jyseps2_1"] != ds.metadata["jyseps1_2"]:
@@ -190,7 +195,12 @@ class Case:
         ds.metadata["ion_species"] = [x for x in ds.metadata["species"] if "+" in x]
         ds.metadata["neutral_species"] = list(set(ds.metadata["species"]).difference(set(ds.metadata["charged_species"])))
         
-        
+        ds.metadata["recycle_pair"] = dict()
+        for ion in ds.metadata["ion_species"]:
+            if "recycle_as" in ds.options[ion].keys():
+                ds.metadata["recycle_pair"][ion] = ds.options[ion]["recycle_as"]
+            else:
+                print(f"No recycling partner found for {ion}")
         
         q_e = constants("q_e")
 
@@ -242,7 +252,7 @@ class Case:
         
         
     def guard_replace(self):
-
+        pass
         if self.is_2d == False:
             if self.ds.metadata["keep_yboundaries"] == 1:
                 # Replace inner guard cells with values at cell boundaries
@@ -256,14 +266,9 @@ class Case:
                     for var_name in self.ds.data_vars:
                         var = self.ds[var_name]
                         
-                        if "y" in var.dims:
-                            
-                            if "t" in var.dims:
-                                var[:, -2] = (var[:,-3] + var[:,-2])/2
-                                var[:, 1] = (var[:, 1] + var[:, 2])/2
-                            else:
-                                var[-2] = (var[-3] + var[-2])/2
-                                var[1] = (var[1] + var[2])/2 
+                        if "pos" in var.dims:
+                            var[{"pos":-2}] = (var[{"pos":-3}] + var[{"pos":-2}])/2
+                            var[{"pos":1}] = (var[{"pos":1}] + var[{"pos":2}])/2
                             
                 else:
                     raise Exception("Guards already replaced!")
@@ -427,6 +432,20 @@ class Case:
             "long_name": "Jacobian to translate from flux to cylindrical coordinates in real space",
         },
         
+        "g_22": {
+            "conversion": m["rho_s0"] * m["rho_s0"],
+            "units": "m2",
+            "standard_name": "g_22",
+            "long_name": "g_22",
+        },
+        
+        "g11": {
+            "conversion": (m["Bnorm"] * m["rho_s0"])**2,
+            "units": "T-2m-2",
+            "standard_name": "g11",
+            "long_name": "g11",
+        },
+        
         "Th+": {
             "conversion": m["Tnorm"],
             "units": "eV",
@@ -525,6 +544,27 @@ class Case:
             "long_name": "Neutral energy source (d)"
         },
         
+        "Pe_src": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "electron energy source (d)",
+            "long_name": "Electron energy source (d)"
+        },
+        
+        "SPd+": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "d+ net pressure source",
+            "long_name": "d+ net pressure source"
+        },
+        
+        "SPe": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "e net pressure source",
+            "long_name": "e net pressure source"
+        },
+        
         "Sd_src": {
             "conversion": m["Nnorm"] * m["Omega_ci"],
             "units": "Wm-3",
@@ -552,6 +592,55 @@ class Case:
             "standard_name": "recombination radiation (d+)",
             "long_name": "Recombination radiation (d+)"
         },
+        
+        "Ed+_rec": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "recombination plasma energy source (d+)",
+            "long_name": "Recombination plasma energy source (d+)"
+        },
+        
+        "Ed+_iz": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "ionisation plasma energy source (d+)",
+            "long_name": "Ionization plasma energy source (d+)"
+        },
+        
+        "Edd+_cx": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "ionisation plasma energy source (d+)",
+            "long_name": "Ionization plasma energy source (d+)"
+        },
+        
+        "Rar": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "argon radiation",
+            "long_name": "Argon radiation"
+        },
+        
+        "Rc": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "argon radiation",
+            "long_name": "Argon radiation"
+        },
+        
+        "Rne": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "argon radiation",
+            "long_name": "Argon radiation"
+        },
+        
+        "Rn": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "argon radiation",
+            "long_name": "Argon radiation"
+        },
 
 
         "Sd+_iz": {
@@ -568,6 +657,20 @@ class Case:
             "long_name": "Recombination ion source (d+)"
         },
         
+        "Sd+_feedback": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units": "m-3s-1",
+            "standard_name": "density source",
+            "long_name": "Upstream density feedback source"
+        },
+        
+        "density_source_shape_d+": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units": "m-3s-1",
+            "standard_name": "density source shape",
+            "long_name": "Upstream density feedback source shape"
+        },
+        
         "NVd+": {
             "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"],
             "units": "kgms-1",
@@ -580,6 +683,48 @@ class Case:
             "units": "kgms-1",
             "standard_name": "neutral momentum",
             "long_name": "Neutral momentum (d+)"
+        },
+
+        "Fdd+_cx": {
+            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"] * m["Omega_ci"],
+            "units": "kgm-3s-2",
+            "standard_name": "CX momentum transfer",
+            "long_name": "CX momentum transfer"
+        },
+        
+        "Fd+_iz": {
+            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"] * m["Omega_ci"],
+            "units": "kgm-3s-2",
+            "standard_name": "IZ momentum transfer",
+            "long_name": "IZ momentum transfer"
+        },
+        
+        "Fd+_rec": {
+            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"] * m["Omega_ci"],
+            "units": "kgm-3s-2",
+            "standard_name": "Rec momentum transfer",
+            "long_name": "Rec momentum transfer"
+        },
+        
+        "SNVd+": {
+            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"] * m["Omega_ci"],
+            "units": "kgm-3s-2",
+            "standard_name": "Net momentum transfer",
+            "long_name": "Net momentum transfer"
+        },
+        
+        "Vd": {
+            "conversion": m["Cs0"],
+            "units": "ms-1",
+            "standard_name": "neutral velocity",
+            "long_name": "Neutral velocity (d+)"
+        },
+        
+        "Vd+": {
+            "conversion": m["Cs0"],
+            "units": "ms-1",
+            "standard_name": "ion velocity",
+            "long_name": "Ion velocity (d+)"
         },
         
         "anomalous_D_e": {
@@ -868,8 +1013,8 @@ class Case:
             "standard_name" : "cross-sectional area",
             "long_name" : "Cell parallel cross-sectional area"})
         
-        self.ds["dV"] = self.ds.J * self.ds.dy
-        self.ds["dV"].attrs.update({
+        self.ds["dv"] = self.ds.J * self.ds.dy
+        self.ds["dv"].attrs.update({
             "conversion" : 1,
             "units" : "m3",
             "standard_name" : "cell volume",

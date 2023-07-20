@@ -20,6 +20,7 @@ class Monitor():
         
         self.case = case
         self.ds = self.case.ds
+        m = self.ds.metadata
         # self.windows = np.array(windows)
         self.windows = windows
         num_rows = len(self.windows)
@@ -27,6 +28,7 @@ class Monitor():
         self.noguards = case.ds.hermesm.select_region("all_noguards")
         self.core = case.ds.hermesm.select_region("core_noguards")
         self.sol = case.ds.hermesm.select_region("sol_noguards")
+        self.omp = case.ds.hermesm.select_region("outer_midplane_a").isel(x = slice(m["MYG"], -m["MYG"]))
         
         self.c = ["navy", "deeppink", "teal", "darkorange"]
         
@@ -48,6 +50,7 @@ class Monitor():
         
         legend = True
         xformat = True
+        m = self.ds.metadata
         
         if "cvode" in name:
             cvode = dict()
@@ -71,21 +74,27 @@ class Monitor():
                 ax.set_yscale("log")
 
 
-        elif name == "density":
+        elif name == "avg_density":
             self.core["Ne"].mean(["x", "theta"]).plot(ax = ax, label = "Ne core", ls = "--", c = self.c[0])
             self.core["Nd"].mean(["x", "theta"]).plot(ax = ax, label = "neut core", ls = "--", c = self.c[1])
             self.sol["Ne"].mean(["x", "theta"]).plot(ax = ax, label = "Ne sol", c = self.c[0])
             self.sol["Nd"].mean(["x", "theta"]).plot(ax = ax, label = "neut sol", c = self.c[1])
             ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
-            # ax.set_yscale("log")
+            ax.set_yscale("log")
             
-        elif name == "temperature":
+        elif name == "avg_temp":
             self.core["Td+"].mean(["x", "theta"]).plot(ax = ax, label = "Td+ core", ls = "--", c = self.c[0])
             self.core["Te"].mean(["x", "theta"]).plot(ax = ax, label = "Te core", ls = "--", c = self.c[1])
             self.sol["Td+"].mean(["x", "theta"]).plot(ax = ax, label = "Td+ sol", c = self.c[0])
             self.sol["Te"].mean(["x", "theta"]).plot(ax = ax, label = "Te sol", c = self.c[1])
             ax.set_yscale("log")
             ax.legend(fontsize=9, loc = "upper center", bbox_to_anchor = (0.5, 1.35), ncol = 2)
+            
+        elif name == "sep_ne":
+            self.omp["Ne"].isel(x = m["ixseps1"]).plot(ax = ax, c = self.c[0])
+            
+        elif name == "sep_te":
+            self.omp["Te"].isel(x = m["ixseps1"]).plot(ax = ax, c = self.c[0])
             
         elif name == "radiation":
             (self.core["Rd+_ex"].mean(["x", "theta"])*-1).plot(ax = ax, label = "core", c = self.c[0])
@@ -213,7 +222,7 @@ class Monitor2D():
         # Defaults:
         self.settings = {"all": {"xlim":(None, None), "ylim":(None, None), 
                                  "figure_aspect":0.9, "wspace_modifier":1, 
-                                 "view":None, "dpi":100}}
+                                 "view":None, "dpi":100, "clean_guards":True}}
         
         
         self.fig_size = 3.5
@@ -235,7 +244,11 @@ class Monitor2D():
             self.fig_height = 0.8 * self.fig_size * self.settings["all"]["figure_aspect"]
             self.wspace = 0.3
             
-        elif mode == "pcolor":
+        elif mode == "pcolor" or mode == "polygon":
+            
+            # Select final timestep if one not provided
+            if "t" in self.ds.dims.keys():
+                self.ds = self.ds.isel(t=-1)
             
             if self.settings["all"]["view"] == "lower_divertor":
                 
@@ -248,10 +261,7 @@ class Monitor2D():
                 
             self.fig_height = 1.8 * self.fig_size * self.settings["all"]["figure_aspect"]
             
-        
-            
-        
-        print(self.settings["all"])
+
         self.windows = windows
         num_rows = len(self.windows)
         
@@ -284,15 +294,21 @@ class Monitor2D():
         
         # Default settings
         self.settings[name] = {
-            "log":True, "vmin":self.ds[name].min().values, "vmax":self.ds[name].max().values,
+            "log":False, "vmin":self.ds[name].min().values, "vmax":self.ds[name].max().values,
             }
         if "history" in self.mode:
             self.settings[name]["log"] = False
         # Modify through inputs
         self.capture_setting_inputs(name)
         
+        
 
         settings = self.settings[name]
+        
+        
+        
+        if self.settings["all"]["clean_guards"] is True:
+            self.ds[name] = self.ds[name].hermesm.clean_guards()
         
         if settings["vmin"] == None:
             settings["vmin"] = self.ds[name].min().values
@@ -306,7 +322,7 @@ class Monitor2D():
         if self.mode == "grid":
         
             norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
-            abs(self.ds[name].isel(t=-1)).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""}, vmin=settings["vmin"], vmax=settings["vmax"], norm = norm)
+            abs(self.ds[name]).plot(ax = ax, cmap = "Spectral_r", cbar_kwargs={"label":""}, vmin=settings["vmin"], vmax=settings["vmax"], norm = norm)
             ax.set_title(name)
 
             ax.set_ylabel(""); ax.set_xlabel("")
@@ -317,7 +333,12 @@ class Monitor2D():
             
             
         elif self.mode == "pcolor":
-            abs(self.ds[name].isel(t=-1)).bout.pcolormesh(ax = ax, cmap = "Spectral_r", logscale=settings["log"], vmin=settings["vmin"], vmax=settings["vmax"])#, cbar_kwargs={"label":""})
+            
+            data = abs(self.ds[name])
+            # if self.settings["all"]["clean_guards"] is True:
+            #     data = data.hermesm.clean_guards()
+                
+            data.bout.pcolormesh(ax = ax, cmap = "Spectral_r", logscale=settings["log"], vmin=settings["vmin"], vmax=settings["vmax"])#, cbar_kwargs={"label":""})
             ax.set_title(name)
 
             ax.set_ylabel(""); ax.set_xlabel("")
@@ -325,7 +346,17 @@ class Monitor2D():
             ax.grid(which="both", alpha = 0.3)
             # [ax.vlines(meta[x], self.ds["x"][0], self.ds["x"][-1], colors = "k") for x in ["jyseps1_1", "jyseps1_2", "jyseps2_1", "jyseps2_2"]]
             
-        
+        elif self.mode == "polygon":
+            data = abs(self.ds[name])
+            # if self.settings["all"]["clean_guards"] is True:
+            #     data = data.hermesm.clean_guards()
+                
+            data.bout.polygon(ax = ax, cmap = "Spectral_r", logscale=settings["log"], vmin=settings["vmin"], vmax=settings["vmax"])#, cbar_kwargs={"label":""})
+            ax.set_title(name)
+
+            ax.set_ylabel(""); ax.set_xlabel("")
+            ax.tick_params(axis="x", labelrotation = 0)
+            ax.grid(which="both", alpha = 0.3)
             
         elif self.mode == "omp_history":
             norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
@@ -354,41 +385,64 @@ class Monitor2D():
 
             
             
-def plot_ddt(case, smoothing = 1, dpi = 120, volume_weighted = True, ylims = (None,None), xlims = (None,None)):
+def plot_ddt(case, 
+             smoothing = 1, 
+             dpi = 120, 
+             volume_weighted = True, 
+             ylims = (None,None), 
+             xlims = (None,None)):
     """
     RMS of all the ddt parameters, which are convergence metrics.
     Inputs:
     smoothing: moving average period used for plot smoothing (default = 20. 1 is no smoothing)
     volume_weighted: weigh the ddt by cell volume
     """
+    
+    if case.is_2d:
+        ds = case.ds.hermesm.select_region("all_noguards")
+    else:
+        # No guard cells at all
+        ds = case.ds.isel(pos=slice(2,-2))
+    
+
+        
+    
+    
     # Find parameters (species dependent)
     list_params = []
 
-    for var in case.ds.data_vars:
+    for var in ds.data_vars:
         if "ddt" in var and not any([x in var for x in []]):
             list_params.append(var)
     list_params.sort()
     
-    # Account for case if not enough timesteps for smoothing
-    if len(case.ds.coords["t"]) < smoothing:
-        smoothing = len(case.ds.coords) / 10
+    # Account for when if not enough timesteps for smoothing
+    if len(ds.coords["t"]) < smoothing:
+        smoothing = len(ds.coords) / 10
 
     res = dict()
     ma = dict()
+    
 
     for param in list_params:
 
         if volume_weighted:
-            res[param] = (case.ds[param] * case.dv) / np.sum(case.dv)    # Cell volume weighted
+            res[param] = (ds[param] * ds.dv) / np.sum(ds.dv)    # Cell volume weighted
         else:
-            res[param] = case.ds[param]
-        res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))    # Root mean square
+            res[param] = ds[param]
+            
+        if case.is_2d:
+            res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))    # Root mean square
+        else:
+            res[param] = np.sqrt(np.mean(res[param]**2, axis = 1))    # Root mean square
         res[param] = np.convolve(res[param], np.ones(smoothing), "same")    # Moving average with window = smoothing
 
     fig, ax = plt.subplots(figsize = (5,4), dpi = dpi)
+    fig.subplots_adjust(right=0.8)
+
 
     for param in list_params:
-        ax.plot(case.ds.coords["t"], res[param], label = param, lw = 1)
+        ax.plot(ds.coords["t"], res[param], label = param, lw = 1)
         
     ax.set_yscale("log")
     ax.grid(which = "major", lw = 1)
@@ -596,6 +650,92 @@ def plot_rz_grid(ds, ax, xlim = (None,None), ylim = (None,None)):
     if ylim != (None,None):
         ax.set_ylim(ylim)
         
+def lineplot(
+    cases,
+    scale = "log",
+    colors = ["teal", "darkorange", "deeppink", "limegreen", "firebrick",  "limegreen", "magenta","cyan", "navy"],
+    params = ["Td+", "Te", "Td", "Ne", "Nd"],
+    regions = ["imp", "omp", "outer_lower"],
+    ylims = (None,None),
+    xlims = (None,None),
+    markersize = 2,
+    dpi = 120,
+    clean_guards = True
+    ):
+    
+    marker = "o"
+    ms = markersize
+    lw = 2.5
+    set_ylims = dict()
+    set_yscales = dict()
+    
+    # Automatically select last timestep if none provided
+    for name in cases.keys():
+        if "t" in  cases[name].dims.keys():
+            cases[name] = cases[name].isel(t=-1)
+
+
+    for region in regions:
+
+        fig, axes = plt.subplots(1,len(params), dpi = dpi, figsize = (4.2*len(params),5), sharex = True)
+        fig.subplots_adjust(hspace = 0, wspace = 0.25, bottom = 0.25, left = 0.1, right = 0.9)
+        ls = "-"
+        
+        region_ds = dict()
+        for name in cases.keys():
+            ds = cases[name]
+            if region == "omp":
+                region_ds[name] = ds.hermesm.select_region("outer_midplane_a")
+                xlabel = "Distance from separatrix [m]"
+            elif region == "imp":
+                region_ds[name] = ds.hermesm.select_region("inner_midplane_a")
+                xlabel = "Distance from separatrix [m]"
+            elif region == "outer_lower":
+                region_ds[name] = ds.hermesm.select_region("outer_lower_target")
+                xlabel = "Distance from separatrix [m]"
+            elif region == "field_line":
+                region_ds[name] = ds.hermesm.select_custom_sol_ring(ds.metadata["ixseps1"], "outer_lower").squeeze()
+                xlabel = "Distance from midplane [m]"
+            else:
+                raise Exception(f"Region {region} not found")
+                
+            
+        
+            
+        for i, param in enumerate(params):
+            for j, name in enumerate(cases.keys()):
+                
+                if region == "field_line":    # Poloidal
+                    m = region_ds[name].metadata
+                    xplot = region_ds[name].coords["theta"] - region_ds[name].coords["theta"][0]
+                else:    # Radial, 0 at sep
+                    sep_R = region_ds[name].coords["R"][ds.metadata["ixseps1"]- ds.metadata["MXG"]]
+                    xplot = region_ds[name].coords["R"] - sep_R
+                    
+                data = region_ds[name][param]
+                
+                if clean_guards is True:
+                    data = data.hermesm.clean_guards()
+                
+                axes[i].plot(xplot, data, label = name, c = colors[j], marker = marker, ms = ms, lw = lw, ls = ls)
+                
+             
+            if ylims != (None, None):
+                axes[i].set_ylim(ylims)
+            if xlims != (None, None):
+                axes[i].set_xlim(xlims)
+            
+            axes[i].grid(which="both", alpha = 0.2)
+            axes[i].set_xlabel(xlabel)
+            axes[i].set_yscale(scale)
+            axes[i].set_title(f"{region}: {param}")
+
+            
+        legend_items = []
+        for j, name in enumerate(cases.keys()):
+            legend_items.append(mpl.lines.Line2D([0], [0], color=colors[j], lw=2, ls = ls))
+            
+        fig.legend(legend_items, cases.keys(), ncol = len(cases), loc = "upper center", bbox_to_anchor=(0.5,0.15))
         
 def create_norm(logscale, norm, vmin, vmax):
     if logscale:
@@ -621,13 +761,236 @@ def create_norm(logscale, norm, vmin, vmax):
 
 
 def camera_view(ax, loc, tokamak = "ST40"):
+    """
+    Available views:
+    ---------
+    lower_outer, lower2
+    """
     
     lims = dict()
     if loc == "lower_outer":
         lims = dict(x = (0.45, 0.65), y = (-0.87, -0.7))
+    elif loc == "lower2":
+        lims = dict(x = (0.15, 0.66), y = (-0.87, -0.5))
+    elif loc == "lower_half":
+        lims = dict(x = (None,None), y = (-0.87, 0.1))
+        
     else:
         raise Exception(f"Location {loc} not implemented yet")
         
     ax.set_xlim(lims["x"])
     ax.set_ylim(lims["y"])
     
+    
+def plot_perp_heat_fluxes(ds):
+    """
+    Plots poloidal integrals of radial heat fluxes
+    Plot is for LHS cell edges and then the outermost RHS cell edge is appended
+    This way zero radial flux appears as a "0" on both ends.
+    """
+    lw = 1
+    
+    if ds.coords["t"].shape != ():
+        raise Exception("Must supply single time slice")
+    
+    fig, ax = plt.subplots(figsize=(4,3), dpi = 150)
+    d = ds.isel(x=slice(2,-2)).sum("theta")
+    
+    def append_rhs(x):
+        F = d[x]
+        rhs = d[x.replace("_L_", "_R_")][-1].values
+        return np.concatenate([F, [rhs]])
+    
+    Fi = append_rhs("hf_perp_tot_L_d+")
+    Fe = append_rhs("hf_perp_tot_L_e")
+    Fn = append_rhs("hf_perp_tot_L_d")
+    
+    ax.plot(range(len(Fi)), Fi,  marker = "o", label = f"d+", ms = 2, c = "teal", lw = lw)
+    ax.plot(range(len(Fe)), Fe,  marker = "o", label = f"e", ms = 2, c = "darkorange", lw = lw)
+    ax.plot(range(len(Fi)), Fn,  marker = "o", label = f"d", ms = 2, c = "firebrick", lw = lw)
+    
+    # d["hf_perp_tot_L_d+"].plot(ax = ax, marker = "o", label = "d+", ms = 2, c = "teal")
+    # d["hf_perp_tot_L_e"].plot(ax = ax, marker = "o", label = "e", ms = 2, c = "darkorange")
+    # d["hf_perp_tot_L_d"].plot(ax = ax, marker = "o", label = "d", ms = 2, c = "firebrick")
+    ax.set_xlabel("Radial index")
+    ax.set_ylabel("Heat flow [s-1]")
+    ax.set_title("Radial heat flow integral")
+    ax.set_yscale("symlog")
+    ax.grid()
+    ax.legend()
+    
+def plot_perp_particle_fluxes(ds):
+    """
+    Plots poloidal integrals of radial particle fluxes
+    Plot is for LHS cell edges and then the outermost RHS cell edge is appended
+    This way zero radial flux appears as a "0" on both ends.
+    """
+    
+    lw = 1
+    
+    def append_rhs(x):
+        F = d[x]
+        rhs = d[x.replace("_L_", "_R_")][-1].values
+        return np.concatenate([F, [rhs]])
+    
+    if ds.coords["t"].shape != ():
+        raise Exception("Must supply single time slice")
+    
+    fig, ax = plt.subplots(figsize=(4,3), dpi = 150)
+    d = ds.isel(x=slice(2,-2)).sum("theta")
+    
+    Fi = append_rhs("pf_perp_diff_L_d+")
+    Fn = append_rhs("pf_perp_diff_L_d")
+    
+    Ft = Fi + Fn
+    ax.plot(range(len(Fi)), Fi,  marker = "o", label = f"d+", ms = 2, c = "teal", lw = lw)
+    ax.plot(range(len(Fi)), Fn,  marker = "o", label = f"d", ms = 2, c = "darkorange", lw = lw)
+    
+    ax.set_xlabel("Radial index")
+    ax.set_ylabel("Particle flow [s-1]")
+    ax.set_title("Particle flow integral")
+    ax.grid()
+    ax.legend()
+    
+def plot_particle_balance(ds, ylims = (None, None)):
+    """
+    Plot net domain particle flows and the particle imbalance as a function of time.
+    Particle flows are aggregated for all heavy species. 
+    Requires you to have calculated the balance to begin with (see fluxes.py)
+    """
+    fig, ax = plt.subplots(figsize=(4,3), dpi = 150)
+    m = ds.metadata
+    data_pos = [ds["pf_int_core_net"], ds["pf_int_sol_net"], ds["pf_int_src_net"]]
+    labels_pos = ["Core", "SOL", "Source"]
+
+    data_neg = [ds["pf_int_targets_net"]]
+    labels_neg = ["Targets"]
+
+    # Ignore first X time for ylim calculation
+    mins = []
+    maxs = []
+    for data in data_neg + data_pos:
+        tlen = len(data.coords["t"])
+        data = data.isel(t = slice(int(tlen*0.1), None))
+        mins.append(np.nanmin(data.values))
+        maxs.append(np.nanmax(data.values))
+        
+    max_magnitude = max( [abs(min(mins)), abs(max(maxs))] )
+    ymin = - max_magnitude * 1.2
+    ymax = max_magnitude * 1.2
+    
+    ax.stackplot(ds.coords["t"], data_pos, labels = labels_pos, baseline = "zero", colors = ["teal", "cyan", "navy"], alpha = 0.7)
+    ax.stackplot(ds.coords["t"], data_neg, labels = labels_neg, baseline = "zero", colors = ["darkorange"], alpha = 0.7)
+
+    ax.plot(ds.coords["t"], ds["pf_int_total_net"], lw = 2, ls = "--", c = "k", label = "Imbalance")
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Particle flow [s-1]")
+    ax.set_title("Particle balance")
+    
+    if ylims != (None, None):
+        ax.set_ylim(ylims)
+    else:
+        ax.set_ylim(ymin,ymax)
+    fig.legend(bbox_to_anchor = (1.25,0.9), loc = "upper right")
+    ax.grid(lw = 0.5)
+    
+def plot_heat_balance(ds, ylims = (None, None)):
+    """
+    Plot net domain heat flows and the heat imbalance as a function of time.
+    Heat flows are aggregated for all species. 
+    Requires you to have calculated the balance to begin with (see fluxes.py)
+    """
+    fig, ax = plt.subplots(figsize=(4,3), dpi = 150)
+    m = ds.metadata
+    data_pos = [ds["hf_int_core_net"], ds["hf_int_sol_net"], ds["hf_int_src_net"]]
+    labels_pos = ["Core", "SOL", "Source"]
+
+    data_neg = [ds["hf_int_targets_net"]]
+    labels_neg = ["Targets"]
+    print(type(data_neg))
+    if "hf_int_rad_ex_e" in ds.data_vars:
+        data_neg.append(ds["hf_int_rad_ex_e"])
+        labels_neg.append("Rad (ex)")
+        print(type(data_neg))
+    if "hf_int_rad_rec_e" in ds.data_vars:
+        data_neg.append(ds["hf_int_rad_rec_e"])
+        labels_neg.append("Rad (rec")
+
+    # Ignore first X time for ylim calculation
+    mins = []
+    maxs = []
+    for data in data_neg + data_pos:
+        tlen = len(data.coords["t"])
+        data = data.isel(t = slice(int(tlen*0.1), None))
+        mins.append(np.nanmin(data.values))
+        maxs.append(np.nanmax(data.values))
+        
+    max_magnitude = max( [abs(min(mins)), abs(max(maxs))] )
+    ymin = - max_magnitude * 1.2
+    ymax = max_magnitude * 1.2
+    
+
+    ax.stackplot(ds.coords["t"], data_pos, labels = labels_pos, baseline = "zero", colors = ["teal", "cyan", "navy"], alpha = 0.7)
+    ax.stackplot(ds.coords["t"], data_neg, labels = labels_neg, baseline = "zero", colors = ["darkorange", "deeppink", "crimson"], alpha = 0.7)
+
+    ax.plot(ds.coords["t"], ds["hf_int_total_net"], lw = 2, ls = "--", c = "k", label = "Imbalance")
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Domain heat flow [W]")
+    ax.set_title("Heat balance")
+    
+    
+    if ylims != (None, None):
+        ax.set_ylim(ylims)
+    else:
+        ax.set_ylim(ymin,ymax)
+    fig.legend(bbox_to_anchor = (1.25,0.9), loc = "upper right")
+    ax.grid(lw = 0.5)
+    
+def plot_omp(da_list, legend = True, title = True, dpi = 150, **kwargs):
+    """
+    Wrap standard Xarray plotter for the outboard midplane
+    """
+    fig, ax = plt.subplots(figsize=(4,3), dpi = dpi)
+    for da in da_list:
+        da.hermesm.select_region("outer_midplane_a").plot(ax = ax, label = da.standard_name, **kwargs)
+        
+    ax.grid()
+    if legend is True and len(da_list)>1:
+        ax.legend()
+    
+    if len(da_list) == 1 and title is True:
+        ax.set_title(da_list[0].standard_name)
+    else:
+        ax.set_title("")
+    
+
+def plot_density_feedback_controller(ds):
+    """
+    Plot the upstream density, and the feedback signal breakdown
+    """
+    fig, axes = plt.subplots(1,3, figsize=(4.5*3, 3.5), dpi = 120)
+    fig.subplots_adjust(wspace=0.3, bottom = 0.2)
+    colors = ["teal", "darkorange", "firebrick", "deeppink", "green", "navy"]
+
+        
+    ds = ds.isel(pos=slice(2,-1))
+    particle_count = ((ds["Ne"] + ds["Nd"])*ds["dv"]).sum("pos")
+    ds["Ne"].isel(pos=0).plot(ax = axes[0], c = colors[0])
+    # ds["densi"]
+    
+    ds["density_feedback_src_p_d+"].plot(ax = axes[1], c = "darkorange", label = "P")
+    ds["density_feedback_src_i_d+"].plot(ax = axes[1], c = "purple", label = "I")
+    
+    ds["density_feedback_src_mult_d+"].plot(ax = axes[1], c = colors[0], ls = ":", label = "Total")
+
+
+    # pflux.plot(ax=axes[2])
+    axes[0].set_title("Upstream density")
+    axes[1].set_title("Signal breakdown")
+    axes[1].legend()
+    axes[2].set_title("Relative error")
+    axes[1].set_ylabel("-")
+
+
+    for ax in axes:
+        ax.grid()
