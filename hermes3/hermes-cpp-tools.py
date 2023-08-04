@@ -17,9 +17,7 @@ if (sol_recycling) {
             // output << "("" << ix << "Y:" << iy << "Z:" << iz << "T:" << Tn(ix, iy, iz) << "  ";
             std::string string_count = std::string("(") + std::to_string(ix) + std::string(",") + std::to_string(iy)+ std::string(",") + std::to_string(iz) + std::string(")");
             output << string_count + std::string(": ") + std::to_string(Tn(ix,iy,iz)) + std::string("; ");
-
           }
-          
       }
     output << "\n";
     }
