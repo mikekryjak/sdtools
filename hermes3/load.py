@@ -671,6 +671,48 @@ class Case:
             "long_name": "Upstream density feedback source shape"
         },
         
+        "Sd_pfr_recycle": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units":"m-3s-1",
+            "standard_name": "PFR recycle neutral density source (d)",
+            "long_name": "PFR recycling neutral density source (d)"
+        },
+        
+        "Sd_sol_recycle": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units":"m-3s-1",
+            "standard_name": "SOL recycle neutral density source (d)",
+            "long_name": "SOL recycling neutral density source (d)"
+        },
+        
+        "Sd_target_recycle": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units":"m-3s-1",
+            "standard_name": "Target recycle neutral density source (d)",
+            "long_name": "Target recycling neutral density source (d)"
+        },
+        
+        "Ed_pfr_recycle": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "PFR recycle neutral energy source",
+            "long_name": "PFR recycle neutral energy source"
+        },
+        
+        "Ed_sol_recycle": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "SOL recycle neutral energy source",
+            "long_name": "SOL recycle neutral energy source"
+        },
+        
+        "Ed_target_recycle": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "Target recycle neutral energy source",
+            "long_name": "Target recycle neutral energy source"
+        },
+        
         "NVd+": {
             "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"],
             "units": "kgms-1",
