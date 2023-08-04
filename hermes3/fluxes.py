@@ -133,13 +133,18 @@ def calculate_particle_balance(ds):
         ds[f"pf_int_core_{species}"] = core[f"pf_perp_diff_L_{species}"].sum("theta").squeeze()
         ds[f"pf_int_sol_{species}"] = sol[f"pf_perp_diff_R_{species}"].sum("theta").squeeze() * -1 # Positive is going right, which is flowing OUT
         ds[f"pf_int_pfr_{species}"] = pfr[f"pf_perp_diff_L_{species}"].sum("theta").squeeze()
+    
         
         for place in list_places:
             net[f"pf_int_{place}_net"] += ds[f"pf_int_{place}_{species}"]
             
     for place in list_places:
         ds[f"pf_int_{place}_net"] = net[f"pf_int_{place}_net"]
-        
+    
+    for species in m["recycle_pair"]:
+        ds[f"pf_int_recycle_sol_{species}"] = (domain[f"S{species}_sol_recycle"] * domain["dv"]).sum(["x", "theta"]).squeeze() 
+        ds[f"pf_int_recycle_pfr_{species}"] = (domain[f"S{species}_pfr_recycle"] * domain["dv"]).sum(["x", "theta"]).squeeze() 
+        ds[f"pf_int_recycle_target_{species}"] = (domain[f"S{species}_target_recycle"] * domain["dv"]).sum(["x", "theta"]).squeeze() 
         
     # Target fluxes
     for target_name in m["targets"]:
@@ -310,19 +315,37 @@ def calculate_target_fluxes(ds):
     for target in m["targets"]:
         ds[f"hf_{target}_e"], ds[f"hf_{target}_{ion}"],  ds[f"pf_{target}_{ion}"] = sheath_boundary_simple(ds, ion, 
                                                                                 target = target)
-        
-        if recycling is True:
-            neutral = ds.metadata["recycle_pair"][ion]
-            ds[f"pf_{target}_{neutral}"] = -ds[f"pf_{target}_{ion}"] * ds.options[ion]["recycle_multiplier"]   # TODO generalise and check
-            ds[f"pf_{target}_{neutral}"].attrs.update(
-                    {
-                    "standard_name": f"target particle flux on {target} ({neutral})",
-                    "long_name": f"target particle flux on {target} ({neutral})",
-                    })
+    
+    # Get recycling fluxes
+    if recycling is True:
+        print(f"Calculating target recycling:")
+        for name in m["targets"]:
+            print(f"{name}")
+            for species in m["recycle_pair"].values():
+                target = ds.hermesm.select_region(f"{name}_target")
+                ds[f"pf_recycle_{target}_{species}"] = (target[f"S{species}_target_recycle"] * target["dv"])   #[s-1]
+                ds[f"hf_recycle_{target}_{species}"] = (target[f"E{species}_target_recycle"] * target["dv"])   #[W]
+                
+                # ds[f"pf_{target}_{species}"].attrs.update(
+                #     {
+                #     "units" : "s-1",
+                #     "standard_name": f"target particle flux on {target} ({species})",
+                #     "long_name": f"target particle flux on {target} ({species})",
+                #     })
+                
+                # pf_int_recycle_target_{species}"
+        # if recycling is True:
+        #     neutral = ds.metadata["recycle_pair"][ion]
+        #     ds[f"pf_{target}_{neutral}"] = -ds[f"pf_{target}_{ion}"] * ds.options[ion]["target_recycle_multiplier"]   # TODO generalise and check
+        #     ds[f"pf_{target}_{neutral}"].attrs.update(
+        #             {
+        #             "standard_name": f"target particle flux on {target} ({neutral})",
+        #             "long_name": f"target particle flux on {target} ({neutral})",
+        #             })
             
-            # Assume neutral heat loss to target is zero for now
-            # TODO: fix this when neutral_gamma is used
-            ds[f"hf_{target}_{neutral}"] = xr.zeros_like(ds[f"hf_{target}_{ion}"])
+        #     # Assume neutral heat loss to target is zero for now
+        #     # TODO: fix this when neutral_gamma is used
+        #     ds[f"hf_{target}_{neutral}"] = xr.zeros_like(ds[f"hf_{target}_{ion}"])
             
         
     return ds
