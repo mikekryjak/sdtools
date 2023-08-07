@@ -2325,7 +2325,7 @@ class AMJUEL():
     def get_amjuel_data(self):
 
         self.amjuel_data = dict()
-        onedrive = r"C:\Users\mikek\OneDrive"
+        onedrive = r"C:\Users\Mike.Kryajak\OneDrive"
 
         # ALL FROM AMJUEL UNLESS OTHERWISE SPECIFIED
         # Ionisation particle source rate
