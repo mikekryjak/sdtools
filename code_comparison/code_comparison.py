@@ -233,7 +233,7 @@ class SOLPSdata:
         
         # for region in self.params.keys():
         for param in self.file.keys():
-            if any([x in param for x in ["ti3", "te3", "ne3", "dab23", "dmb23", "AMJUEL_H.4_2.1.5_3d"]]):
+            if any([x in param for x in ["ti3", "te3", "ne3", "dab23", "dmb23", "rfluxa3", "refluxm3", "AMJUEL_H.4_2.1.5_3d"]]):
                 self.file[param].columns = ["pos", param]
                 self.file[param] = self.file[param].set_index("pos")
                 self.file[param].index = self.file[param].index.astype(float)
