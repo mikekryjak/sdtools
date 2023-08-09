@@ -340,25 +340,26 @@ def _select_region(ds, name):
     return selection
 
 
-# def _select_custom_core_ring(self, i):
-#     """
-#     Creates custom SOL ring slice within the core.
-#     i = 0 is at first domain cell.
-#     i = -2 is at first inner guard cell.
-#     i = ixseps - MXG is the separatrix.
-#     """
+def _select_custom_core_ring(ds, i):
+    """
+    Creates custom SOL ring slice within the core.
+    i = 0 is at first domain cell.
+    i = -2 is at first inner guard cell.
+    i = ixseps - MXG is the separatrix.
+    """
+    m = ds.metadata
+    
+    if i > m["ixseps1"] - m["MXG"]:
+        raise Exception("i is too large!")
 
-#     if i > self.ixseps1 - self.MXG:
-#         raise Exception("i is too large!")
+    selection = (
+        slice(0 + m["MXG"] + i, 1 + m["MXG"] + i),
+        np.r_[
+            slice(m["j1_2g"] + 1, m["j2_2g"] + 1), slice(m["j1_1g"] + 1, m["j2_1g"] + 1)
+        ],
+    )
 
-#     selection = (
-#         slice(0 + self.MXG + i, 1 + self.MXG + i),
-#         np.r_[
-#             slice(self.j1_2g + 1, self.j2_2g + 1), slice(self.j1_1g + 1, self.j2_1g + 1)
-#         ],
-#     )
-
-#     return self.da.isel(x=selection[0], theta=selection[1])
+    return ds.isel(x=selection[0], theta=selection[1])
 
 
 def _select_custom_sol_ring(ds, i, region):
