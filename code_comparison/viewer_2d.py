@@ -19,11 +19,11 @@ sys.path.append(os.path.join(onedrive_path, r"Project\python-packages"))
 
 from hermes3.utils import *
 try:
-    import gridtools.solps_python_scripts.setup
-    from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d
+    # import gridtools.solps_python_scripts.setup
+    # from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d
     from gridtools.solps_python_scripts.read_b2fgmtry import *
 except:
-    print("Gridtools not found")
+    print("Viewer_2D: Gridtools not found")
     
 # SOLEDGE functions
 from files.load_plasma_files						import load_plasma_files
@@ -35,11 +35,11 @@ from routines.h5_routines							import h5_read
 class viewer_2d():
     """
     Pass a case:
-    case = {
-        <case_name> : {"name" : <case name>, "code" : "hermes", "ds" : <hermes-3 dataset>},
-        <case_name> : {"name" : <case name>, "code" : "solps", "path" : <path to SOLPS dir>}
-        <case_name> : {"code" : "soledge", "path": <path to SOLEDGE dir>}
-        }
+    cases = [
+        {"name" : <case name>, "code" : "hermes", "ds" : <hermes-3 dataset>},
+        {"name" : <case name>, "code" : "solps", "path" : <path to SOLPS dir>}
+        {"name" : <case name>, "code" : "soledge", "path": <path to SOLEDGE dir>}
+        ]
     """
     def __init__(self,
                  param,
@@ -96,6 +96,7 @@ class viewer_2d():
         scale = 3
         fig.set_figwidth(1 * scale * num_cases)
         fig.set_figheight(1 * scale * box_aspect_ratio)
+        
 
         # Plot grid
         gs0a = mpl.gridspec.GridSpec(
@@ -142,7 +143,7 @@ class viewer_2d():
             axes[-1].get_position().x1+0.01,
             axes[-1].get_position().y0,0.02,
             axes[-1].get_position().height])
-        plt.colorbar(mappable = sm, cax=cax, label = param) # Similar to fig.colorbar(im, cax = cax)
+        cbar = plt.colorbar(mappable = sm, cax=cax, label = param) # Similar to fig.colorbar(im, cax = cax)
 
         # Add slider
         slider = RangeSlider(
@@ -162,12 +163,19 @@ class viewer_2d():
             except:
                 pass
         # artists = artists.append(cbar)
+        
+        # fig.subplots_adjust(top=0.9, bottom=0.1, left = 0.1, right = 0.8)
 
         def update(val):
             slider.ax.set_ylim(self.min, self.max) # This is inexplicably needed otherwise it freezes
+            print(val)
             
-            cbar.norm.vmin = val[0]
-            cbar.norm.vmax = val[1]
+            if logscale == True:
+                cbar.norm.vmin = np.log10(val[0])
+                cbar.norm.vmax = np.log10(val[1])
+            else:
+                cbar.norm.vmin = val[0]
+                cbar.norm.vmax = val[1]
                 
             for i, artist in enumerate(artists):
                 if logscale == True:
@@ -233,10 +241,10 @@ class SOLEDGEplot():
         
         with HiddenPrints():
             Plasmas = load_plasma_files(path, nZones=0, Evolution=0, iPlasmas=[0,1])
-        if param.endswith("e"):
+        if soledgeparam.endswith("e"):
             # Electrons are index 0
             species_idx = 0
-        elif param.endswith("i"):
+        elif soledgeparam.endswith("i"):
             # Ions and neutrals are index 1
             species_idx = 1
         else:
@@ -244,7 +252,15 @@ class SOLEDGEplot():
 
         # Extract parameter data and find ranges
         iPar = Plasmas[species_idx][0].Triangles.VNames.index(soledgeparam)	
-        self.data = Plasmas[1][0].Triangles.Values[iPar]
+
+        if param == "Nd":
+            print("SOLEDGE: Combining Nmi and Nni")
+            iPar = Plasmas[species_idx][0].Triangles.VNames.index("Nni")	
+            self.data = Plasmas[1][0].Triangles.Values[iPar]
+            
+            iPar = Plasmas[species_idx][0].Triangles.VNames.index("Nmi")	
+            self.data += Plasmas[1][0].Triangles.Values[iPar]
+            
         self.vmin = min(self.data)
         self.vmax = max(self.data)
         
@@ -337,8 +353,15 @@ class SOLPSplot():
            
         solpsparam = name_parser(param, "solps")
         bal = nc.Dataset(os.path.join(path, "balance.nc"))
+        
+        
         if param != None:
-            self.data = bal[solpsparam][:]
+            if param == "Nd":
+                self.data = bal["dab2"][:] + bal["dmb2"][:]*2   # Add atom and molecular densities
+            elif param == "Td":
+                self.data = bal["tab2"][:]
+            else:
+                self.data = bal[solpsparam][:]
             if any([x in param for x in ["Te", "Td+", "Td"]]):
                 self.data /= constants("q_e")   # Convert K -> eV
         elif data != None:

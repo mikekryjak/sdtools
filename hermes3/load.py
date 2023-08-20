@@ -713,6 +713,34 @@ class Case:
             "long_name": "Target recycle neutral energy source"
         },
         
+        "ParticleFlow_d+_xlow": {
+            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Omega_ci"],
+            "units":"s-1",
+            "standard_name": "X flow of d+",
+            "long_name": "X flow of d+"
+        },
+        
+        "ParticleFlow_d+_ylow": {
+            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Omega_ci"],
+            "units":"s-1",
+            "standard_name": "Y flow of d+",
+            "long_name": "Y flow of d+"
+        },
+        
+        "EnergyFlow_d+_xlow": {
+            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Tnorm"] * constants("q_e") * m["Omega_ci"],
+            "units":"W",
+            "standard_name": "X flow of d+ energy",
+            "long_name": "X flow of d+ energy"
+        },
+        
+        "EnergyFlow_e_xlow": {
+            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Tnorm"] * constants("q_e") * m["Omega_ci"],
+            "units":"W",
+            "standard_name": "X flow of e energy",
+            "long_name": "X flow of e energy"
+        },
+        
         "NVd+": {
             "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"],
             "units": "kgms-1",
