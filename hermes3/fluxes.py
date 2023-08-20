@@ -313,7 +313,9 @@ def calculate_target_fluxes(ds):
     
     
     for name in m["targets"]:
-        ds[f"hf_{name}_target_e"], ds[f"hf_{name}_target_{ion}"],  ds[f"pf_{name}_target_{ion}"] = sheath_boundary_simple(ds, ion, 
+        targetname = f"{name}_target"
+        # targetname = name
+        ds[f"hf_{targetname}_e"], ds[f"hf_{targetname}_{ion}"],  ds[f"pf_{targetname}_{ion}"] = sheath_boundary_simple(ds, ion, 
                                                                                 target = name)
     
     # Get recycling fluxes
@@ -325,6 +327,7 @@ def calculate_target_fluxes(ds):
                 print(f"{name}")
                 for species in m["recycle_pair"].values():
                     targetname = f"{name}_target"
+                    # targetname = name
                     target = ds.hermesm.select_region(targetname).squeeze()
                     ds[f"pf_recycle_{targetname}_{species}"] = (target[f"S{species}_target_recycle"] * target["dv"])   #[s-1]
                     ds[f"hf_recycle_{targetname}_{species}"] = (target[f"E{species}_target_recycle"] * target["dv"])   #[W]
@@ -342,6 +345,7 @@ def calculate_target_fluxes(ds):
             
             for name in m["targets"]:
                 targetname = f"{name}_target"
+                # targetname = name
                 neutral = ds.metadata["recycle_pair"][ion]
                 
                 if "target_recycle_multiplier" in ds.options[ion].keys():
@@ -651,8 +655,8 @@ def sheath_boundary_simple(bd, species, target,
     # if target == "outer_lower":
     #     factor = (J.isel(theta=y) + J.isel(theta=yg)) #/ (np.sqrt(g_22.isel(theta=y)) + np.sqrt(g_22.isel(theta=yg)))
         
-        # print(nesheath.isel(t=-1).mean().values)
-        # print(vesheath.isel(t=-1).mean().values)
+    # print(nesheath.isel(t=-1).mean().values)
+    # print(vesheath.mean())
         # print(dx.mean().values)
         # print(g_22.isel(theta=y).mean().values)
         # print(g_22.isel(theta=yg).mean().values)
