@@ -1866,7 +1866,7 @@ class Case:
             sigmav_amj = atools.cx_willett(Te)
             print("This is an SD1D case. Comparing to H.3 3.1.8 @ E=10eV.")
 
-        nu_cx = sigmav_amj * Ne
+        nu_cx = sigmav_amj * Ne 
         
         # ----- NN rate (SD1D only):
         vth_n = np.sqrt(Tn*q_e/mass_i) 
@@ -2193,6 +2193,10 @@ class AMJUEL():
     Also contains lots of rates itself.
     """
     def __init__(self):
+        print("*****************************")
+        print("WARNING: CHECK RATE CSVs FOR DECIMAL POINTS!!!!!!!")
+        print("Excel saves precision as it appears, not as what the number has.......")
+        print("*****************************")
         self.get_amjuel_data()
 
     def read_amjuel_2d(self, path):
@@ -2325,7 +2329,7 @@ class AMJUEL():
     def get_amjuel_data(self):
 
         self.amjuel_data = dict()
-        onedrive = r"C:\Users\Mike.Kryajak\OneDrive"
+        onedrive = r"C:\Users\mikek\OneDrive"
 
         # ALL FROM AMJUEL UNLESS OTHERWISE SPECIFIED
         # Ionisation particle source rate
