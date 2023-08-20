@@ -720,6 +720,13 @@ class Case:
             "long_name": "X flow of d+"
         },
         
+        "ParticleFlow_d+_ylow": {
+            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Omega_ci"],
+            "units":"s-1",
+            "standard_name": "Y flow of d+",
+            "long_name": "Y flow of d+"
+        },
+        
         "EnergyFlow_d+_xlow": {
             "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Tnorm"] * constants("q_e") * m["Omega_ci"],
             "units":"W",
