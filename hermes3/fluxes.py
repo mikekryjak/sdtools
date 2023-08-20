@@ -312,9 +312,10 @@ def calculate_target_fluxes(ds):
         recycling = False
     
     
-    for target in m["targets"]:
-        ds[f"hf_{target}_e"], ds[f"hf_{target}_{ion}"],  ds[f"pf_{target}_{ion}"] = sheath_boundary_simple(ds, ion, 
-                                                                                target = target)
+    for name in m["targets"]:
+        targetname = f"{name}_target"
+        ds[f"hf_{targetname}_e"], ds[f"hf_{targetname}_{ion}"],  ds[f"pf_{targetname}_{ion}"] = sheath_boundary_simple(ds, ion, 
+                                                                                target = name)
     
     # Get recycling fluxes
     if recycling is True:
@@ -322,9 +323,10 @@ def calculate_target_fluxes(ds):
         for name in m["targets"]:
             print(f"{name}")
             for species in m["recycle_pair"].values():
-                target = ds.hermesm.select_region(f"{name}_target")
-                ds[f"pf_recycle_{target}_{species}"] = (target[f"S{species}_target_recycle"] * target["dv"])   #[s-1]
-                ds[f"hf_recycle_{target}_{species}"] = (target[f"E{species}_target_recycle"] * target["dv"])   #[W]
+                targetname = f"{name}_target"
+                target = ds.hermesm.select_region(targetname)
+                ds[f"pf_recycle_{targetname}_{species}"] = (target[f"S{species}_target_recycle"] * target["dv"])   #[s-1]
+                ds[f"hf_recycle_{targetname}_{species}"] = (target[f"E{species}_target_recycle"] * target["dv"])   #[W]
                 
                 # ds[f"pf_{target}_{species}"].attrs.update(
                 #     {
