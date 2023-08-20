@@ -394,16 +394,15 @@ def _select_custom_sol_ring(ds, i, region):
         # if region == "all":
         #     selection = (slice(i+1,i+2), np.r_[slice(0+.MYG, .j2_2g + 1), slice(.j1_1g + 1, self.nyg - self.MYG)])
         
-        # if region == "inner":
-        #     selection = (slice(i+1,i+2), slice(0+.MYG, .ny_inner + .MYG))
+        if region == "inner":
+            selection = (slice(i+1,i+2), slice(0+MYG, ny_inner + MYG))
         # if region == "inner_lower":
         #     selection = (slice(i+1,i+2), slice(0+.MYG, inner_midplane_a +1))
         # if region == "inner_upper":
         #     selection = (slice(i+1,i+2), slice(inner_midplane_b, .ny_inner + .MYG))
-        
-        # if region == "outer":
-        #     selection = (slice(i+1,i+2), slice(.ny_inner + .MYG*3, .nyg - .MYG))
-        if region == "outer_lower":
+        elif region == "outer":
+            selection = (slice(i+1,i+2), slice(ny_inner + MYG*3, nyg - MYG))
+        elif region == "outer_lower":
             selection = (slice(i+1,i+2), slice(outer_midplane_b, m["nyg"] - m["MYG"]))
         elif region == "outer_upper":
             selection = (slice(i+1,i+2), slice(ny_inner + MYG*3, outer_midplane_a+1))
