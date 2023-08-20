@@ -77,7 +77,7 @@ def constants(name):
 
 
 def mike_cmap():
-    return ["teal", "darkorange", "firebrick", "limegreen", "deeppink", "navy", "crimson"]
+    return ["teal", "darkorange", "firebrick", "limegreen", "mediumblue", "darkorchid", "deeppink"]
 
 
 def select_custom_core_ring(ds, i):
