@@ -9,11 +9,10 @@ from hermes3.utils import *
 class NeutralTransport():
     def __init__(self, ds):
         
-        if len(ds.dims) > 1:
-            raise Exception("Only 1D radial slices are supported.")
+        if len(ds.dims) == 2:
+            print("2D data detected")
         
         self.ds = ds
-        self.dist = (ds["R"] - ds["R"][ds.metadata["ixseps1"]]).values
         
     def get_rates(self, Te, Ta, Ti, Ne, Na, reproduce_bug = True):
         """
@@ -24,9 +23,7 @@ class NeutralTransport():
         """
         
         ds = self.ds
-        domain = ds
         m = ds.metadata
-        dist = self.dist
         q_e = constants("q_e")
         mp = constants("mass_p")
         me = constants("mass_e")
@@ -38,10 +35,30 @@ class NeutralTransport():
         rtools = AMJUEL()
         nu_iz = np.zeros_like(Ta)
         nu_cx = np.zeros_like(Ta)
-        for i, _ in enumerate(dist):
-            nu_iz[i] = rtools.amjuel_2d("H.4 2.1.5", Te[i], Ne[i]) * Ne[i]
-            nu_cx[i] = rtools.amjuel_1d("H.2 3.1.8", (Ta[i] + Ti[i])/2) * Ne[i]
-    
+        
+        if len(Ne.shape) == 1:
+            for i, _ in enumerate(Te):
+                nu_iz[i] = rtools.amjuel_2d("H.4 2.1.5", Te[i], Ne[i]) * Ne[i]
+                nu_cx[i] = rtools.amjuel_1d("H.2 3.1.8", (Ta[i] + Ti[i])/2) * Ne[i]
+                
+        elif len(Ne.shape) == 2:
+            for i in range(Te.shape[0]):
+                for j in range(Te.shape[1]):
+                    nu_iz[i,j] = rtools.amjuel_2d("H.4 2.1.5", Te[i,j], Ne[i,j]) * Ne[i,j]
+                    nu_cx[i,j] = rtools.amjuel_1d("H.2 3.1.8", (Ta[i,j] + Ti[i,j])/2) * Ne[i,j]
+                    
+        # CX (Hermes-3) ----------------
+        # ln_sigmav = -18.5028
+        # Teff = (Ta + Ti)/2
+        # lnT = np.log(Teff)
+        # lnT_n = lnT.copy()
+
+        # for b in [0.3708409, 7.949876e-3, -6.143769e-4, -4.698969e-4, -4.096807e-4, 1.440382e-4, -1.514243e-5, 5.122435e-7]:
+        #     ln_sigmav += b * lnT_n
+        #     lnT_n *= lnT
+            
+        # sigmav_cx = np.exp(ln_sigmav) * 1e-6 # convert from cm^3/s to m^3/s
+            
         # NN ----------------
         # Neutral-neutral collisions... not verified yet 
         a0 = np.pi * (2.8e-10)**2   # AKA 2.5e-19
@@ -87,18 +104,22 @@ class NeutralTransport():
         Calculate diffusion coefficient from collision rates
         Inputs: collisions is a list of strings corresponding to self.k.
         It defaults to Hermes-3 default
+        
+        To calculate fluxes from this, do:
+        flux = Dn * Nd * np.gradient(Pd, x) / Pd / (dy * dz)
         """
         
         mp = constants("mass_p")
         q_e = constants("q_e")
-        nu = 0
         
+        nu = 0
         for c in collisions:
             nu += self.k[c]
             
         vth_n = np.sqrt(Ta*q_e / (mp*2))
             
-        self.Dn = vth_n**2 / (nu * mp*2)
+        self.Dn = vth_n**2 / (nu)
+
         
         
         
