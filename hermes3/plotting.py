@@ -178,9 +178,13 @@ class Monitor():
         elif name == "cvode_fails_per_step":
             ax.plot(self.ds.coords["t"], (self.ds["cvode_num_fails"] + self.ds["cvode_nonlin_fails"])/self.ds["cvode_nsteps"], c = self.c[0], lw = 1, markersize=1, marker = "o")
         
-        elif name == "cvode_fails_per_second":
+        elif name == "cumulative_linear_fails_per_second":
             # Per second of time simulated
-            ax.plot(self.ds.coords["t"], cvode["num_fails"], c = self.c[0], lw = 1, markersize=1, marker = "o")
+            ax.plot(self.ds.coords["t"], self.ds["cvode_num_fails"], c = self.c[0], lw = 1, markersize=1, marker = "o")
+            
+        elif name == "cumulative_newton_fails_per_second":
+            # Per second of time simulated
+            ax.plot(self.ds.coords["t"], self.ds["cvode_nonlin_fails"], c = self.c[0], lw = 1, markersize=1, marker = "o")
             
         elif name == "cvode_stab_lims":
             # Per second of time simulated

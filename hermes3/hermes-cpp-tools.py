@@ -24,6 +24,13 @@ if (sol_recycling) {
 
   }
   
+output<<std::string("\n\n****************************************************\n");
+output << std::string("Collisions: ") << species1.name() << species2.name();
+output<<std::string("\n****************************************************\n\n");
+
+output<<std::string("\n------------------------\n");
+output << std::string("Definitely doing this");
+output<<std::string("\n------------------------\n");
   output << std::string("\n******************************************\n");
   output << s1->first << s2->first << std::string(": ") << collision_rates[s1->first][s2->first];
   output << std::string("\n******************************************");
