@@ -183,6 +183,9 @@ class Case:
     def derive_vars(self):
         ds = self.ds
         m = ds.metadata
+        q_e = constants("q_e")
+        
+        m["Pnorm"] = m["Nnorm"] * m["Tnorm"] * q_e
         
         # From Hypnotoad trim_yboundaries() in compare_grid_files
         if ds.metadata["jyseps2_1"] != ds.metadata["jyseps1_2"]:
@@ -202,7 +205,7 @@ class Case:
             else:
                 print(f"No recycling partner found for {ion}")
         
-        q_e = constants("q_e")
+        
 
         if "Ph+" in ds.data_vars:
             ds["Th+"] = ds["Ph+"] / (ds["Nh+"] * q_e)
