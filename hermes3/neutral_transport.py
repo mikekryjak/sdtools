@@ -8,21 +8,33 @@ from hermes3.utils import *
 from hermes3.fluxes import *
 
 class NeutralTransport():
-    def __init__(self, ds):
+    def __init__(self, ds, inputs):
         
         if len(ds.dims) == 2:
             print("2D data detected")
         
         self.ds = ds
         
-    def get_rates(self, Te, Ta, Ti, Ne, Na, reproduce_bug = True):
+        self.inputs = inputs
+        
+    def get_rates(self, reproduce_bug = True):
         """
         Reproduce collisionalities from Hermes-3
         Can reproduce bugs:
         - EN had Te[i] in SI instead of normalised, resulting in K being too off by sqrt(Tnorm)
         - NI had temperature2 in normalised instead of SI, resulting in K being off by sqrt(1/Tnorm)
-        """
         
+        Input deck as a dict with:
+        {Te, Ta, Ti, Ne, Na, Pa, dl, dr}
+        
+        """
+        Te = self.inputs["Te"]
+        Ta = self.inputs["Ta"]
+        Ti = self.inputs["Ti"]
+        Ne = self.inputs["Ne"]
+        Na = self.inputs["Na"]
+        
+                
         ds = self.ds
         m = ds.metadata
         q_e = constants("q_e")
@@ -99,7 +111,7 @@ class NeutralTransport():
             "nnlim" : nu_nnlim,
         }
         
-    def get_Dn(self, Ta, Na, Pa, dl, dr,
+    def get_Dn(self, 
                collisions = ["cx", "nn", "ne", "ni", "nnlim"],
                flux_limiter = "original",
                alpha = 1):
@@ -117,16 +129,6 @@ class NeutralTransport():
         
         Inputs
         ------
-        Ta : array_like
-            Neutral atom temperature in eV
-        Na : array_like
-            Neutral atom density in m^-3
-        Pa : array_like
-            Neutral atom pressure in Pa
-        dl : array_like
-            Grid spacing in poloidal direction
-        dr : array_like
-            Grid spacing in radial direction
         collisions : list of strings
             List of collisions to include in calculation
         flux_limiter : string  
@@ -135,6 +137,11 @@ class NeutralTransport():
             Flux limiter parameter. Default is 1.0
         """
         
+        Ta = self.inputs["Ta"]
+        Na = self.inputs["Na"]
+        Pa = self.inputs["Pa"]
+        dl = self.inputs["dl"]
+        dr = self.inputs["dr"]
         mp = constants("mass_p")
         q_e = constants("q_e")
         
@@ -169,13 +176,63 @@ class NeutralTransport():
             Dn = np.where(Dn > Dmax, Dmax, Dn)
             self.Dn = Dn
             
+        else:
+            self.Dn = Dn
+            
         
-    def get_flux(self, ds, Dn, Na, Pa, dy, dz):
-        L, R = Div_a_Grad_perp_fast(ds, Dn*Na, np.log(Pa))
+    def get_flux(self):
+        
+        Dn = self.Dn 
+        Na = self.inputs["Na"]
+        Pa = self.inputs["Pa"]
+        dy = self.inputs["dy"]
+        dz = self.inputs["dz"]
+        dl = self.inputs["dl"]
+        dr = self.inputs["dr"]
+        J = self.inputs["J"]
+        g11 = self.inputs["g11"]
+        dx = self.inputs["dx"]
+        ds = self.ds
+        
+        
+        # L, R = Div_a_Grad_perp_fast(ds, Dn*Na, np.log(Pa))
         
         L,R = Div_a_Grad_perp_fast(ds, ds[f"Dn_calc"]*ds[f"Nd"], np.log(ds["Pd"]))
         
         self.flux = (L+R)/2 / (dy*dz)
+        
+        a = Dn * Na
+        f = np.log(Pa)
+        L = np.zeros_like(a)
+        R = np.zeros_like(a)
+        
+        def get_flux_on_line(a, f, J, g11, dx, dy, dz):
+            """
+            Works for single radial slice
+            """
+            L = np.zeros_like(a)
+            R = np.zeros_like(a)
+            for i, _ in enumerate(a[:-1]):
+                ip = i + 1  # The next cell
+                
+                gradient = (f[ip] - f[i]) * (J[i] * g11[i] + J[ip] * g11[ip]) / (dx[i] + dx[ip])
+                flux = -gradient * 0.5 * (a[i] + a[ip])
+                
+                flux *= dy[i] * dz[i]  
+                R[i] = flux
+                L[ip] = flux  
+            
+            return L, R
+        
+        if len(a.shape) > 1:
+            # 2D
+            for yi in range(Na.shape[1]):
+                L[:,yi], R[:,yi] = get_flux_on_line(a[:,yi], f[:,yi], J[:,yi], g11[:,yi], dx[:,yi], dy[:,yi], dz[:,yi])
+        else:
+            # 1D
+            L, R = get_flux_on_line(a, f, J, g11, dx, dy, dz)
+            
+        self.flux = (L+R)/2
         
     
 """
