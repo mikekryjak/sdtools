@@ -261,6 +261,9 @@ class SOLEDGEplot():
             iPar = Plasmas[species_idx][0].Triangles.VNames.index("Nmi")	
             self.data += Plasmas[1][0].Triangles.Values[iPar]
             
+        else:
+            self.data = Plasmas[species_idx][0].Triangles.Values[iPar]
+            
         self.vmin = min(self.data)
         self.vmax = max(self.data)
         
