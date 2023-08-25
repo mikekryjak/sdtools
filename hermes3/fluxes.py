@@ -62,13 +62,15 @@ def calculate_heat_balance(ds, merge_targets = True):
 
 
     # Target fluxes
-    for target_name in m["targets"]:
+    for target in m["targets"]:
+        target_name = f"{target}_target"
         net[target_name] = 0
     net["targets"] = 0
 
     for species in m["ion_species"]+m["neutral_species"]+["e"]:
         net[f"targets_{species}"] = 0
-        for target_name in m["targets"]:
+        for target in m["targets"]:
+            target_name = f"{target}_target"
             ds[f"hf_int_{target_name}_{species}"] = ds[f"hf_{target_name}_{species}"].sum("x").squeeze()
             net[target_name] += ds[f"hf_int_{target_name}_{species}"] 
             net[f"targets_{species}"]  += ds[f"hf_int_{target_name}_{species}"] 
@@ -77,7 +79,8 @@ def calculate_heat_balance(ds, merge_targets = True):
         ds[f"hf_int_targets_{species}"] = net[f"targets_{species}"]
             
     
-    for target_name in m["targets"]:
+    for target in m["targets"]:
+        target_name = f"{target}_target"
         ds[f"hf_int_{target_name}_net"] = net[target_name]
         net["targets"] += net[target_name]
         
