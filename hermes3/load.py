@@ -183,6 +183,9 @@ class Case:
     def derive_vars(self):
         ds = self.ds
         m = ds.metadata
+        q_e = constants("q_e")
+        
+        m["Pnorm"] = m["Nnorm"] * m["Tnorm"] * q_e
         
         # From Hypnotoad trim_yboundaries() in compare_grid_files
         if ds.metadata["jyseps2_1"] != ds.metadata["jyseps1_2"]:
@@ -202,7 +205,7 @@ class Case:
             else:
                 print(f"No recycling partner found for {ion}")
         
-        q_e = constants("q_e")
+        
 
         if "Ph+" in ds.data_vars:
             ds["Th+"] = ds["Ph+"] / (ds["Nh+"] * q_e)
@@ -432,11 +435,18 @@ class Case:
             "long_name": "Jacobian to translate from flux to cylindrical coordinates in real space",
         },
         
+        "g22": {
+            "conversion": 1/(m["rho_s0"] * m["rho_s0"]),
+            "units": "m-2",
+            "standard_name": "g22",
+            "long_name": "g22, 1/h_theta^2",
+        },
+        
         "g_22": {
             "conversion": m["rho_s0"] * m["rho_s0"],
             "units": "m2",
             "standard_name": "g_22",
-            "long_name": "g_22",
+            "long_name": "g_22, B^2*h_theta^2/Bpol^2",
         },
         
         "g11": {
@@ -1168,7 +1178,7 @@ class Case:
         # self.hthe = self.J * self.ds["Bpxy"]    # poloidal arc length per radian
         # self.dl = self.dy * self.hthe    # poloidal arc length
         
-        ds["dr"] = (["x", "theta"], ds.dx.data / (ds.R.data * ds.Bpxy.data))
+        ds["dr"] = (["x", "theta"], ds.dx.data / (ds.R.data * ds.Bpxy.data))  # eqv. to sqrt(g11)
         ds["dr"].attrs.update({
             "conversion" : 1,
             "units" : "m",
