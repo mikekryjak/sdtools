@@ -19,7 +19,7 @@ try:
 except:
     print("Gridtools not found")
 
-
+from soledge.wrapper_class import *
 
 from hermes3.utils import *
 
@@ -233,7 +233,7 @@ class SOLPSdata:
         
         # for region in self.params.keys():
         for param in self.file.keys():
-            if any([x in param for x in ["ti3", "te3", "ne3", "dab23", "dmb23", "AMJUEL_H.4_2.1.5_3d"]]):
+            if any([x in param for x in ["ti3", "te3", "ne3", "dab23", "dmb23", "rfluxa3", "refluxm3", "AMJUEL_H.4_2.1.5_3d"]]):
                 self.file[param].columns = ["pos", param]
                 self.file[param] = self.file[param].set_index("pos")
                 self.file[param].index = self.file[param].index.astype(float)
@@ -486,21 +486,6 @@ def lineplot_compare(
             if param in units:
                 axes[i].set_ylabel(units[param]) 
             
-
-            # ymin = []; ymax = []
-            # for name in cases.keys():
-            #     if cases[name].code != "SOLEDGE2D":
-            #         print(name)
-            #         ymin.append(cases[name].regions[region][param].min())
-            #         ymax.append(cases[name].regions[region][param].max())
-            
-            # print(ymin)
-            # print(ymax)
-            
-            # if param in set_ylims[region].keys():
-            #     if set_ylims[region][param] != (None, None):
-            #         axes[i].set_ylim(set_ylims[region][param])
-                
              
             if ylims != (None, None):
                 axes[i].set_ylim(ylims)

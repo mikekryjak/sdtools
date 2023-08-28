@@ -183,6 +183,9 @@ class Case:
     def derive_vars(self):
         ds = self.ds
         m = ds.metadata
+        q_e = constants("q_e")
+        
+        m["Pnorm"] = m["Nnorm"] * m["Tnorm"] * q_e
         
         # From Hypnotoad trim_yboundaries() in compare_grid_files
         if ds.metadata["jyseps2_1"] != ds.metadata["jyseps1_2"]:
@@ -202,7 +205,7 @@ class Case:
             else:
                 print(f"No recycling partner found for {ion}")
         
-        q_e = constants("q_e")
+        
 
         if "Ph+" in ds.data_vars:
             ds["Th+"] = ds["Ph+"] / (ds["Nh+"] * q_e)
@@ -432,11 +435,18 @@ class Case:
             "long_name": "Jacobian to translate from flux to cylindrical coordinates in real space",
         },
         
+        "g22": {
+            "conversion": 1/(m["rho_s0"] * m["rho_s0"]),
+            "units": "m-2",
+            "standard_name": "g22",
+            "long_name": "g22, 1/h_theta^2",
+        },
+        
         "g_22": {
             "conversion": m["rho_s0"] * m["rho_s0"],
             "units": "m2",
             "standard_name": "g_22",
-            "long_name": "g_22",
+            "long_name": "g_22, B^2*h_theta^2/Bpol^2",
         },
         
         "g11": {
@@ -669,6 +679,76 @@ class Case:
             "units": "m-3s-1",
             "standard_name": "density source shape",
             "long_name": "Upstream density feedback source shape"
+        },
+        
+        "Sd_pfr_recycle": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units":"m-3s-1",
+            "standard_name": "PFR recycle neutral density source (d)",
+            "long_name": "PFR recycling neutral density source (d)"
+        },
+        
+        "Sd_sol_recycle": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units":"m-3s-1",
+            "standard_name": "SOL recycle neutral density source (d)",
+            "long_name": "SOL recycling neutral density source (d)"
+        },
+        
+        "Sd_target_recycle": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units":"m-3s-1",
+            "standard_name": "Target recycle neutral density source (d)",
+            "long_name": "Target recycling neutral density source (d)"
+        },
+        
+        "Ed_pfr_recycle": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "PFR recycle neutral energy source",
+            "long_name": "PFR recycle neutral energy source"
+        },
+        
+        "Ed_sol_recycle": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "SOL recycle neutral energy source",
+            "long_name": "SOL recycle neutral energy source"
+        },
+        
+        "Ed_target_recycle": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "Target recycle neutral energy source",
+            "long_name": "Target recycle neutral energy source"
+        },
+        
+        "ParticleFlow_d+_xlow": {
+            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Omega_ci"],
+            "units":"s-1",
+            "standard_name": "X flow of d+",
+            "long_name": "X flow of d+"
+        },
+        
+        "ParticleFlow_d+_ylow": {
+            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Omega_ci"],
+            "units":"s-1",
+            "standard_name": "Y flow of d+",
+            "long_name": "Y flow of d+"
+        },
+        
+        "EnergyFlow_d+_xlow": {
+            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Tnorm"] * constants("q_e") * m["Omega_ci"],
+            "units":"W",
+            "standard_name": "X flow of d+ energy",
+            "long_name": "X flow of d+ energy"
+        },
+        
+        "EnergyFlow_e_xlow": {
+            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Tnorm"] * constants("q_e") * m["Omega_ci"],
+            "units":"W",
+            "standard_name": "X flow of e energy",
+            "long_name": "X flow of e energy"
         },
         
         "NVd+": {
@@ -1098,7 +1178,7 @@ class Case:
         # self.hthe = self.J * self.ds["Bpxy"]    # poloidal arc length per radian
         # self.dl = self.dy * self.hthe    # poloidal arc length
         
-        ds["dr"] = (["x", "theta"], ds.dx.data / (ds.R.data * ds.Bpxy.data))
+        ds["dr"] = (["x", "theta"], ds.dx.data / (ds.R.data * ds.Bpxy.data))  # eqv. to sqrt(g11)
         ds["dr"].attrs.update({
             "conversion" : 1,
             "units" : "m",

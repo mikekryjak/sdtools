@@ -35,6 +35,8 @@ def create_norm(logscale, norm, vmin, vmax):
             else:
                 linear_scale = 1.0e-5
             linear_threshold = min(abs(vmin), abs(vmax)) * linear_scale
+            if linear_threshold == 0:
+                linear_threshold = 1e-4 * vmax   # prevents crash on "Linthresh must be positive"
             norm = mpl.colors.SymLogNorm(linear_threshold, vmin=vmin, vmax=vmax)
     elif norm is None:
         norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
@@ -75,7 +77,7 @@ def constants(name):
 
 
 def mike_cmap():
-    return ["teal", "darkorange", "firebrick", "limegreen", "deeppink", "navy", "crimson"]
+    return ["teal", "darkorange", "firebrick", "limegreen", "mediumblue", "darkorchid", "deeppink"]
 
 
 def select_custom_core_ring(ds, i):
