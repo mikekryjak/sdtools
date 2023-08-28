@@ -6,10 +6,11 @@ from hermes3.named_selections import *
 
 
 class Monitor():
-    def __init__(self, case, windows, settings = None):
+    def __init__(self, case, windows, settings = None, save = False):
         
         self.settings = settings
         self.plot_settings = {"xmin":None, "xmax":None}
+        self.save = save
         
         if self.settings is not None:
             if "plot" in self.settings.keys():
@@ -44,9 +45,12 @@ class Monitor():
             else:
                 for i, name in enumerate(row_windows):
                     self.add_plot(self.axes[i], name)
+            
+            if self.save is True:
+                fig.savefig(f"{case.name}_monitor_{row_id}.png")
         
         
-    def add_plot(self, ax, name):
+    def add_plot(self,  ax, name):
         
         legend = True
         xformat = True
@@ -203,6 +207,9 @@ class Monitor():
         ax.set_ylabel("")
         ax.tick_params(axis="x", labelrotation = 0)
         ax.grid(which="both", alpha = 0.3)
+        
+        
+            
         
         
         
