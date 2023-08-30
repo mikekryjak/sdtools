@@ -438,13 +438,15 @@ def calculate_radial_fluxes(ds, force_neumann = False):
         
         # Perpendicular heat diffusion NOTE: 3/2 factor was initially omitted by accident
         L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*ds[f"P{name}"], np.log(Plim))
-        ds[f"hf_perp_conv_L_{name}"] = L * 3/2
-        ds[f"hf_perp_conv_R_{name}"] = R * 3/2
+        corr = ds["heat_flux_factor_d"] if "heat_flux_factor_d" in ds.data_vars else 1
+        ds[f"hf_perp_conv_L_{name}"] = L * 3/2 * corr
+        ds[f"hf_perp_conv_R_{name}"] = R * 3/2 * corr
         
         # Perpendicular heat conduction NOTE: this is actually energy not pressure like above, so no factor needed
         L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*Nd, constants("q_e")*Td)
-        ds[f"hf_perp_diff_L_{name}"] = L 
-        ds[f"hf_perp_diff_R_{name}"] = R
+        corr = ds["heat_flux_factor_d"] if "heat_flux_factor_d" in ds.data_vars else 1
+        ds[f"hf_perp_diff_L_{name}"] = L * corr 
+        ds[f"hf_perp_diff_R_{name}"] = R * corr
         
         # Total
         ds[f"hf_perp_tot_L_{name}"] = ds[f"hf_perp_conv_L_{name}"] + ds[f"hf_perp_diff_L_{name}"]
@@ -473,8 +475,9 @@ def calculate_radial_fluxes(ds, force_neumann = False):
     for name in m["charged_species"]:   
         # L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"anomalous_D_{name}"] * ds[f"N{name}"] / ds[f"N{name}"], ds[f"N{name}"])
         L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"anomalous_D_{name}"], ds[f"N{name}"])
-        ds[f"pf_perp_diff_L_{name}"] = L 
-        ds[f"pf_perp_diff_R_{name}"] = R
+        corr = ds["particle_flux_factor_d"] if "particle_flux_factor_d" in ds.data_vars else 1
+        ds[f"pf_perp_diff_L_{name}"] = L * corr 
+        ds[f"pf_perp_diff_R_{name}"] = R * corr
         
         
     for name in m["neutral_species"]:
