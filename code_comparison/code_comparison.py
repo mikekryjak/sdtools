@@ -467,7 +467,7 @@ def lineplot_compare(
             xlims = (None,None)
             ylims = (None,None)
             # Set ylims
-            ymin = min(ymin)*0.8
+            ymin = min(ymin)*0.5
             ymax = max(ymax)*1.5
             
             units = {
@@ -475,11 +475,13 @@ def lineplot_compare(
                 "Te":"eV", "Td+" : "eV", "Td" : "eV"}
             
             if "Td+" in param:
-                ymin *= 0.4
+                ymin *= 1
             if "Td" in param:
-                ymin *= 0.9
-            # if "Nd" in param:
-            #     ymax *= 10
+                ymin *= 1
+            if "Nd" in param:
+                ymax *= 2
+                ymin *= 0.3
+            
 
             axes[i].set_ylim(ymin,ymax)
             
