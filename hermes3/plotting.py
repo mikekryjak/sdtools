@@ -797,31 +797,33 @@ def plot_perp_heat_fluxes(ds):
     if ds.coords["t"].shape != ():
         raise Exception("Must supply single time slice")
     
-    fig, ax = plt.subplots(figsize=(4,3), dpi = 150)
+    plt.style.use(r"C:\Users\mikek\OneDrive\Project\pyenvs\fusion-a-310\Lib\site-packages\matplotlib\mpl-data\stylelib\mike.mplstyle")
+
+    fig, ax = plt.subplots()
+
     d = ds.isel(x=slice(2,-2)).sum("theta")
-    
+    omp = ds.hermesm.select_region("outer_midplane_a").isel(x=slice(2,-2))
+    dist = (omp["R"] - omp["R"][ds.metadata["ixseps1"]])
+    dist = np.insert(dist.values, 0, dist.values[0] - (dist.values[1] - dist.values[0]))
+
     def append_rhs(x):
         F = d[x]
         rhs = d[x.replace("_L_", "_R_")][-1].values
         return np.concatenate([F, [rhs]])
-    
-    Fi = append_rhs("hf_perp_tot_L_d+")
-    Fe = append_rhs("hf_perp_tot_L_e")
-    Fn = append_rhs("hf_perp_tot_L_d")
-    
-    ax.plot(range(len(Fi)), Fi,  marker = "o", label = f"d+", ms = 2, c = "teal", lw = lw)
-    ax.plot(range(len(Fe)), Fe,  marker = "o", label = f"e", ms = 2, c = "darkorange", lw = lw)
-    ax.plot(range(len(Fi)), Fn,  marker = "o", label = f"d", ms = 2, c = "firebrick", lw = lw)
-    
-    # d["hf_perp_tot_L_d+"].plot(ax = ax, marker = "o", label = "d+", ms = 2, c = "teal")
-    # d["hf_perp_tot_L_e"].plot(ax = ax, marker = "o", label = "e", ms = 2, c = "darkorange")
-    # d["hf_perp_tot_L_d"].plot(ax = ax, marker = "o", label = "d", ms = 2, c = "firebrick")
-    ax.set_xlabel("Radial index")
-    ax.set_ylabel("Heat flow [s-1]")
-    ax.set_title("Radial heat flow integral")
-    ax.set_yscale("symlog")
-    ax.grid()
-    ax.legend()
+
+    m = "o"
+    ms = 5
+    ax.plot(dist, append_rhs("hf_perp_diff_L_d"), label = "Neutral conduction", marker = m, ms = ms)
+    ax.plot(dist, append_rhs("hf_perp_diff_L_e"), label = "Electron conduction", marker = m, ms = ms)
+    ax.plot(dist, append_rhs("hf_perp_diff_L_d+"), label = "Ion conduction", marker = m, ms = ms)
+    ax.plot(dist, append_rhs("hf_perp_conv_L_d"), label = "Neutral convection", marker = "x",ls = "--", ms = ms)
+    ax.plot(dist, append_rhs("hf_perp_conv_L_d+"), label = "Ion convection", marker = "x",ls = "--", ms = ms)
+    fig.legend(loc = "upper left", bbox_to_anchor = (0.9,0.9))
+    # domain["hf_perp_diff_R_d"].plot(ax = ax, label = "Neutral conduction")
+    # domain["hf_perp_conv_R_d"].plot(ax = ax, label = "Neutral convection")
+    ax.set_ylabel("Heat flow poloidal integral [W]")
+    ax.set_xlabel("Distance from separatrix [m]")
+    ax.set_title("Perpendicular heat flows")
     
 def plot_perp_particle_fluxes(ds):
     """
