@@ -14,12 +14,14 @@ import time
 parser = argparse.ArgumentParser(description = "Run case")
 parser.add_argument("casepath", type=str, help = "Case to run")
 parser.add_argument("-b", type=str, help = "Branch (build folder name)")
-parser.add_argument("-c", type=str, help = "Number of cores")
-parser.add_argument("-t", type=str, help = "Time in hh:mm:ss")
-parser.add_argument("-N", type=str, help = "Number of nodes")
+parser.add_argument("-c", type=str, help = "Number of cores", default = 120)
+parser.add_argument("-t", type=str, help = "Time in hh:mm:ss", default = "24:00:00")
+parser.add_argument("-N", type=str, help = "Number of nodes", default = 1)
 parser.add_argument("-restart", action="store_true", help = "Restart?")
 parser.add_argument("-append", action="store_true", help = "Append?")
 
+hermes_path = "/work/e281/e281/mkryjak/hermes-3"
+# hermes_path = "/mnt/lustre/rdfaas/epsrc/e281/e281/mkryjak/hermes-3"
 
 args = parser.parse_args()
 
@@ -70,7 +72,7 @@ f"""#!/bin/bash
 export OMP_NUM_THREADS=1
 
 source /work/e281/e281/mkryjak/bout.env
-srun --distribution=block:block --hint=nomultithread /work/e281/e281/mkryjak/hermes-3/{args.b}/hermes-3 -d {abscasepath} {restartappend}
+srun --distribution=block:block --hint=nomultithread {hermes_path}/{args.b}/hermes-3 -d {abscasepath} {restartappend}
 """
 
 with open(runscriptpath, "w") as f:
