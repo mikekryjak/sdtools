@@ -449,6 +449,13 @@ class Case:
             "long_name": "g_22, B^2*h_theta^2/Bpol^2",
         },
         
+        "g_33": {
+            "conversion": m["rho_s0"] * m["rho_s0"],
+            "units": "m2",
+            "standard_name": "g_22",
+            "long_name": "g_22, R^2",
+        },
+        
         "g11": {
             "conversion": (m["Bnorm"] * m["rho_s0"])**2,
             "units": "T-2m-2",
