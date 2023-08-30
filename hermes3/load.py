@@ -695,6 +695,20 @@ class Case:
             "long_name": "SOL recycling neutral density source (d)"
         },
         
+        "Sd_wall_recycle": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units":"m-3s-1",
+            "standard_name": "wall recycle neutral density source (d)",
+            "long_name": "wall recycling neutral density source (d)"
+        },
+        
+        "Sd_pump_recycle": {
+            "conversion": m["Nnorm"] * m["Omega_ci"],
+            "units":"m-3s-1",
+            "standard_name": "pump recycle neutral density source (d)",
+            "long_name": "pump recycling neutral density source (d)"
+        },
+        
         "Sd_target_recycle": {
             "conversion": m["Nnorm"] * m["Omega_ci"],
             "units":"m-3s-1",
@@ -721,6 +735,20 @@ class Case:
             "units": "Wm-3",
             "standard_name": "Target recycle neutral energy source",
             "long_name": "Target recycle neutral energy source"
+        },
+        
+        "Ed_wall_refl": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "Wall reflection neutral energy source",
+            "long_name": "Wall reflection neutral energy source"
+        },
+        
+        "Ed_target_refl": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "Target reflection neutral energy source",
+            "long_name": "Target reflection neutral energy source"
         },
         
         "ParticleFlow_d+_xlow": {
