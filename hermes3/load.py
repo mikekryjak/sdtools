@@ -709,7 +709,7 @@ class Case:
             "long_name": "wall recycling neutral density source (d)"
         },
         
-        "Sd_pump_recycle": {
+        "Sd_pump": {
             "conversion": m["Nnorm"] * m["Omega_ci"],
             "units":"m-3s-1",
             "standard_name": "pump recycle neutral density source (d)",
@@ -756,6 +756,13 @@ class Case:
             "units": "Wm-3",
             "standard_name": "Target reflection neutral energy source",
             "long_name": "Target reflection neutral energy source"
+        },
+        
+        "Ed_pump": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "Pump neutral energy source",
+            "long_name": "Pump neutral energy source"
         },
         
         "ParticleFlow_d+_xlow": {
@@ -1237,6 +1244,13 @@ class Case:
             "long_name" : "Poloidal arc length",
             "source" : "xHermes"})
         
+        ds["dtor"] = (["x", "theta"], ds["dz"].data * np.sqrt(ds["g_33"].data))   # Toroidal length
+        ds["dtor"].attrs.update({
+            "conversion" : 1,
+            "units" : "m",
+            "standard_name" : "Toroidal length",
+            "long_name" : "Toroidal length",
+            "source" : "xHermes"})
 
 
     # def extract_2d_tokamak_geometry(self):
