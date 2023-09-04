@@ -793,7 +793,7 @@ def camera_view(ax, loc, tokamak = "ST40"):
     ax.set_ylim(lims["y"])
     
     
-def plot_perp_heat_fluxes(ds):
+def plot_perp_heat_fluxes(ds, loc = "omp_integral", neutrals_only = False, ylim = (None,None)):
     """
     Plots poloidal integrals of radial heat fluxes
     Plot is for LHS cell edges and then the outermost RHS cell edge is appended
@@ -808,29 +808,65 @@ def plot_perp_heat_fluxes(ds):
 
     fig, ax = plt.subplots()
 
-    d = ds.isel(x=slice(2,-2)).sum("theta")
+    if loc == "integral":
+        d = ds.isel(x=slice(2,-2)).sum("theta")
+        print("Integrating poloidally")
+        ylabel = "Radial heat flow $[MW]$"
+        title = "Whole domain radial heat flow integral"
+        scale = 1e-6
+    elif loc == "omp":
+        d = ds.hermesm.select_region("outer_midplane_a").isel(x=slice(2,-2))
+        ylabel = "Radial heat flux $[Wm^{-2}]$"
+        title = "Radial heat fluxes at OMP"
+        scale = 1
+    elif loc == "imp":    
+        d = ds.hermesm.select_region("inner_midplane_a").isel(x=slice(2,-2))
+        ylabel = "Radial heat flux $[Wm^{-2}]$"
+        title = "Radial heat fluxes at IMP"
+        scale = 1
+    else:
+        raise Exception("Location must be omp, imp or integral")
+
+    
+    # if "omp" in loc:
+    #     d = domain.hermesm.select_region("outer_midplane_a").isel(x=slice(2,-2))
+    # elif "imp" in loc:
+    #     d = domain.hermesm.select_region("inner_midplane_a").isel(x=slice(2,-2))
+    # else:
+    #     raise Exception("Location must contain omp or imp")
+        
     omp = ds.hermesm.select_region("outer_midplane_a").isel(x=slice(2,-2))
     dist = (omp["R"] - omp["R"][ds.metadata["ixseps1"]])
     dist = np.insert(dist.values, 0, dist.values[0] - (dist.values[1] - dist.values[0]))
 
     def append_rhs(x):
-        F = d[x]
+        F = d[x].values
         rhs = d[x.replace("_L_", "_R_")][-1].values
         return np.concatenate([F, [rhs]])
 
     m = "o"
-    ms = 5
-    ax.plot(dist, append_rhs("hf_perp_diff_L_d"), label = "Neutral conduction", marker = m, ms = ms)
-    ax.plot(dist, append_rhs("hf_perp_diff_L_e"), label = "Electron conduction", marker = m, ms = ms)
-    ax.plot(dist, append_rhs("hf_perp_diff_L_d+"), label = "Ion conduction", marker = m, ms = ms)
-    ax.plot(dist, append_rhs("hf_perp_conv_L_d"), label = "Neutral convection", marker = "x",ls = "--", ms = ms)
-    ax.plot(dist, append_rhs("hf_perp_conv_L_d+"), label = "Ion convection", marker = "x",ls = "--", ms = ms)
-    fig.legend(loc = "upper left", bbox_to_anchor = (0.9,0.9))
+    ms = 0
+    
+    if neutrals_only is False:
+        ax.plot(dist, append_rhs("hf_perp_diff_L_e")*scale, label = "Electron total", marker = m, ms = 0, c = "teal")
+        ax.plot(dist, append_rhs("hf_perp_diff_L_d+")*scale, label = "Ion conduction", marker = m, ms = ms, ls = "--", c = "red")
+        ax.plot(dist, append_rhs("hf_perp_conv_L_d+")*scale, label = "Ion convection", marker = "x",ls = ":", ms = ms, c = "red")
+        ax.plot(dist, append_rhs("hf_perp_tot_L_d+")*scale, label = "Ion total", marker = "|",ls = "-", ms = 0, c = "red")
+    
+    ax.plot(dist, append_rhs("hf_perp_diff_L_d")*scale, label = "Neutral conduction", marker = m, ls = "--", ms = ms, c = "dimgray")
+    ax.plot(dist, append_rhs("hf_perp_conv_L_d")*scale, label = "Neutral convection", marker = "x",ls = ":", ms = ms, c = "dimgray")
+    ax.plot(dist, append_rhs("hf_perp_tot_L_d")*scale, label = "Neutral total", marker = "|",ls = "-", ms = ms, c = "dimgray")
+    
+    leg = ax.legend(loc = "upper right", bbox_to_anchor = (1,1), fontsize = 10)
+    
+    for line in leg.get_lines():
+        line.set_linewidth(2.0)
     # domain["hf_perp_diff_R_d"].plot(ax = ax, label = "Neutral conduction")
     # domain["hf_perp_conv_R_d"].plot(ax = ax, label = "Neutral convection")
-    ax.set_ylabel("Heat flow poloidal integral [W]")
+    ax.set_ylabel(ylabel)
     ax.set_xlabel("Distance from separatrix [m]")
-    ax.set_title("Perpendicular heat flows")
+    ax.set_title(title)
+    ax.set_ylim(ylim)
     
 def plot_perp_particle_fluxes(ds):
     """
