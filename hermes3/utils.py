@@ -3,6 +3,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import os, sys
+import pandas as pd
 
 
 class HiddenPrints:
@@ -98,4 +99,20 @@ def make_cmap(cmap, N):
     cmap = Matplotlib colormap name
     """
     return plt.cm.get_cmap(cmap)(np.linspace(0, 1, N))
+
+def display_dataframe(df, format = "{:.2e}"):
+
+    def styler(s):
+            if abs(s) < 0.01 or pd.isna(s):
+                c =  "color: lightgrey"
+            else:
+                c =  "color: black"
+
+            return c
+            
+    ts = df.style.format("{:.2e}")
+    ts = ts.applymap(styler)
+    display(ts)
+    
+
 
