@@ -29,6 +29,87 @@ Particle throughput time: 0.05228062823230518 s
 ------------
 """
 
+def calculate_simple_particle_balance(ds):
+    """
+    Calculate a simple balance where things like species etc are hardcoded
+    """
+    m = ds.metadata
+
+    sol = ds.hermesm.select_region("sol_edge")
+    pfr = ds.hermesm.select_region("pfr_edge")
+    domain = ds.hermesm.select_region("all_noguards")
+    core = ds.hermesm.select_region("core_edge")
+
+    s = {}
+
+    # SOL
+    s["sol_src_i"] = sol["pf_perp_diff_R_d+"].sum(["x", "theta"]) * -1
+    s["sol_src_n"] = sol["pf_perp_diff_R_d"].sum(["x", "theta"]) * -1
+
+    # Core
+    s["core_src_i"] = core["pf_perp_diff_L_d+"].sum(["x", "theta"])
+    s["core_src_n"] = core["pf_perp_diff_L_d"].sum(["x", "theta"])
+
+    # PFR
+    s["pfr_src_i"] = pfr["pf_perp_diff_L_d+"].sum(["x", "theta"])
+    s["pfr_src_n"] = pfr["pf_perp_diff_L_d"].sum(["x", "theta"])
+
+    # Wall and pump recycle
+    s["pump_recycle"] = ((domain["Sd_pump_recycle"])*domain["dv"]).sum(["x", "theta"]) * m["Nnorm"] * m["Omega_ci"]
+    s["wall_recycle"] = ((domain["Sd_wall_recycle"])*domain["dv"]).sum(["x", "theta"]) * m["Nnorm"] * m["Omega_ci"]
+    # target_recycle = ((domain["Sd_target_recycle"])*domain["dv"]).sum(["x", "theta"])
+
+    s["target_src_i"] = 0
+    s["target_src_n"] = 0
+
+    for name in m["targets"]:
+        target_name = f"{name}_target"
+        s["target_src_i"] += ds[f"pf_{target_name}_d+"].sum("x")
+        s["target_src_n"] += ds[f"pf_recycle_{target_name}_d"].sum("x")
+        
+    targets_net = s["target_src_i"] + s["target_src_n"]
+
+    df = pd.DataFrame(columns = ["value"])
+    for name in s:
+        df.loc[name, "value"] = s[name].values
+        
+    display_dataframe(df)
+    
+def calculate_simple_heat_balance(ds):
+    """
+    Simple heat balance with things hardcoded
+    Currently only reflective wall cooling
+    """
+    if ds["t"].shape != ():
+        raise Exception("Please supply a single time slice")
+    places = {}
+    places["outer_wall"] = ds.hermesm.select_region("outer_sol_edge")
+    places["inner_wall"] = ds.hermesm.select_region("inner_sol_edge")
+    places["pfr"] = ds.hermesm.select_region("pfr_edge")
+
+    if "Ed_wall_refl" in ds.data_vars:
+        hflows = {}
+        for place in places:
+            ds_place = places[place]
+            hflows[place] = ()
+            hflows[place] = (ds_place["Ed_wall_refl"] * ds_place["dv"] ).sum().values * 1e-6
+            
+        hflows["targets"] = (ds["Ed_target_refl"] * ds["dv"]).sum().values * 1e-6
+        
+        tot = 0
+        for name in hflows:
+            print(f"{name}: {hflows[name]:.3f}")
+            tot += hflows[name]
+            
+        print(f"Total: {tot:.3f}\n")
+    
+    
+    else:
+        print("No wall heat fluxes found in dataset")
+    
+    
+
+
 def calculate_heat_balance(ds, merge_targets = True):
 
     m = ds.metadata
