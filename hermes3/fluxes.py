@@ -603,6 +603,21 @@ def calculate_radial_fluxes(ds, force_neumann = False):
         
     return ds
     
+def reverse_pfr_fluxes(ds):
+    m = ds.metadata
+    regions = [
+    dict(x=slice(0, m["ixseps1"]), theta=np.r_[slice(None, m["j1_1g"] + 1), slice(m["j2_2g"] + 1, m["nyg"])]),
+    dict(x=slice(0, m["ixseps1"]), theta=slice(m["j2_1g"] + 1, m["j1_2g"] + 1)),
+    ]
+        
+    fluxes_to_correct = [x for x in ds.data_vars if "f_perp" in x]
+    fluxes_to_correct += [x for x in ds.data_vars if "Flow_" in x]
+
+    for variable in fluxes_to_correct:
+        for selection in regions:
+            ds[variable][selection] = ds[variable][selection] * -1
+            
+    return ds
 
 def sheath_boundary_simple(bd, species, target,
                            sheath_ion_polytropic=1.0, include_convective=True):
