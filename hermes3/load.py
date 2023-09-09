@@ -18,6 +18,7 @@ from hermes3.utils import *
 from hermes3.named_selections import *
 from hermes3.plotting import *
 from hermes3.fluxes import *
+from hermes3.case_db import *
 
 
 class Load:
@@ -41,82 +42,43 @@ class Load:
 
         return Case(ds, casepath, unnormalise_geom = True)
 
-    def case_2D(casepath, 
-                gridfilepath = None, 
+    def case_2D(
+                casepath,
+                gridfilepath,
                 verbose = False, 
-                keep_boundaries = None, 
-                keep_xboundaries = False,
-                keep_yboundaries = False,
                 squeeze = True, 
-                double_load = False,
-                unnormalise_geom = False,
-                unnormalise = True):
-        """ 
-        Double load returns a case with and without guards.
-        """
-        
-        if keep_xboundaries == True or keep_boundaries == True:
-            xboundaries = True
-        else:
-            xboundaries = False
-        if keep_yboundaries == True or keep_boundaries == True:
-            yboundaries = True
-        else:
-            yboundaries = False
-            
-        datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
-        inputfilepath = os.path.join(casepath, "BOUT.inp")
+                unnormalise_geom = True,
+                unnormalise = True,
+                use_squash = False):
 
-        # Load both a case with and without guards
-        if double_load is True:
             
-            ds = xbout.load.open_boutdataset(
-                datapath = datapath, 
-                inputfilepath = inputfilepath, 
-                gridfilepath = gridfilepath,
-                info = False,
-                cache = False,
-                geometry = "toroidal",
-                keep_xboundaries=True,
-                keep_yboundaries=True,
-                )
-            
-            ds_ng = xbout.load.open_boutdataset(
-                datapath = datapath, 
-                inputfilepath = inputfilepath, 
-                gridfilepath = gridfilepath,
-                info = False,
-                cache = False,
-                geometry = "toroidal",
-                keep_xboundaries=False,
-                keep_yboundaries=False,
-                )
-            
-            if squeeze:
-                ds = ds.squeeze(drop = True)
-                ds_ng = ds_ng.squeeze(drop = True)
+        loadfilepath = os.path.join(casepath, "BOUT.dmp.*.nc")
+        inputfilepath = os.path.join(casepath, "BOUT.inp")
+        squashfilepath = os.path.join(casepath, "BOUT.squash.nc") # Squashoutput hardcoded to this filename
+
+        if use_squash is True:
+            squash(casepath, verbose = verbose)
+            loadfilepath = squashfilepath
                 
-            return Case(ds, casepath, unnormalise_geom), Case(ds_ng, casepath, unnormalise_geom)
-                
-        else:
+
+        ds = xbout.load.open_boutdataset(
+                        datapath = loadfilepath, 
+                        inputfilepath = inputfilepath, 
+                        gridfilepath = gridfilepath,
+                        info = False,
+                        cache = True,
+                        geometry = "toroidal",
+                        keep_xboundaries=True,
+                        keep_yboundaries=True,
+                        )
+        
+        if squeeze:
+            ds = ds.squeeze(drop = False)
             
-            # Load with guard settings as per inputs
-            ds = xbout.load.open_boutdataset(
-                datapath = datapath, 
-                inputfilepath = inputfilepath, 
-                gridfilepath = gridfilepath,
-                info = False,
-                geometry = "toroidal",
-                keep_xboundaries=xboundaries,
-                keep_yboundaries=yboundaries,
-                )
-            
-            if squeeze:
-                ds = ds.squeeze(drop = False)
-                
-            return Case(ds, casepath, 
-                        unnormalise_geom,
-                        unnormalise = unnormalise)
+        return Case(ds, casepath, 
+                    unnormalise_geom,
+                    unnormalise = unnormalise)
+        
 
 
 class Case:
