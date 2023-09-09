@@ -804,8 +804,6 @@ def plot_perp_heat_fluxes(ds, loc = "omp_integral", neutrals_only = False, ylim 
     if ds.coords["t"].shape != ():
         raise Exception("Must supply single time slice")
     
-    plt.style.use(r"C:\Users\mikek\OneDrive\Project\pyenvs\fusion-a-310\Lib\site-packages\matplotlib\mpl-data\stylelib\mike.mplstyle")
-
     fig, ax = plt.subplots()
 
     if loc == "integral":
