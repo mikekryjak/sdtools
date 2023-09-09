@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from hermes3.utils import *
 from hermes3.named_selections import *
+import sdtools.general.plotstyle
+
 
 
 class Monitor():
@@ -687,8 +689,8 @@ def lineplot(
 
 
     for region in regions:
-
-        fig, axes = plt.subplots(1,len(params), dpi = dpi, figsize = (4.2*len(params),5), sharex = True)
+        mult = 0.5
+        fig, axes = plt.subplots(1,len(params), dpi = dpi, figsize = (4.2*len(params)*mult,5*mult), sharex = True)
         fig.subplots_adjust(hspace = 0, wspace = 0.25, bottom = 0.25, left = 0.1, right = 0.9)
         ls = "-"
         
@@ -737,9 +739,10 @@ def lineplot(
                 axes[i].set_xlim(xlims)
             
             axes[i].grid(which="both", alpha = 0.2)
-            axes[i].set_xlabel(xlabel)
+            axes[i].set_xlabel(xlabel, fontsize=9)
             axes[i].set_yscale(scale)
             axes[i].set_title(f"{region}: {param}")
+            axes[i].yaxis.set_major_locator(mpl.ticker.MaxNLocator(min_n_ticks=3,nbins=5))
 
             
         legend_items = []
@@ -747,6 +750,7 @@ def lineplot(
             legend_items.append(mpl.lines.Line2D([0], [0], color=colors[j], lw=2, ls = ls))
             
         fig.legend(legend_items, cases.keys(), ncol = len(cases), loc = "upper center", bbox_to_anchor=(0.5,0.15))
+        # fig.tight_layout()
         
 def create_norm(logscale, norm, vmin, vmax):
     if logscale:
