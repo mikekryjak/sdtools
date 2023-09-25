@@ -51,7 +51,9 @@ class viewer_2d():
                  logscale = True,
                  dpi = 120,
                  wspace = 0.05,
-                 cmap = "Spectral_r"):
+                 cmap = "Spectral_r",
+                 add_cbar = True,
+                 slider = True):
         
         plots = []
         for case in cases:
@@ -138,20 +140,25 @@ class viewer_2d():
                 axes[i].tick_params(axis="y", which="both", left=False,labelleft=False)
                 
         # Add colorbar
-        sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
-        cax = fig.add_axes([
-            axes[-1].get_position().x1+0.01,
-            axes[-1].get_position().y0,0.02,
-            axes[-1].get_position().height])
-        cbar = plt.colorbar(mappable = sm, cax=cax, label = param) # Similar to fig.colorbar(im, cax = cax)
+        if add_cbar is True:
+            sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+            cax = fig.add_axes([
+                axes[-1].get_position().x1+0.01,
+                axes[-1].get_position().y0,0.02,
+                axes[-1].get_position().height])
+        
+            cbar = plt.colorbar(mappable = sm, cax=cax, label = param) # Similar to fig.colorbar(im, cax = cax)
 
         # Add slider
         slider = RangeSlider(
-                fig.add_axes([0.3, 0.12, 0.5, 0.1]), "Colour limits",   # left, bottom, width, height
+                fig.add_axes([0.3, 0.05, 0.5, 0.1]), "Colour limits",   # left, bottom, width, height
                 self.min, self.max,
                 orientation = "horizontal",
                 valinit = (self.min, self.max)
                 )
+        
+        for ax in axes:
+            ax.grid(False)
             
 
         artists = []
@@ -252,6 +259,7 @@ class SOLEDGEplot():
 
         # Extract parameter data and find ranges
         iPar = Plasmas[species_idx][0].Triangles.VNames.index(soledgeparam)	
+        
 
         if param == "Nd":
             print("SOLEDGE: Combining Nmi and Nni")
