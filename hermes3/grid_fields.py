@@ -55,24 +55,24 @@ def impose_fields(source, destination,
     # Pe_src_core = 0.76e6 * 2/3   # W converted to pressure
 
     # # Anomalous diffusion coefficients
-    # D_core = 0.1
+    # D_core = 0.3
     # chi_core = 0.45
     # D_sol = 1
     # chi_sol = 3
-    
+    print("WARNING: Puff is suppressed")
     # Make regions
-    puff_region = mesh.slices("symmetric_puff")(width=3, center_half_gap=1)
+    # puff_region = mesh.slices("symmetric_puff")(width=3, center_half_gap=1)
     core_edge_region = mesh.slices("core_edge")
     core_region = mesh.slices("core")
     sol_region = mesh.slices("sol")
     pfr_region = mesh.slices("pfr")
     fields = dict()
     
-    fields["Nd_src"] = Field("Nd_src", mesh)
-    fields["Nd_src"].set_value(puff_region, Nd_src_puff, make_per_volume = True)
+    # fields["Nd_src"] = Field("Nd_src", mesh)
+    # fields["Nd_src"].set_value(puff_region, Nd_src_puff, make_per_volume = True)
 
-    fields["Pd_src"] = Field("Pd_src", mesh)
-    fields["Pd_src"].set_value(puff_region, Pd_src_puff, make_per_volume = True)
+    # fields["Pd_src"] = Field("Pd_src", mesh)
+    # fields["Pd_src"].set_value(puff_region, Pd_src_puff, make_per_volume = True)
 
     fields["Nd+_src"] = Field("Nd+_src", mesh)
     fields["Nd+_src"].set_value(core_edge_region, Ni_src_core, make_per_volume = True)
@@ -372,7 +372,7 @@ class Mesh():
         plt.style.use("default")
 
         field = self.mesh[name]
-        cmap = plt.get_cmap("jet")
+        cmap = plt.get_cmap("Spectral_r")
 
         fieldnorm = field / np.max(field) * 1
         colors = [cmap(x) for x in fieldnorm.flatten()]
@@ -446,7 +446,7 @@ class Field():
 
 
         field = self.data
-        cmap = plt.get_cmap("jet")
+        cmap = plt.get_cmap("YlOrRd")
 
 
         fieldnorm = field / np.max(field) * 1
@@ -461,7 +461,7 @@ class Field():
         axes[0].scatter(self.mesh.yflat, self.mesh.xflat, c = colors, s = 1)
 
         self.mesh.plot_rz_grid(axes[1])
-        axes[1].scatter(self.mesh.rflat, self.mesh.zflat, c = colors, s = 5)
+        axes[1].scatter(self.mesh.rflat, self.mesh.zflat, c = colors, s = 4)
 
         cbar = mpl.colorbar.ColorbarBase(ax=axes[2], cmap = cmap, norm = norm)
 

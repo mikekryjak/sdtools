@@ -1,5 +1,11 @@
 from pathlib import Path
 import os
+from boutdata.squashoutput import squashoutput
+from datetime import datetime as dt
+from boututils.options import BOUTOptions
+from hermes3.load import Load
+
+
 
 class CaseDB():
     """ 
@@ -29,3 +35,45 @@ class CaseDB():
             self.gridpaths[grid_file.name] = grid_file
             self.grids.append(grid_file.parts[-2])
             
+    def get_grid_path(self, casename):
+        """
+        Find path of grid based on case name
+        """
+        
+        if casename not in self.casepaths.keys():
+            raise Exception(f"Case {casename} not found in database")
+        
+        casepath = self.casepaths[casename]
+        options = BOUTOptions()
+        options.read_inp(casepath)
+
+        gridname = options.mesh["file"]
+
+        if gridname in self.gridpaths.keys():
+            gridfilepath = self.gridpaths[gridname]
+        else:
+            raise Exception(f"Grid {gridname} not found in database")
+        
+        return gridfilepath
+    
+    def load_case_2D(self, 
+                    casename,
+                    verbose = False, 
+                    squeeze = True, 
+                    unnormalise_geom = True,
+                    unnormalise = True,
+                    use_squash = False):
+
+        casepath = self.casepaths[casename]
+        gridfilepath = self.get_grid_path(casename)
+            
+        return Load.case_2D(
+                    casepath = casepath,
+                    gridfilepath = gridfilepath,
+                    verbose = verbose,
+                    squeeze = squeeze,
+                    unnormalise_geom = unnormalise_geom,
+                    unnormalise = unnormalise,
+                    use_squash = use_squash
+                )
+
