@@ -13,6 +13,7 @@ from scipy import stats
 from boututils.datafile import DataFile
 from boutdata.collect import collect
 from boutdata.data import BoutData
+from boutdata.squashoutput import squashoutput
 import xbout
 
 from hermes3.utils import *
