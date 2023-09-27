@@ -80,9 +80,12 @@ class SOLEDGEdata:
     Read and parse SOLEDGE parameters
     """
 
-    def __init__(self):
+    def __init__(self, path = None):
         self.regions = dict()
         self.code = "SOLEDGE2D"
+        if path != None:
+            self.path = path
+            self.case = SOLEDGEcase(path)
     
     def read_csv(self, path, mode):
         
@@ -99,7 +102,7 @@ class SOLEDGEdata:
             self.wallring = df
             self.process_ring()
 
-        # self.derive_variables()
+        self.derive_variables()
             
     def process_plot1d(self, df, name):
         """ 
@@ -114,11 +117,11 @@ class SOLEDGEdata:
                             'Ppi':"Pd+",
                             'Ppe':"Pe",
                             'IRadi':"Rd+_ex",
-                            "Nni":"Nd",
-                            "Nmi":"Nd2",
-                            "Tni":"Td",
-                            "Tmi":"Td2",
-                            "Pni":"Pd",
+                            "Nni":"Na",
+                            "Nmi":"Nm",
+                            "Tni":"Ta",
+                            "Tmi":"Tm",
+                            "Pni":"Pa",
                             "vyni":"Vyd",
                             "DIST":"x"})
         df = df.set_index("x")
@@ -159,10 +162,24 @@ class SOLEDGEdata:
         self.wallring = self.wallring.set_index("l")
         self.wallring.index.name = "pos"
         
+        
+        
         # Find peaks in temperature which correspond to the four divertors
         peaks = scipy.signal.find_peaks(self.wallring["Te"], prominence=10)[0]
 
         strikepoints = dict()
+        
+        # Add neutrals
+        target = self.case.get_wall_data_on_target(self.case.get_wall_ntmpi(), "outer_lower")
+        
+        for col in target.columns:
+            if col not in ["Ne", "Te"]:
+                self.wallring[col] = target[col].values
+                
+        self.wallring = self.wallring.rename(columns = {
+                            'Tn' : "Ta", 
+                            'Nn' : "Na", 
+                            })
         
         # Create copy of each df for each target with 0 being the strikepoint.
         for i, target in enumerate(["inner_lower", "outer_lower", "outer_upper", "inner_upper"]):
@@ -171,6 +188,8 @@ class SOLEDGEdata:
             df.index -= strikepoints[target]
             
             self.regions[target] = df
+            
+        
         
         self.strikepoints = strikepoints
         
@@ -180,6 +199,10 @@ class SOLEDGEdata:
                 self.regions[region]["Pe"] = self.regions[region]["Ne"] * self.regions[region]["Te"] * constants("q_e")
             if "Td+" in self.regions[region].keys():
                 self.regions[region]["Pd+"] = self.regions[region]["Ne"] * self.regions[region]["Td+"] * constants("q_e")
+            if "Ta" in self.regions[region].keys():
+                self.regions[region]["Pa"] = self.regions[region]["Na"] * self.regions[region]["Ta"] * constants("q_e")
+            if "Tm" in self.regions[region].keys():
+                self.regions[region]["Pm"] = self.regions[region]["Nm"] * self.regions[region]["Tm"] * constants("q_e")
             
 
 class SOLPSdata:
@@ -316,8 +339,17 @@ class Hermesdata:
         self.regions["omp"] = self.compile_results(ds.hermesm.select_region("outer_midplane_a"))
         self.regions["imp"] = self.compile_results(ds.hermesm.select_region("inner_midplane_a"))
         self.regions["outer_lower"] = self.compile_results(ds.hermesm.select_region("outer_lower_target"))
+        self.regions["outer_upper"] = self.compile_results(ds.hermesm.select_region("outer_upper_target"))
         
         self.regions["imp"].index *= -1    # Ensure core is on the LHS
+        
+        # Parse column names to fit with the other codes
+        for region in self.regions.keys():
+            self.regions[region] = self.regions[region].rename(columns = {
+                "Td" : "Ta",
+                "Nd" : "Na",
+                "Pd" : "Pa"
+            })
 
         
     def compile_results(self, dataset):
@@ -365,98 +397,86 @@ def lineplot_compare(
     set_ylims = dict()
     set_yscales = dict()
 
-
-    if mode == "sol":
         
-        set_ylims = {
-        "imp"         : {"Td+": (0, 300), "Te": (0, 250), "Ne": (1e15, 3e19), "Nd": (0.15e10, 1e18)},
-        "omp"         : {"Td+": (0, 250), "Te": (0, 250), "Ne": (1e17, 0.5e20), "Nd": (1e10, 1e16)},
-        "outer_lower" : {"Td+": (0, 250), "Te": (0, 250), "Ne": (None, 4e18), "Nd": (0, None)},
-        }
-        
-        set_yscales = {
-        "imp" : {"Td+": "linear", "Te": "linear", "Ne": "linear", "Nd": "linear"},
-        "omp" : {"Td+": "linear", "Te": "linear", "Ne": "linear", "Nd": "linear"},
-        "outer_lower" : {"Td+": "linear", "Te": "linear", "Ne": "linear", "Nd": "log"},
-        }
-        
-        xlims = (-0.01, None)
-        
-    if mode == "core":
-        
-        set_ylims = {
-        "imp"         : {"Td+": (0, 2600), "Te": (0, 2500), "Ne": (1e15, 8e19), "Nd": (0.15e10, 1e16)},
-        "omp"         : {"Td+": (0, 2600), "Te": (0, 2500), "Ne": (1e17, 1e20), "Nd": (1e10, 1e16)},
-        "outer_lower" : {"Td+": (0, 250), "Te": (0, 250), "Ne": (None, 4e18), "Nd": (0, None)},
-        }
-        
-        set_yscales = {
-        "imp" : {"Td+": "linear", "Te": "linear", "Ne": "linear", "Nd": "linear"},
-        "omp" : {"Td+": "linear", "Te": "linear", "Ne": "linear", "Nd": "linear"},
-        "outer_lower" : {"Td+": "linear", "Te": "linear", "Ne": "linear", "Nd": "log"},
-        }
-        
-        xlims = (None, 0.01)
-        # xlims = (None, None)
-        
-        
-    elif mode == "log":
-        
-        set_ylims = {
-        "imp"         : {"Td+": (0, 2600), "Te": (0, 2600), "Ne": (1e15, 2e20), "Nd": (1e13, 0.15e18)},
-        "omp"         : {"Td+": (0, 2600), "Te": (0, 2600), "Ne": (1e17, 2e20), "Nd": (1e14, 1e18)},
-        "outer_lower" : {"Td+": (0, 250), "Te": (0, 250), "Ne": (None, 4e18), "Nd": (0, None)},
-        }
-            
-        set_yscales = {
-        "omp" : {"Td+": "log", "Te": "log", "Ne": "log", "Nd": "log"},
-        "imp" : {"Td+": "log", "Te": "log", "Ne": "log", "Nd": "log"},
-        "outer_lower" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ne": "linear", "Nd": "log"},
-        }
-        
-        xlims = (None, None)
+    set_yscales = {
+    "omp" : {"Td+": "log", "Te": "log", "Ne": "log", "Nd": "log", "Pe":"log", "Pd+":"log"},
+    "imp" : {"Td+": "log", "Te": "log", "Ne": "log", "Nd": "log", "Pe":"log", "Pd+":"log"},
+    "outer_lower" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ne": "linear", "Nd": "log"},
+    "outer_upper" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ne": "linear", "Nd": "log"},
+    }
+    
+    region_extents = {
+        "omp" : (-0.06, 0.05),
+        "imp" : (-0.10, 0.06),
+        "outer_lower" : (-0.02, 0.05),
+        "outer_upper" : (-0.02, 0.05)
+    }
+    
+    xlims = (None, None)
 
 
 
     for region in regions:
 
-        fig, axes = plt.subplots(1,len(params), dpi = dpi, figsize = (4.2*len(params),5), sharex = True)
-        fig.subplots_adjust(hspace = 0, wspace = 0.25, bottom = 0.25, left = 0.1, right = 0.9)
+        scale = 1.1
+        fig, axes = plt.subplots(1,len(params), dpi = dpi*scale, figsize = (4.2*len(params)/scale,5/scale), sharex = True)
+        fig.subplots_adjust(hspace = 0, wspace = 0.3, bottom = 0.25, left = 0.1, right = 0.9)
+        fig.suptitle(region, 
+                     x = 0.06, y = 1.0, 
+                     fontsize = "xx-large", color = "darkorchid", horizontalalignment = "left")
         
         linestyles = {"Hermes-3" : "-", "SOLEDGE2D" : ":", "SOLPS" : "--"}
+        styles = {
+            "Hermes-3" : {"ls" : "-"},
+            "SOLEDGE2D" : {"ls" : "-", "lw" : 0, "marker" : "o", "ms" : 4, "markerfacecolor":"auto", "markeredgewidth":1},
+            "SOLPS" : {"ls" : "-", "lw" : 0, "marker" : "x", "ms" : 3, "markeredgewidth":2}
+        }
 
 
-        
+        ### For each parameter
         for i, param in enumerate(params):
             
             ymin = []; ymax = []
             
+            ### For each case
             for j, name in enumerate(cases.keys()):
                 case = cases[name]["data"]
                 color = cases[name]["color"]
                 code = case.code
                 ls = linestyles[code]
                 
+                ## Find region
                 if region in case.regions.keys():   # Is region available?
                     data = case.regions[region]
                     
+                    ## Find parameter
                     if param in data.columns:   # If the parameter is available already, it's probaby custom made.
                         parsed_param = param
                     else:    # If it's not, then let's translate it. If not available, parsed_param is None
                         if code == "SOLPS":
                             parsed_param = parse_solps(param, region)
-                        else:
                             parsed_param = param
+                        else:
+                            parsed_param = None
                     
-                    
+                    ## Did we successfully parse the parameter?
                     if parsed_param != None and parsed_param in data.columns:    # Is parameter available?
+                        
+                        ## Crop SOLEDGE2D results to allow easier min/max finding
+                        if code == "SOLEDGE2D":
+                            data = data.query(f"(index > {region_extents[region][0]}) & (index < {region_extents[region][1]})")
+                        
                         # print(f"Plotting {code}, {region}, {param}, {parsed_param}")
-                        axes[i].plot(data.index, data[parsed_param], label = name, c = color, marker = marker, ms = ms, lw = lw, ls = ls)
+                        style_kwargs = styles[code]
+                        axes[i].plot(data.index, data[parsed_param], label = name, c = color, **style_kwargs)
                         
                         # Collect min and max for later
-                        if code != "SOLEDGE2D":
-                            ymin.append(case.regions[region][parsed_param].min())
-                            ymax.append(case.regions[region][parsed_param].max())
+                        ymin.append(case.regions[region][parsed_param].min())
+                        ymax.append(case.regions[region][parsed_param].max())
+
+                    ## Some issue with parameter
+                    else:
+                        print(f"{parsed_param} not available in {name}, {region}")
                     
             # Set yscales
             if param in set_yscales[region].keys():
@@ -467,26 +487,15 @@ def lineplot_compare(
             xlims = (None,None)
             ylims = (None,None)
             # Set ylims
-            ymin = min(ymin)*0.5
-            ymax = max(ymax)*1.5
+            if len(ymin) == 0:
+                raise Exception(f"No data found for {param}")
+            ymin = min(ymin)
+            ymax = max(ymax)
+            range = ymax - ymin
             
-            units = {
-                "Ne":"m-3", "Nd":"m-3",
-                "Te":"eV", "Td+" : "eV", "Td" : "eV"}
+            axes[i].autoscale()
             
-            if "Td+" in param:
-                ymin *= 1
-            if "Td" in param:
-                ymin *= 1
-            if "Nd" in param:
-                ymax *= 2
-                ymin *= 0.3
             
-
-            axes[i].set_ylim(ymin,ymax)
-            
-            if param in units:
-                axes[i].set_ylabel(units[param]) 
             
              
             if ylims != (None, None):
@@ -502,15 +511,28 @@ def lineplot_compare(
                 elif region == "imp":
                     axes[i].set_xlim(-0.11, 0.09)
                 elif region == "outer_lower":
-                    axes[i].set_xlim(-0.05, 0.1)
+                    axes[i].set_xlim(-0.03, 0.05 )
             
             axes[i].grid(which="both", color = "k", alpha = 0.05, lw = 0.5)
-            axes[i].set_xlabel("Distance from separatrix [m]")
-            # axes[i].legend()
-            axes[i].set_title(f"{region}: {param}")
+            
+            ## Title and axis labels
+            axes[i].set_title(f"{param}", fontsize = "xx-large")
+            axes[i].set_xlabel("$X-X_{sep}$ [m]")
+            
+            # Set units in ylabel
+            units = {
+                "Ne":"$m^{-3}$", "Nd":"$m^{-3}$", "Nn":"$m^{-3}$",  "Na":"$m^{-3}$",  "Nm":"$m^{-3}$", 
+                "Te":"eV", "Td+" : "eV", "Td" : "eV",
+                "Pa":"Pa", "Pd+":"Pa", "Pe":"Pa"}
+            
+            if param in units:
+                axes[i].set_ylabel(units[param]) 
+                
+            axes[i].xaxis.set_major_locator(mpl.ticker.MaxNLocator(min_n_ticks=3, nbins=5))
+            # axes[i].yaxis.set_major_locator(mpl.ticker.MaxNLocator(min_n_ticks=3, nbins=7))
             
             
-            
+        ### Make legend
         legend_items = []
         for j, name in enumerate(cases.keys()):
             if "SOLPS" in name:
@@ -519,10 +541,13 @@ def lineplot_compare(
                 ls = linestyles["SOLEDGE2D"]
             else:
                 ls = linestyles["Hermes-3"]
-            legend_items.append(mpl.lines.Line2D([0], [0], color=cases[name]["color"], lw=2, ls = ls))
+                
+            style_kwargs = styles[cases[name]["data"].code]
+            legend_items.append(mpl.lines.Line2D([0], [0], color=cases[name]["color"], **style_kwargs))
             
-        fig.legend(legend_items, cases.keys(), ncol = len(cases), loc = "upper center", bbox_to_anchor=(0.5,0.15))
-        
+        fig.legend(legend_items, cases.keys(), ncol = int(len(cases)), loc = "upper center", bbox_to_anchor=(0.5,0.10))
+        # fig.legend(legend_items, cases.keys(), ncol = 1, loc = "upper right", bbox_to_anchor=(0.05,0.90))
+        # fig.tight_layout()
         
             
           
