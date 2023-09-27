@@ -26,7 +26,7 @@ class Load:
     def __init__(self):
         pass
 
-    def case_1D(casepath):
+    def case_1D(casepath, guard_replace = True):
         
         datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
@@ -41,7 +41,7 @@ class Load:
 
         ds = ds.squeeze(drop = True)
 
-        return Case(ds, casepath, unnormalise_geom = True)
+        return Case(ds, casepath, unnormalise_geom = True, guard_replace = guard_replace)
 
     def case_2D(
                 casepath,
@@ -86,7 +86,8 @@ class Case:
 
     def __init__(self, ds, casepath, 
                  unnormalise_geom = False,
-                 unnormalise = True):
+                 unnormalise = True,
+                 guard_replace = True):
 
         self.ds = ds
         self.name = os.path.split(casepath)[-1]
@@ -115,7 +116,8 @@ class Case:
         else:
             self.extract_1d_tokamak_geometry()
             # self.clean_guards()
-            self.guard_replace()
+            if guard_replace:
+                self.guard_replace()
             
         # self.ds = calculate_radial_fluxes(ds)
         # self.ds = calculate_target_fluxes(ds)
@@ -754,6 +756,20 @@ class Case:
             "units":"W",
             "standard_name": "X flow of e energy",
             "long_name": "X flow of e energy"
+        },
+        
+        "EnergyFlow_d+_ylow": {
+            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Tnorm"] * constants("q_e") * m["Omega_ci"],
+            "units":"W",
+            "standard_name": "Y flow of e energy",
+            "long_name": "Y flow of e energy"
+        },
+        
+        "EnergyFlow_e_ylow": {
+            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Tnorm"] * constants("q_e") * m["Omega_ci"],
+            "units":"W",
+            "standard_name": "Y flow of e energy",
+            "long_name": "Y flow of e energy"
         },
         
         "NVd+": {
