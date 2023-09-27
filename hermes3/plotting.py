@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from hermes3.utils import *
 from hermes3.named_selections import *
-import sdtools.general.plotstyle
+import general.plotstyle
 
 
 
