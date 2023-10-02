@@ -129,8 +129,8 @@ def cmonitor(path, save = False, plot = False, table = True):
         axes[0,3].plot(t, Tn_sol, c = "limegreen", lw = lw)
         axes[0,3].set_title("$T_{n}^{omp,sol}$")
             
-        axes[1,0].plot(t, wtime_per_stime/1e6, c = "k", lw = lw)
-        axes[1,0].set_title("wtime/(1e6*stime)")
+        axes[1,0].plot(t, wtime_per_stime/1e4, c = "k", lw = lw)
+        axes[1,0].set_title("wtime/(1e4*stime)")
         # axes[1,0].set_yscale("log")
         axes[1,1].plot(t, lratio, c = "k", lw = lw)
         axes[1,1].set_title("linear/nonlinear")

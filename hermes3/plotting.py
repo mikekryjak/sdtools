@@ -797,7 +797,7 @@ def camera_view(ax, loc, tokamak = "ST40"):
     ax.set_ylim(lims["y"])
     
     
-def plot_perp_heat_fluxes(ds, loc = "omp_integral", neutrals_only = False, ylim = (None,None)):
+def plot_perp_heat_fluxes(ds, ax = None, loc = "omp_integral", neutrals_only = False, ylim = (None,None)):
     """
     Plots poloidal integrals of radial heat fluxes
     Plot is for LHS cell edges and then the outermost RHS cell edge is appended
@@ -808,7 +808,8 @@ def plot_perp_heat_fluxes(ds, loc = "omp_integral", neutrals_only = False, ylim 
     if ds.coords["t"].shape != ():
         raise Exception("Must supply single time slice")
     
-    fig, ax = plt.subplots()
+    if ax == None:
+        fig, ax = plt.subplots()
 
     if loc == "integral":
         d = ds.isel(x=slice(2,-2)).sum("theta")
