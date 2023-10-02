@@ -577,8 +577,9 @@ def calculate_radial_fluxes(ds, force_neumann = False):
             Plim = ds[f"P{name}"].where(ds[f"P{name}"]>0, 1e-8 * Pnorm)
         
         L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*ds[f"N{name}"], np.log(Plim))
-        ds[f"pf_perp_diff_L_{name}"] = L 
-        ds[f"pf_perp_diff_R_{name}"] = R
+        corr = ds["particle_flux_factor_d"] if "particle_flux_factor_d" in ds.data_vars else 1
+        ds[f"pf_perp_diff_L_{name}"] = L * corr 
+        ds[f"pf_perp_diff_R_{name}"] = R * corr
         
         
         

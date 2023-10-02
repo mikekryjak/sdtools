@@ -455,9 +455,9 @@ def lineplot_compare(
                     else:    # If it's not, then let's translate it. If not available, parsed_param is None
                         if code == "SOLPS":
                             parsed_param = parse_solps(param, region)
-                            parsed_param = param
                         else:
                             parsed_param = None
+                            
                     
                     ## Did we successfully parse the parameter?
                     if parsed_param != None and parsed_param in data.columns:    # Is parameter available?
