@@ -234,7 +234,102 @@ class NeutralTransport():
             
         self.flux = (L+R)/2
         
+        
+def get_cx_rate(ds):
+    """
+    Calculate the CX rate using coeffs and expressions from Hermes-3
+    and add them to the dataset.
+    You must provide a dataset with 3 dimensions: t, x, theta
+    """
+
+    Ta = ds["Td"].values
+    Ti = ds["Td+"].values
+    Ne = ds["Ne"].values
+
+    ln_sigmav = -18.5028
+    Teff = (Ta + Ti)/2
+    lnT = np.log(Teff)
+    lnT_n = lnT.copy()
+
+    for b in [0.3708409, 7.949876e-3, -6.143769e-4, -4.698969e-4, -4.096807e-4, 1.440382e-4, -1.514243e-5, 5.122435e-7]:
+        ln_sigmav += b * lnT_n
+        lnT_n *= lnT
+        
+    nu_cx = np.exp(ln_sigmav) * 1e-6 * Ne # convert from cm^3/s to m^3/s
+
+
+    ds["K_cx"] = (["t", "x", "theta"], nu_cx)
+    ds["K_cx"].attrs["metadata"] = ds.metadata
     
+    return ds
+        
+def calculate_neutral_mfp(ds):
+    Ta = ds["Td"].values
+    Ti = ds["Td+"].values
+    Ne = ds["Ne"].values
+    Na = ds["Nd"].values
+    Vi = ds["Vd+"]
+    Va = ds["NVd"] / (ds["Nd"] * constants("mass_p")*2)
+
+    ln_sigmav = -18.5028
+    Teff = (Ta + Ti)/2
+    lnT = np.log(Teff)
+    lnT_n = lnT.copy()
+
+    for b in [0.3708409, 7.949876e-3, -6.143769e-4, -4.698969e-4, -4.096807e-4, 1.440382e-4, -1.514243e-5, 5.122435e-7]:
+        ln_sigmav += b * lnT_n
+        lnT_n *= lnT
+        
+    nu_cx = np.exp(ln_sigmav) * 1e-6 * Ne # convert from cm^3/s to m^3/s
+    nu = nu_cx  # Only consider CX for now
+    v_thi = np.sqrt((ds["Td+"]*constants("q_e")) / (constants("mass_p")*2))
+    v_thn = np.sqrt((ds["Td"]*constants("q_e")) / (constants("mass_p")*2))
+
+    Vi_pol = Vi / (ds["J"] / np.sqrt(ds["g_22"]))
+    Va_pol = Va / (ds["J"] / np.sqrt(ds["g_22"]))
+
+    L_T_rad = ds["Td+"].bout.ddx()
+    L_T_pol = ds["Td+"].bout.ddy()
+
+    mfp_rad = (v_thi + v_thn) / (nu)
+    mfp_pol = abs((Vi_pol - Va_pol)) / (nu)
+
+    Kn_rad = abs(mfp_rad / L_T_rad)
+    Kn_pol = abs(mfp_pol / L_T_pol)
+    
+    fig, axes = plt.subplots(1,2, figsize = (7,5), dpi = 150)
+    Kn_rad.hermesm.clean_guards().bout.polygon(ax = axes[0], cmap = "Spectral_r", vmin = 1e-4, vmax = 1, logscale = True, add_colorbar = True)
+    axes[0].set_title(r"Radial: $v_{rel}=v_{th}^{i} + v_{th}^{n}$")
+    Kn_pol.hermesm.clean_guards().bout.polygon(ax = axes[1], cmap = "Spectral_r", vmin = 1e-4, vmax = 1, logscale = True, add_colorbar = True)
+    axes[1].set_title(r"Poloidal: $v_{rel}=|v_{\theta}^{i} - v_{\theta}^{n}|$")
+    fig.suptitle(r"Neutral Knudsen number for conduction $K_{n} = \frac{mfp}{L_{T}}$")
+    fig.tight_layout()
+
+    fig, axes = plt.subplots(1,2, figsize = (7,5), dpi = 150)
+    mfp_rad.hermesm.clean_guards().bout.polygon(ax = axes[0], cmap = "Spectral_r", vmin = 1e-2, vmax = 10, logscale = True, add_colorbar = True)
+    axes[0].set_title("$mfp_{r}$")
+    mfp_pol.hermesm.clean_guards().bout.polygon(ax = axes[1], cmap = "Spectral_r", vmin = 1e-2, vmax = 10, logscale = True, add_colorbar = True)
+    axes[1].set_title(r"$mfp_{\theta}$")
+    fig.suptitle("Neutral mean free path")
+    fig.tight_layout()
+    
+    v_the = np.sqrt((ds["Te"]*constants("q_e")) / (constants("mass_e")))
+    mfp_e = v_the / (ds["Kee_coll"] + ds["Ked+_coll"])
+    Kn_e = mfp_e / np.sqrt(abs(L_T_rad)**2 + abs(L_T_pol)**2)
+
+    fig, axes = plt.subplots(1,2, figsize = (7,5), dpi = 150)
+
+    mfp_e.hermesm.clean_guards().bout.polygon(ax = axes[0], cmap = "Spectral_r", vmin = None, vmax = None, logscale = True, add_colorbar = True)
+    axes[0].set_title(r"Mean free path")
+
+    Kn_e.hermesm.clean_guards().bout.polygon(ax = axes[1], cmap = "Spectral_r", vmin = None, vmax = None, logscale = True, add_colorbar = True)
+    axes[1].set_title(r"Knudsen number")
+    fig.suptitle(r"Electron Knudsen number for conduction $K_{n,e} = \frac{mfp}{L_{T}}$")
+    fig.tight_layout()
+
+
+    
+
 """
 
 Hey Mike,
