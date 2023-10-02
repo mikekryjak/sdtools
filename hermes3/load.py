@@ -26,7 +26,7 @@ class Load:
     def __init__(self):
         pass
 
-    def case_1D(casepath, guard_replace = True):
+    def case_1D(casepath, guard_replace = True, squeeze = True):
         
         datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
@@ -39,7 +39,7 @@ class Load:
                 cache = False
                 )
 
-        ds = ds.squeeze(drop = True)
+        if squeeze is True: ds = ds.squeeze(drop = True)
 
         return Case(ds, casepath, unnormalise_geom = True, guard_replace = guard_replace)
 
@@ -709,6 +709,13 @@ class Case:
             "long_name": "Target recycle neutral energy source"
         },
         
+        "Ed_wall_recycle": {
+            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+            "units": "Wm-3",
+            "standard_name": "Target recycle neutral energy source",
+            "long_name": "Target recycle neutral energy source"
+        },
+        
         "Ed_wall_refl": {
             "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
             "units": "Wm-3",
@@ -1106,7 +1113,7 @@ class Case:
         # Replace y in dataset with the new one
         # ds.coords["y"] = pos
         
-        self.ds["da"] = self.ds.J / np.sqrt(ds.g_22)
+        self.ds["da"] = self.ds.dx * self.ds.dz * self.ds.J / np.sqrt(ds.g_22)
         
         self.ds["da"].attrs.update({
             "conversion" : 1,
@@ -1114,7 +1121,7 @@ class Case:
             "standard_name" : "cross-sectional area",
             "long_name" : "Cell parallel cross-sectional area"})
         
-        self.ds["dv"] = self.ds.J * self.ds.dy
+        self.ds["dv"] = self.ds.J * self.ds.dy * self.ds.dx * self.ds.dz
         self.ds["dv"].attrs.update({
             "conversion" : 1,
             "units" : "m3",
