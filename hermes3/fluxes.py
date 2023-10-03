@@ -519,13 +519,27 @@ def calculate_radial_fluxes(ds, force_neumann = False):
         
         # Perpendicular heat diffusion NOTE: 3/2 factor was initially omitted by accident
         L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*ds[f"P{name}"], np.log(Plim))
-        corr = ds["heat_flux_factor_d"] if "heat_flux_factor_d" in ds.data_vars else 1
+        
+        if "heat_flux_factor_d" in ds.data_vars:
+            corr = ds["heat_flux_factor_d"]
+        elif "convective_heat_flux_factor_d" in ds.data_vars:
+            corr = ds["convective_heat_flux_factor_d"]
+        else:
+            corr = 1
+        
         ds[f"hf_perp_conv_L_{name}"] = L * 3/2 * corr
         ds[f"hf_perp_conv_R_{name}"] = R * 3/2 * corr
         
         # Perpendicular heat conduction NOTE: this is actually energy not pressure like above, so no factor needed
         L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*Nd, constants("q_e")*Td)
-        corr = ds["heat_flux_factor_d"] if "heat_flux_factor_d" in ds.data_vars else 1
+        
+        if "heat_flux_factor_d" in ds.data_vars:
+            corr = ds["heat_flux_factor_d"]
+        elif "conductive_heat_flux_factor_d" in ds.data_vars:
+            corr = ds["conductive_heat_flux_factor_d"]
+        else:
+            corr = 1
+            
         ds[f"hf_perp_diff_L_{name}"] = L * corr 
         ds[f"hf_perp_diff_R_{name}"] = R * corr
         
