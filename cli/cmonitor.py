@@ -63,6 +63,15 @@ def cmonitor(path, save = False, plot = False, table = True):
     dy = get_var("dy")
     dz = get_var("dz")
     J = get_var("J")
+    
+    res = {}
+    res["ddtPe"] = get_var("ddt(Pe)")
+    res["ddtPi"] = get_var("ddt(Pd+)")
+    res["ddtPn"] = get_var("ddt(Pd)")
+    res["ddtNe"] = get_var("ddt(Nd+)")
+    res["ddtNn"] = get_var("ddt(Nd)")
+    res["ddtNVi"] = get_var("ddt(NVd+)")
+    res["ddtNVd"] = get_var("ddt(NVd)")
     dv = dx * dy * dz * J
 
     # Get process parameters
@@ -106,6 +115,13 @@ def cmonitor(path, save = False, plot = False, table = True):
     fails[0] = fails[1]
     lorder[0] = lorder[1]
     wtime_per_stime[0] = wtime_per_stime[1]
+    
+    # ddt
+    res = {}
+    for param in res:
+        res[param] = (res[param] * dv) / np.sum(dv)   # Volume weighted
+        res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))  # RMS
+        res[param] = np.convolve(res[param], np.ones(1), "same")    # Moving average with window of 1
     
     print("..calculations", end="")
     
