@@ -83,9 +83,10 @@ def calculate_simple_heat_balance(ds):
     if ds["t"].shape != ():
         raise Exception("Please supply a single time slice")
     places = {}
-    places["outer_wall"] = ds.hermesm.select_region("outer_sol_edge")
-    places["inner_wall"] = ds.hermesm.select_region("inner_sol_edge")
-    places["pfr"] = ds.hermesm.select_region("pfr_edge")
+
+    places["inner_wall  "] = ds.hermesm.select_region("inner_sol_edge")
+    places["outer_wall  "] = ds.hermesm.select_region("outer_sol_edge")
+    places["pfr         "] = ds.hermesm.select_region("pfr_edge")
 
     if "Ed_wall_refl" in ds.data_vars:
         hflows = {}
@@ -94,18 +95,23 @@ def calculate_simple_heat_balance(ds):
             hflows[place] = ()
             hflows[place] = (ds_place["Ed_wall_refl"] * ds_place["dv"] ).sum().values * 1e-6
             
-        hflows["targets"] = (ds["Ed_target_refl"] * ds["dv"]).sum().values * 1e-6
+        hflows["targets     "] = (ds["Ed_target_refl"] * ds["dv"]).sum().values * 1e-6
         
+        print("Wall reflective cooling:")
         tot = 0
         for name in hflows:
-            print(f"{name}: {hflows[name]:.3f}")
+            print(f"{name}: {hflows[name]:.3f} [MW]")
             tot += hflows[name]
             
-        print(f"Total: {tot:.3f}\n")
-    
-    
+        print(f"Total       : {tot:.3f} [MW]\n")
     else:
         print("No wall heat fluxes found in dataset")
+        
+    print("Recycling neutral energy source:")
+    en_rec = (ds["Ed_target_recycle"] * ds["dv"]).sum(["x", "theta"]).values * 1e-6
+    print(f"Total       : {en_rec:.3f} [MW]")
+    
+    
     
     
 
@@ -519,13 +525,27 @@ def calculate_radial_fluxes(ds, force_neumann = False):
         
         # Perpendicular heat diffusion NOTE: 3/2 factor was initially omitted by accident
         L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*ds[f"P{name}"], np.log(Plim))
-        corr = ds["heat_flux_factor_d"] if "heat_flux_factor_d" in ds.data_vars else 1
+        
+        if "heat_flux_factor_d" in ds.data_vars:
+            corr = ds["heat_flux_factor_d"]
+        elif "convective_heat_flux_factor_d" in ds.data_vars:
+            corr = ds["convective_heat_flux_factor_d"]
+        else:
+            corr = 1
+        
         ds[f"hf_perp_conv_L_{name}"] = L * 3/2 * corr
         ds[f"hf_perp_conv_R_{name}"] = R * 3/2 * corr
         
         # Perpendicular heat conduction NOTE: this is actually energy not pressure like above, so no factor needed
         L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*Nd, constants("q_e")*Td)
-        corr = ds["heat_flux_factor_d"] if "heat_flux_factor_d" in ds.data_vars else 1
+        
+        if "heat_flux_factor_d" in ds.data_vars:
+            corr = ds["heat_flux_factor_d"]
+        elif "conductive_heat_flux_factor_d" in ds.data_vars:
+            corr = ds["conductive_heat_flux_factor_d"]
+        else:
+            corr = 1
+            
         ds[f"hf_perp_diff_L_{name}"] = L * corr 
         ds[f"hf_perp_diff_R_{name}"] = R * corr
         
