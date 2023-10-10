@@ -103,6 +103,7 @@ def cmonitor(path, save = False, plot = False, table = True):
     # Ntot = ((Ne[:, x_ng, :] + Nn[:, x_ng, :]) * dv).sum(axis = (1,2))
     Ne_target = np.max((0.5*(Ne[:,x_ng, -2] + Ne[:,x_ng,-3])), axis = 1)
     Nn_target = np.max((0.5*(Nn[:,x_ng, -2] + Nn[:,x_ng,-3])), axis = 1)
+    Tn_target = np.max((0.5*(Tn[:,x_ng, -2] + Tn[:,x_ng,-3])), axis = 1)
     Tn_sol = Tn[:, -3, y_omp]
 
     def append_first(x):
@@ -138,8 +139,10 @@ def cmonitor(path, save = False, plot = False, table = True):
         lw = 2
         axes[0,0].plot(t, Ne_sep, c = "darkorange", lw = lw)
         axes[0,0].set_title("$N_{e}^{omp,sep}$")
-        axes[0,1].plot(t, Ne_target, c = "darkorchid", lw = lw)
-        axes[0,1].set_title("$N_{e}^{targ,max}$")
+        # axes[0,1].plot(t, Ne_target, c = "darkorchid", lw = lw)
+        # axes[0,1].set_title("$N_{e}^{targ,max}$")
+        axes[0,1].plot(t, Tn_target, c = "darkorchid", lw = lw)
+        axes[0,1].set_title("$T_{n}^{targ,max}$")
         axes[0,2].plot(t, Nn_target, c = "deeppink", lw = lw)
         axes[0,2].set_title("$N_{n}^{targ,max}$")
         axes[0,3].plot(t, Tn_sol, c = "limegreen", lw = lw)
