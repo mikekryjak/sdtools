@@ -50,15 +50,19 @@ class Load:
                 squeeze = True, 
                 unnormalise_geom = True,
                 unnormalise = True,
-                use_squash = False):
+                use_squash = False,
+                force_squash = False):
 
+        if verbose:
+            print(f"- Reading case {os.path.split(casepath)[-1]}")
+            print("-----------------------")
             
         loadfilepath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
         squashfilepath = os.path.join(casepath, "BOUT.squash.nc") # Squashoutput hardcoded to this filename
 
         if use_squash is True:
-            squash(casepath, verbose = verbose)
+            squash(casepath, verbose = verbose, force = force_squash)
             loadfilepath = squashfilepath
                 
 
@@ -75,6 +79,8 @@ class Load:
         
         if squeeze:
             ds = ds.squeeze(drop = False)
+            
+        print("")
             
         return Case(ds, casepath, 
                     unnormalise_geom,
@@ -112,7 +118,7 @@ class Case:
         if self.is_2d is True:
             self.extract_2d_tokamak_geometry()
             vol = self.ds.dv.values.sum()
-            print(f"CHECK: Total domain volume is {vol:.3E} [m3]")
+            # print(f"CHECK: Total domain volume is {vol:.3E} [m3]")
         else:
             self.extract_1d_tokamak_geometry()
             # self.clean_guards()
@@ -1236,6 +1242,14 @@ class Case:
             "units" : "m",
             "standard_name" : "Toroidal length",
             "long_name" : "Toroidal length",
+            "source" : "xHermes"})
+        
+        ds["dpol"] = (["x", "theta"], ds["dz"].data * 1/np.sqrt(ds["g_22"].data))   # Poloidal length
+        ds["dpol"].attrs.update({
+            "conversion" : 1,
+            "units" : "m",
+            "standard_name" : "Poloidal length",
+            "long_name" : "Poloidal length",
             "source" : "xHermes"})
 
 
