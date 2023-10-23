@@ -148,54 +148,51 @@ class viewer_2d():
                 axes[-1].get_position().height])
         
             cbar = plt.colorbar(mappable = sm, cax=cax, label = param) # Similar to fig.colorbar(im, cax = cax)
-
-        # Add slider
-        slider = RangeSlider(
-                fig.add_axes([0.3, 0.05, 0.5, 0.1]), "Colour limits",   # left, bottom, width, height
-                self.min, self.max,
-                orientation = "horizontal",
-                valinit = (self.min, self.max)
-                )
-        
+            
         for ax in axes:
             ax.grid(False)
-            
-
-        artists = []
         
+        artists = []
+    
         # This is to account for missing artists if one case has no param
         for i in range(num_cases):
             try:
                 artists.append(axes[i].collections[0])
             except:
                 pass
-        # artists = artists.append(cbar)
-        
-        # fig.subplots_adjust(top=0.9, bottom=0.1, left = 0.1, right = 0.8)
 
-        def update(val):
-            slider.ax.set_ylim(self.min, self.max) # This is inexplicably needed otherwise it freezes
-            print(val)
-            
-            if logscale == True:
-                cbar.norm.vmin = np.log10(val[0])
-                cbar.norm.vmax = np.log10(val[1])
-            else:
-                cbar.norm.vmin = val[0]
-                cbar.norm.vmax = val[1]
+        # Add slider
+        if slider is True:
+            slider = RangeSlider(
+                    fig.add_axes([0.3, 0.05, 0.5, 0.1]), "Colour limits",   # left, bottom, width, height
+                    self.min, self.max,
+                    orientation = "horizontal",
+                    valinit = (self.min, self.max)
+                )
+        
+            def update(val):
+                slider.ax.set_ylim(self.min, self.max) # This is inexplicably needed otherwise it freezes
+                print(val)
                 
-            for i, artist in enumerate(artists):
                 if logscale == True:
-                    artist.norm.vmin = np.log10(val[0])
-                    artist.norm.vmax = np.log10(val[1])
+                    cbar.norm.vmin = np.log10(val[0])
+                    cbar.norm.vmax = np.log10(val[1])
                 else:
-                    artist.norm.vmin = val[0]
-                    artist.norm.vmax = val[1]
-                
-                fig.canvas.draw_idle()
-                fig.canvas.flush_events() # https://stackoverflow.com/questions/64789437/what-is-the-difference-between-figure-show-figure-canvas-draw-and-figure-canva
-                
-        slider.on_changed(update)
+                    cbar.norm.vmin = val[0]
+                    cbar.norm.vmax = val[1]
+                    
+                for i, artist in enumerate(artists):
+                    if logscale == True:
+                        artist.norm.vmin = np.log10(val[0])
+                        artist.norm.vmax = np.log10(val[1])
+                    else:
+                        artist.norm.vmin = val[0]
+                        artist.norm.vmax = val[1]
+                    
+                    fig.canvas.draw_idle()
+                    fig.canvas.flush_events() # https://stackoverflow.com/questions/64789437/what-is-the-difference-between-figure-show-figure-canvas-draw-and-figure-canva
+                    
+            slider.on_changed(update)
 
             
         
@@ -362,24 +359,27 @@ class SOLPSplot():
     """
     def __init__(self, path, data = None, param = None):
            
-        solpsparam = name_parser(param, "solps")
+        # solpsparam = name_parser(param, "solps")
         bal = nc.Dataset(os.path.join(path, "balance.nc"))
+        # print(bal.variables)
         
         
-        if param != None:
-            if param == "Nd":
-                self.data = bal["dab2"][:] + bal["dmb2"][:]*2   # Add atom and molecular densities
-            elif param == "Td":
-                self.data = bal["tab2"][:]
-            else:
-                self.data = bal[solpsparam][:]
-            if any([x in param for x in ["Te", "Td+", "Td"]]):
-                self.data /= constants("q_e")   # Convert K -> eV
-        elif data != None:
-            self.data = data
-        else:
-            raise Exception("Provide either the data or the parameter name")
+        # if param != None:
+            # if param == "Nd":
+            #     self.data = bal["dab2"][:] + bal["dmb2"][:]*2   # Add atom and molecular densities
+            # elif param == "Td":
+            #     self.data = bal["tab2"][:]
+            # else:
+            #     self.data = bal[solpsparam][:]
+            # if any([x in param for x in ["Te", "Td+", "Td"]]):
+            #     self.data /= constants("q_e")   # Convert K -> eV
+        # elif data != None:
+        #     self.data = data
+        # else:
+        #     raise Exception("Provide either the data or the parameter name")
 
+        # if data != None:
+        self.data = data
         g = read_b2fgmtry(where=path)
         self.g = g
         

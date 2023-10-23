@@ -60,6 +60,10 @@ def name_parser(x, code):
         "Td" : "Tni",
     }
     
+    hermes = {
+        "Rtot":"Rd+_"
+    }
+    
     if code == "solps":
         if x in solps:
             return solps[x]
@@ -86,11 +90,38 @@ class SOLEDGEdata:
         if path != None:
             self.path = path
             self.case = SOLEDGEcase(path)
+            
+        ### Get poloidal data
+        df = self.case.get_1d_poloidal_data(params = self.case.params, d_from_sep=0.002)
+        df = df.rename(columns = {
+                            'Dense' : "Ne", 
+                            'Tempe':"Te", 
+                            'Densi':"Nd+", 
+                            'Tempi':"Td+",
+                            'velocityi':"Vd+",
+                            'Ppi':"Pd+",
+                            'Ppe':"Pe",
+                            'IRadi':"Rd+_ex",
+                            "Nni":"Na",
+                            "Nmi":"Nm",
+                            "Tni":"Ta",
+                            "Tmi":"Tm",
+                            "Pni":"Pa",
+                            "vyni":"Vyd",
+                            "DIST":"x"})
+        
+        df.index = df["dist"]
+        df.index.name = "pos"
+        df = df.query("index > 0")
+        self.regions["outer_fieldline"] = df
     
     def read_csv(self, path, mode):
         
         df = pd.read_csv(path)
         
+        if mode == "wall_ntmpi":
+            self.wallring = df
+            self.process_ring()
         
         if mode == "plot1d_omp":
             self.process_plot1d(df, "omp")
@@ -98,9 +129,7 @@ class SOLEDGEdata:
         elif mode == "plot1d_imp":
             self.process_plot1d(df, "imp")
             
-        if mode == "wall_ntmpi":
-            self.wallring = df
-            self.process_ring()
+        
 
         self.derive_variables()
             
@@ -126,6 +155,8 @@ class SOLEDGEdata:
                             "DIST":"x"})
         df = df.set_index("x")
         df.index.name = "pos"
+        # if "imp" in name:
+        #     df.index *= -1
         
         # Merge with existing data if it exists
         if name in self.regions:
@@ -188,6 +219,10 @@ class SOLEDGEdata:
             df.index -= strikepoints[target]
             
             self.regions[target] = df
+            
+            # Inner targets are mirrored about the strikepoint
+            if "inner" in target:
+                df.index *= -1
             
         
         
@@ -330,18 +365,21 @@ def parse_solps(param, loc):
 class Hermesdata:
     def __init__(self):
         self.code = "Hermes-3"
+        self.params =  ["Td+", "Td", "Te", "Ne", "Pe", "Pd+", "Pd", "Nd", "Sd+_iz", "Rd+_ex", "Rd+_rec"]
         pass
     
     def read_case(self, ds):
 
         self.ds = ds
         self.regions = dict()
-        self.regions["omp"] = self.compile_results(ds.hermesm.select_region("outer_midplane_a"))
-        self.regions["imp"] = self.compile_results(ds.hermesm.select_region("inner_midplane_a"))
-        self.regions["outer_lower"] = self.compile_results(ds.hermesm.select_region("outer_lower_target"))
-        self.regions["outer_upper"] = self.compile_results(ds.hermesm.select_region("outer_upper_target"))
+        self.regions["omp"] = self.get_radial_data(ds.hermesm.select_region("outer_midplane_a"))
+        self.regions["imp"] = self.get_radial_data(ds.hermesm.select_region("inner_midplane_a"))
+        self.regions["outer_lower"] = self.get_radial_data(ds.hermesm.select_region("outer_lower_target"))
+        self.regions["outer_upper"] = self.get_radial_data(ds.hermesm.select_region("outer_upper_target"))
+        self.regions["inner_lower"] = self.get_radial_data(ds.hermesm.select_region("inner_lower_target"))
+        self.regions["outer_fieldline"] = self.get_poloidal_data()
         
-        self.regions["imp"].index *= -1    # Ensure core is on the LHS
+        # self.regions["imp"].index *= -1    # Ensure core is on the LHS
         
         # Parse column names to fit with the other codes
         for region in self.regions.keys():
@@ -352,16 +390,21 @@ class Hermesdata:
             })
 
         
-    def compile_results(self, dataset):
+    def get_radial_data(self, dataset):
         self.dataset = dataset
 
-        params = ["Td+", "Td", "Te", "Ne", "Pe", "Pd+", "Pd", "Nd", "Sd+_iz"]
         x = []
-        for param in params:
-            data = self.dataset[param]
-            df = pd.DataFrame(index = data["R"].data.flatten())
+        for param in self.params:
+            
+            ds = self.dataset   
+            dr = np.cumsum(ds["dr"].values.flatten())
+            m = self.ds.metadata
+            sep_idx = m["ixseps1"] - m["MXG"]
+            dist = dr - dr[sep_idx]
+            
+            df = pd.DataFrame(index = dist)
             df.index.name = "pos"
-            df[param] = data.values
+            df[param] = ds[param]
             x.append(df)
             
         df = pd.concat(x, axis = 1)
@@ -372,7 +415,38 @@ class Hermesdata:
         
         return df
     
+    def get_poloidal_data(self):
+        ds = self.ds
+        m = ds.metadata
+    
+        # Find the right poloidal flux tube by looking at the midplane
+        sep_dist = 0   # Hardcoded to separatrix
+        omp = ds.hermesm.select_region("outer_midplane_a")
         
+        if ds.dims["x"] == ds.metadata["nxg"]:
+            adder = 0
+        else:
+            adder = 2
+        
+        id_sep = m["ixseps1"] - adder
+
+        r = np.cumsum(omp["dr"].values)
+        r = r - r[id_sep]
+
+        id_fl = np.argmin(np.abs(r - sep_dist))
+        id_omp = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"]
+        fl = ds.isel(theta = slice(id_omp, -m["MYG"]), x = id_fl)
+
+        dist = np.cumsum(fl["dl"].values)
+        dist -= dist[0]
+
+        df = pd.DataFrame(index = dist)
+
+
+        for param in self.params:
+            df[param] = fl[param].values
+            
+        return df
     
 
         
@@ -389,7 +463,8 @@ def lineplot_compare(
     ylims = (None,None),
     dpi = 120,
     lw = 1.5,
-    set_xlim = True
+    set_xlim = True,
+    legend_nrows = 2,
     ):
     
     marker = "o"
@@ -401,15 +476,20 @@ def lineplot_compare(
     set_yscales = {
     "omp" : {"Td+": "log", "Te": "log", "Ne": "log", "Nd": "log", "Pe":"log", "Pd+":"log"},
     "imp" : {"Td+": "log", "Te": "log", "Ne": "log", "Nd": "log", "Pe":"log", "Pd+":"log"},
-    "outer_lower" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ne": "linear", "Nd": "log"},
-    "outer_upper" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ne": "linear", "Nd": "log"},
+    "outer_lower" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "linear", "Nd": "log"},
+    "outer_upper" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "linear", "Nd": "log"},
+    "outer_fieldline" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "log", "Nd": "log"},
     }
+    set_yscales["inner_lower"] = set_yscales["outer_lower"]
+    set_yscales["inner_upper"] = set_yscales["outer_upper"]
     
     region_extents = {
         "omp" : (-0.06, 0.05),
         "imp" : (-0.10, 0.06),
-        "outer_lower" : (-0.02, 0.05),
-        "outer_upper" : (-0.02, 0.05)
+        "outer_lower" : (-0.018, 0.058),
+        "outer_upper" : (-0.02, 0.05),
+        "inner_lower" : (-0.04, 0.09),
+        "outer_fieldline" : (0, 2)
     }
     
     xlims = (None, None)
@@ -418,17 +498,20 @@ def lineplot_compare(
 
     for region in regions:
 
-        scale = 1.1
-        fig, axes = plt.subplots(1,len(params), dpi = dpi*scale, figsize = (4.2*len(params)/scale,5/scale), sharex = True)
-        fig.subplots_adjust(hspace = 0, wspace = 0.3, bottom = 0.25, left = 0.1, right = 0.9)
-        fig.suptitle(region, 
-                     x = 0.06, y = 1.0, 
-                     fontsize = "xx-large", color = "darkorchid", horizontalalignment = "left")
+        scale = 1.3
+        fig, axes = plt.subplots(1,len(params), dpi = dpi*scale, figsize = (4.7*len(params)/scale,5/scale), sharex = True)
+        fig.subplots_adjust(hspace = 0, wspace = 0.35, bottom = 0.25, left = 0.1, right = 0.9)
+        # fig.suptitle({"omp": "Outer midplane", "imp": "Inner midplane", "outer_lower": "Outer lower target"}[region], 
+        #              x = -0.02, y = 0.6, 
+        #              fontsize = "xx-large", color = "darkslategrey", 
+        #              horizontalalignment = "center",
+        #              verticalalignment = "center",
+        #              rotation = "vertical")
         
         linestyles = {"Hermes-3" : "-", "SOLEDGE2D" : ":", "SOLPS" : "--"}
         styles = {
-            "Hermes-3" : {"ls" : "-"},
-            "SOLEDGE2D" : {"ls" : "-", "lw" : 0, "marker" : "o", "ms" : 4, "markerfacecolor":"auto", "markeredgewidth":1},
+            "Hermes-3" : {"ls" : "-", "lw" : 3},
+            "SOLEDGE2D" : {"ls" : "-", "lw" : 0, "marker" : "x", "ms" : 5, "markerfacecolor":"auto", "markeredgewidth":1, "zorder":100},
             "SOLPS" : {"ls" : "-", "lw" : 0, "marker" : "x", "ms" : 3, "markeredgewidth":2}
         }
 
@@ -447,6 +530,7 @@ def lineplot_compare(
                 
                 ## Find region
                 if region in case.regions.keys():   # Is region available?
+                    
                     data = case.regions[region]
                     
                     ## Find parameter
@@ -462,13 +546,18 @@ def lineplot_compare(
                     ## Did we successfully parse the parameter?
                     if parsed_param != None and parsed_param in data.columns:    # Is parameter available?
                         
-                        ## Crop SOLEDGE2D results to allow easier min/max finding
+                        # Crop SOLEDGE2D results to allow easier min/max finding
                         if code == "SOLEDGE2D":
                             data = data.query(f"(index > {region_extents[region][0]}) & (index < {region_extents[region][1]})")
+                            
                         
                         # print(f"Plotting {code}, {region}, {param}, {parsed_param}")
-                        style_kwargs = styles[code]
-                        axes[i].plot(data.index, data[parsed_param], label = name, c = color, **style_kwargs)
+                        input_dict = cases[name]
+                        custom_kwargs = {}
+                        for val in input_dict:
+                            if val != "data": custom_kwargs[val] = input_dict[val]
+                        style_kwargs = {**styles[code], **custom_kwargs}
+                        axes[i].plot(data.index*100, data[parsed_param], label = name,  **style_kwargs)
                         
                         # Collect min and max for later
                         ymin.append(case.regions[region][parsed_param].min())
@@ -507,22 +596,35 @@ def lineplot_compare(
                     axes[i].set_xlim(xlims)
                     
                 if region == "omp":
-                    axes[i].set_xlim(-0.06, 0.05)
+                    axes[i].set_xlim(-0.06*100, 0.05*100)
                 elif region == "imp":
-                    axes[i].set_xlim(-0.11, 0.09)
+                    axes[i].set_xlim(-0.11*100, 0.09*100)
                 elif region == "outer_lower":
-                    axes[i].set_xlim(-0.03, 0.05 )
+                    axes[i].set_xlim(-0.03*100, 0.065*100 )
+                elif region == "inner_lower":
+                    axes[i].set_xlim(-0.06*100, 0.10*100 )
             
-            axes[i].grid(which="both", color = "k", alpha = 0.05, lw = 0.5)
+            axes[i].grid(which="both", color = "k", alpha = 0.1, lw = 0.5)
+            
+            title_translate = {
+                "Td+" : "$T_{i}$", "Te" : "$T_{e}$", "Td+" : "$T_{i}$", "Ta" : "$T_{a}$",
+                "Ne" : "$N_{e}$", "Na" : "$N_{a}$",
+                "Pd+" : "$P_{i}$", "Pe" : "$P_{e}$", "Pd+" : "$P_{i}$",
+            }
+            
+            
+            title = title_translate[param] if param in title_translate.keys() else param
             
             ## Title and axis labels
-            axes[i].set_title(f"{param}", fontsize = "xx-large")
-            axes[i].set_xlabel("$X-X_{sep}$ [m]")
+            axes[i].set_title(loc = "right", y = 1.0, 
+                              label = f"{title}", fontsize = "xx-large", fontweight = "normal",
+                              alpha = 1.0, color = "black")
+            axes[i].set_xlabel("$X-X_{sep}$ [cm]")
             
             # Set units in ylabel
             units = {
                 "Ne":"$m^{-3}$", "Nd":"$m^{-3}$", "Nn":"$m^{-3}$",  "Na":"$m^{-3}$",  "Nm":"$m^{-3}$", 
-                "Te":"eV", "Td+" : "eV", "Td" : "eV",
+                "Te":"eV", "Td+" : "eV", "Td" : "eV", "Ta":"eV", "Tm":"eV", "Ti":"eV",
                 "Pa":"Pa", "Pd+":"Pa", "Pe":"Pa"}
             
             if param in units:
@@ -530,6 +632,14 @@ def lineplot_compare(
                 
             axes[i].xaxis.set_major_locator(mpl.ticker.MaxNLocator(min_n_ticks=3, nbins=5))
             # axes[i].yaxis.set_major_locator(mpl.ticker.MaxNLocator(min_n_ticks=3, nbins=7))
+            
+            ### Set different background for neutrals
+            if param in  ["Nd", "Na", "Nn", "Nm", "Td", "Ta", "Tm", "Pd", "Pa", "Pm"]:
+                axes[i].patch.set_facecolor("dodgerblue")
+                axes[i].patch.set_alpha(0.02)
+            elif param in ["Ne", "Nd+",  "Te", "Td+", "Pe", "Pd+"]:
+                axes[i].patch.set_facecolor("darkorange")
+                axes[i].patch.set_alpha(0.02)
             
             
         ### Make legend
@@ -545,7 +655,9 @@ def lineplot_compare(
             style_kwargs = styles[cases[name]["data"].code]
             legend_items.append(mpl.lines.Line2D([0], [0], color=cases[name]["color"], **style_kwargs))
             
-        fig.legend(legend_items, cases.keys(), ncol = int(len(cases)), loc = "upper center", bbox_to_anchor=(0.5,0.10))
+        fig.legend(legend_items, cases.keys(), ncol = int(len(cases)/legend_nrows), 
+                   loc = "upper center", bbox_to_anchor=(0.5,0.10),
+                   fontsize = "large", frameon = False, labelcolor ="darkslategrey")
         # fig.legend(legend_items, cases.keys(), ncol = 1, loc = "upper right", bbox_to_anchor=(0.05,0.90))
         # fig.tight_layout()
         
