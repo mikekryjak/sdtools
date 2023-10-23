@@ -75,7 +75,7 @@ def calculate_simple_particle_balance(ds):
         
     display_dataframe(df)
     
-def calculate_simple_heat_balance(ds):
+def calculate_simple_heat_balance(ds, verbose = True):
     """
     Simple heat balance with things hardcoded
     Currently only reflective wall cooling
@@ -97,19 +97,21 @@ def calculate_simple_heat_balance(ds):
             
         hflows["targets     "] = (ds["Ed_target_refl"] * ds["dv"]).sum().values * 1e-6
         
-        print("Wall reflective cooling:")
+        if verbose: print("Wall reflective cooling:")
         tot = 0
         for name in hflows:
-            print(f"{name}: {hflows[name]:.3f} [MW]")
+            if verbose: print(f"{name}: {hflows[name]:.3f} [MW]")
             tot += hflows[name]
             
-        print(f"Total       : {tot:.3f} [MW]\n")
+        if verbose: print(f"Total       : {tot:.3f} [MW]\n")
     else:
-        print("No wall heat fluxes found in dataset")
+        if verbose: print("No wall heat fluxes found in dataset")
         
-    print("Recycling neutral energy source:")
+    if verbose: print("Recycling neutral energy source:")
     en_rec = (ds["Ed_target_recycle"] * ds["dv"]).sum(["x", "theta"]).values * 1e-6
-    print(f"Total       : {en_rec:.3f} [MW]")
+    if verbose: print(f"Total       : {en_rec:.3f} [MW]")
+    
+    return hflows
     
     
     
