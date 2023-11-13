@@ -465,6 +465,8 @@ def lineplot_compare(
     lw = 1.5,
     set_xlim = True,
     legend_nrows = 2,
+    combine_molecules = False,
+    titles = "long"
     ):
     
     marker = "o"
@@ -484,7 +486,7 @@ def lineplot_compare(
     set_yscales["inner_upper"] = set_yscales["outer_upper"]
     
     region_extents = {
-        "omp" : (-0.06, 0.05),
+        "omp" : (-0.06, 0.06),
         "imp" : (-0.10, 0.06),
         "outer_lower" : (-0.018, 0.058),
         "outer_upper" : (-0.02, 0.05),
@@ -550,13 +552,36 @@ def lineplot_compare(
                         if code == "SOLEDGE2D":
                             data = data.query(f"(index > {region_extents[region][0]}) & (index < {region_extents[region][1]})")
                             
+                        ### Molecule combination
+                        atom_override = {}
+                        
+                        if all([
+                            (code == "SOLEDGE2D"),
+                            (combine_molecules is True),
+                            (region == "omp" or region == "imp")
+                        ]):
+                            molstyle = {"lw" : 0, "marker" : "x", "ms" : 5, "color": "r", "markeredgewidth":1, "zorder":101}
+                            
+                            if parsed_param == "Na":
+                                axes[i].plot(data.index*100, data["Na"] + data["Nm"], label = name, **molstyle)
+                            # if parsed_param == "Pa":
+                            #     axes[i].plot(data.index*100, data["Pa"]*0 + data["Pm"], label = name, **molstyle)
+                            if parsed_param == "Ta":
+                                weighted_temp = ((data["Ta"] * data["Na"]) + (data["Tm"] * data["Nm"]*2)) / (data["Na"] + data["Nm"]*2)
+                                axes[i].plot(data.index*100, weighted_temp, label = name, **molstyle) 
+                            
+                            # Make atoms grey
+                            if any([x in parsed_param for x in ["Na", "Ta"]]):
+                                atom_override = {"alpha":0.3}
+
                         
                         # print(f"Plotting {code}, {region}, {param}, {parsed_param}")
                         input_dict = cases[name]
                         custom_kwargs = {}
                         for val in input_dict:
                             if val != "data": custom_kwargs[val] = input_dict[val]
-                        style_kwargs = {**styles[code], **custom_kwargs}
+                        style_kwargs = {**styles[code], **custom_kwargs, **atom_override}
+                        
                         axes[i].plot(data.index*100, data[parsed_param], label = name,  **style_kwargs)
                         
                         # Collect min and max for later
@@ -606,20 +631,36 @@ def lineplot_compare(
             
             axes[i].grid(which="both", color = "k", alpha = 0.1, lw = 0.5)
             
-            title_translate = {
-                "Td+" : "$T_{i}$", "Te" : "$T_{e}$", "Td+" : "$T_{i}$", "Ta" : "$T_{a}$",
-                "Ne" : "$N_{e}$", "Na" : "$N_{a}$",
-                "Pd+" : "$P_{i}$", "Pe" : "$P_{e}$", "Pd+" : "$P_{i}$",
-            }
+            if titles == "short":
+                title_translate = {
+                    "Td+" : "$T_{i}$", "Te" : "$T_{e}$", "Td+" : "$T_{i}$", "Ta" : "$T_{a}$",
+                    "Ne" : "$N_{e}$", "Na" : "$N_{a}$",
+                    "Pd+" : "$P_{i}$", "Pe" : "$P_{e}$", "Pd+" : "$P_{i}$",
+                }
+                title_fontsize = "xx-large"
+                
+            elif titles == "long":
+                title_translate = {
+                    "Td+" : "Ion temperature", "Te" : "Electron temperature", "Ta" : "Neutral temperature",
+                    "Ne" : "Electron density", "Na" : "Neutral density",
+                    "Pd+" : "Ion pressure", "Pe" : "Electron pressure", "Pa" : "Neutral pressure",
+                }
+                title_fontsize = "large"
             
             
             title = title_translate[param] if param in title_translate.keys() else param
             
             ## Title and axis labels
             axes[i].set_title(loc = "right", y = 1.0, 
-                              label = f"{title}", fontsize = "xx-large", fontweight = "normal",
+                              label = f"{title}", fontsize = title_fontsize, fontweight = "normal",
                               alpha = 1.0, color = "black")
-            axes[i].set_xlabel("$X-X_{sep}$ [cm]")
+            
+            if "field" in region:
+                xlabel = "$Y-Y_{omp} [cm]$"
+            else:
+                xlabel = "$X-X_{sep}$ [cm]"
+            
+            axes[i].set_xlabel(xlabel)
             
             # Set units in ylabel
             units = {
