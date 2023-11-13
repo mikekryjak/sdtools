@@ -20,7 +20,7 @@ class HiddenPrints:
         sys.stdout.close()
         sys.stdout = self._original_stdout
         
-def create_norm(logscale, norm, vmin, vmax):
+def create_norm(logscale, norm, vmin, vmax, linthresh = None):
     if logscale:
         if norm is not None:
             raise ValueError(
@@ -35,9 +35,13 @@ def create_norm(logscale, norm, vmin, vmax):
                 linear_scale = logscale
             else:
                 linear_scale = 1.0e-5
-            linear_threshold = min(abs(vmin), abs(vmax)) * linear_scale
-            if linear_threshold == 0:
-                linear_threshold = 1e-4 * vmax   # prevents crash on "Linthresh must be positive"
+            
+            if linthresh is None:
+                linear_threshold = min(abs(vmin), abs(vmax)) * linear_scale
+                if linear_threshold == 0:
+                    linear_threshold = 1e-4 * vmax   # prevents crash on "Linthresh must be positive"
+            else:
+                linear_threshold = linthresh
             norm = mpl.colors.SymLogNorm(linear_threshold, vmin=vmin, vmax=vmax)
     elif norm is None:
         norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
