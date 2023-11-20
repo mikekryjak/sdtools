@@ -562,12 +562,13 @@ def lineplot_compare(
                         ]):
                             molstyle = {"lw" : 0, "marker" : "x", "ms" : 5, "color": "r", "markeredgewidth":1, "zorder":101}
                             
+                            ## Partial pressures - Pt = Pa + Pm, no factors of 2.
                             if parsed_param == "Na":
                                 axes[i].plot(data.index*100, data["Na"] + data["Nm"], label = name, **molstyle)
                             # if parsed_param == "Pa":
                             #     axes[i].plot(data.index*100, data["Pa"]*0 + data["Pm"], label = name, **molstyle)
                             if parsed_param == "Ta":
-                                weighted_temp = ((data["Ta"] * data["Na"]) + (data["Tm"] * data["Nm"]*2)) / (data["Na"] + data["Nm"]*2)
+                                weighted_temp = ((data["Ta"] * data["Na"]) + (data["Tm"] * data["Nm"])) / (data["Na"] + data["Nm"]*2)
                                 axes[i].plot(data.index*100, weighted_temp, label = name, **molstyle) 
                             
                             # Make atoms grey
