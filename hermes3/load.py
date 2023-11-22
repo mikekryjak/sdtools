@@ -520,28 +520,28 @@ class Case:
 
         "Pd+_src": {
             "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "ion energy source (d+)",
-            "long_name": "Ion energy source (d+)"
+            "units": "Pa/s",
+            "standard_name": "ion pressure source (d+)",
+            "long_name": "Ion pressure source (d+)"
         },
         
         "Pd_src": {
             "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "neutral energy source (d)",
-            "long_name": "Neutral energy source (d)"
+            "units": "Pa/s",
+            "standard_name": "neutral pressure source (d)",
+            "long_name": "Neutral pressure source (d)"
         },
         
         "Pe_src": {
             "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "electron energy source (d)",
-            "long_name": "Electron energy source (d)"
+            "units": "Pa/s",
+            "standard_name": "electron pressure source (d)",
+            "long_name": "Electron pressure source (d)"
         },
         
         "SPd+": {
             "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
+            "units": "Pa/s",
             "standard_name": "d+ net pressure source",
             "long_name": "d+ net pressure source"
         },
