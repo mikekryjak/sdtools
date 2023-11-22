@@ -663,6 +663,39 @@ def plot_rz_grid(ds, ax, xlim = (None,None), ylim = (None,None)):
     if ylim != (None,None):
         ax.set_ylim(ylim)
         
+def plot1d(
+    casestore
+    ):
+    """
+    Plot profiles of 1D hermes-3 cases
+    provide dictionary of cases
+    """
+    lw = 2
+    toplot = [ ["Te",  "Ne", "Pe"], 
+            #   ["Ne", "Nd"]
+            ]
+
+    for list_params in toplot:
+
+        fig, axes = plt.subplots(1,3, figsize = (18,5))
+        fig.subplots_adjust(wspace=0.4)
+
+        for i, ax in enumerate(axes):
+            param = list_params[i]
+            for i, casename in enumerate(casestore): 
+                ds = casestore[casename].ds.isel(pos=slice(2,-2), t = -1)
+                ax.plot(ds["pos"], abs(ds[param]), linewidth = lw, label = casename, marker = "o", ms = 0)
+
+            ax.set_xlabel("Position (m)")
+            ax.set_title(param)
+            ax.legend(fontsize = 10)
+            ax.grid(which="major", alpha = 0.3)
+
+            if param in list_params:
+                ax.set_ylim(0,ax.get_ylim()[1]*1.1)
+                # ax.set_xlim(9,10.5)
+
+            ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
 def lineplot(
     cases,
     scale = "log",
@@ -675,6 +708,10 @@ def lineplot(
     dpi = 120,
     clean_guards = True
     ):
+    
+    """
+    Provide a dictionary where key is name and value is a single time slice of a dataset
+    """
     
     marker = "o"
     ms = markersize
@@ -689,9 +726,9 @@ def lineplot(
 
 
     for region in regions:
-        mult = 0.5
-        fig, axes = plt.subplots(1,len(params), dpi = dpi, figsize = (4.2*len(params)*mult,5*mult), sharex = True)
-        fig.subplots_adjust(hspace = 0, wspace = 0.25, bottom = 0.25, left = 0.1, right = 0.9)
+        mult = 0.8
+        fig, axes = plt.subplots(1,len(params), dpi = dpi, figsize = (4.6*len(params)*mult,5*mult), sharex = True)
+        fig.subplots_adjust(hspace = 0, wspace = 0.3, bottom = 0.25, left = 0.1, right = 0.9)
         ls = "-"
         
         region_ds = dict()
@@ -711,12 +748,22 @@ def lineplot(
                 xlabel = "Distance from midplane [m]"
             else:
                 raise Exception(f"Region {region} not found")
+            
+            if clean_guards is True:
+                if region == "omp" or region == "imp" or region == "outer_lower":
+                    region_ds[name] = region_ds[name].isel(x=slice(2,-2))
+                elif region == "field_line":
+                    region_ds[name] = region_ds[name].isel(theta = slice(None,-2))
+                else:
+                    raise Exception(f"{region} guard cleaning not implemented")
                 
             
         
             
         for i, param in enumerate(params):
             for j, name in enumerate(cases.keys()):
+                
+                
                 
                 if region == "field_line":    # Poloidal
                     m = region_ds[name].metadata
@@ -727,8 +774,8 @@ def lineplot(
                     
                 data = region_ds[name][param]
                 
-                if clean_guards is True:
-                    data = data.hermesm.clean_guards()
+                
+                    
                 
                 axes[i].plot(xplot, data, label = name, c = colors[j], marker = marker, ms = ms, lw = lw, ls = ls)
                 
