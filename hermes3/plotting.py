@@ -789,7 +789,7 @@ def lineplot(
             axes[i].set_xlabel(xlabel, fontsize=9)
             axes[i].set_yscale(scale)
             axes[i].set_title(f"{region}: {param}")
-            axes[i].yaxis.set_major_locator(mpl.ticker.MaxNLocator(min_n_ticks=3,nbins=5))
+            axes[i].yaxis.set_major_locator(mpl.ticker.LogLocator(numticks=10))
 
             
         legend_items = []
@@ -844,7 +844,10 @@ def camera_view(ax, loc, tokamak = "ST40"):
     ax.set_ylim(lims["y"])
     
     
-def plot_perp_heat_fluxes(ds, ax = None, loc = "omp_integral", neutrals_only = False, ylim = (None,None)):
+def plot_perp_heat_fluxes(ds, ax = None, loc = "omp_integral", 
+                          neutrals_only = False, 
+                          ylim = (None,None),
+                          particle_fluxes = False):
     """
     Plots poloidal integrals of radial heat fluxes
     Plot is for LHS cell edges and then the outermost RHS cell edge is appended
