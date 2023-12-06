@@ -20,28 +20,39 @@ from hermes3.utils import *
 from hermes3.named_selections import *
 from hermes3.plotting import *
 from hermes3.fluxes import *
+import xhermes
 
 
 class Load:
     def __init__(self):
         pass
 
-    def case_1D(casepath, guard_replace = True, squeeze = True):
+    def case_1D(casepath, guard_replace = True, squeeze = True, use_xhermes = True):
         
         datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
-
-        ds = xbout.load.open_boutdataset(
+        
+        if use_xhermes is True:
+            ds = xhermes.open_hermesdataset(
                 datapath = datapath, 
                 inputfilepath = inputfilepath, 
                 info = False,
                 keep_yboundaries=True,
                 cache = False
                 )
+        else:
+
+            ds = xbout.load.open_boutdataset(
+                    datapath = datapath, 
+                    inputfilepath = inputfilepath, 
+                    info = False,
+                    keep_yboundaries=True,
+                    cache = False
+                    )
 
         if squeeze is True: ds = ds.squeeze(drop = True)
 
-        return Case(ds, casepath, unnormalise_geom = True, guard_replace = guard_replace)
+        return Case(ds, casepath, unnormalise_geom = True, guard_replace = guard_replace, use_xhermes = use_xhermes)
 
     def case_2D(
                 casepath,
@@ -51,7 +62,8 @@ class Load:
                 unnormalise_geom = True,
                 unnormalise = True,
                 use_squash = False,
-                force_squash = False):
+                force_squash = False,
+                use_xhermes = True):
 
         if verbose:
             print(f"- Reading case {os.path.split(casepath)[-1]}")
@@ -65,8 +77,8 @@ class Load:
             squash(casepath, verbose = verbose, force = force_squash)
             loadfilepath = squashfilepath
                 
-
-        ds = xbout.load.open_boutdataset(
+        if use_xhermes is True:
+            ds = xhermes.open_hermesdataset(
                         datapath = loadfilepath, 
                         inputfilepath = inputfilepath, 
                         gridfilepath = gridfilepath,
@@ -76,6 +88,17 @@ class Load:
                         keep_xboundaries=True,
                         keep_yboundaries=True,
                         )
+        else:
+            ds = xbout.load.open_boutdataset(
+                            datapath = loadfilepath, 
+                            inputfilepath = inputfilepath, 
+                            gridfilepath = gridfilepath,
+                            info = False,
+                            cache = True,
+                            geometry = "toroidal",
+                            keep_xboundaries=True,
+                            keep_yboundaries=True,
+                            )
         
         if squeeze:
             ds = ds.squeeze(drop = False)
@@ -84,7 +107,8 @@ class Load:
             
         return Case(ds, casepath, 
                     unnormalise_geom,
-                    unnormalise = unnormalise)
+                    unnormalise = unnormalise,
+                    use_xhermes = use_xhermes)
         
 
 
@@ -93,7 +117,8 @@ class Case:
     def __init__(self, ds, casepath, 
                  unnormalise_geom = False,
                  unnormalise = True,
-                 guard_replace = True):
+                 guard_replace = True,
+                 use_xhermes = False):
 
         self.ds = ds
         self.name = os.path.split(casepath)[-1]
@@ -108,10 +133,13 @@ class Case:
 
         self.ds.metadata["colors"] = ["teal", "darkorange", "firebrick", "limegreen", "deeppink", "navy", "crimson"]
 
-        if unnormalise is True:
+        if unnormalise is True and use_xhermes is False:
             self.unnormalise(unnormalise_geom)
-        else:
+        elif use_xhermes is False:
             print("Skipping unnormalisation")
+        elif use_xhermes is True:
+            print("Unnormalising with xHermes")
+            
         self.derive_vars()
         self.guard_replaced = False
         
