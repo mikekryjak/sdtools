@@ -35,52 +35,86 @@ from code_comparison.viewer_2d import *
 from code_comparison.code_comparison import *
 
 import gridtools.solps_python_scripts.setup
-from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d, plot_wall_loads
-from gridtools.solps_python_scripts.read_ft44 import read_ft44
+# from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d, plot_wall_loads
+# from gridtools.solps_python_scripts.read_ft44 import read_ft44
 import ipywidgets as widgets
 
-from solps_python_scripts.read_b2fgmtry import read_b2fgmtry
+# from solps_python_scripts.read_b2fgmtry import read_b2fgmtry
 
 
 
 class SOLPScase():
     def __init__(self, path):
         
-        bal = self.bal = nc.Dataset(os.path.join(path, "balance.nc"))
-        g = self.g = read_b2fgmtry(where=path)
-        self.params = list(self.bal.variables.keys())
+        """
+        Note that everything in the balance file is in the Y, X convention unlike the
+        X, Y convention in the results. This is not intended and it reads as X, Y in MATLAB.
+        You MUST transpose everything so that it's Y,X (large then small number) so it's consistent with geometry
+        which is the opposite
+        """
         
-        # Get cell centre coordinates
-        self.g["R"] = np.mean(g["crx"], axis=2)
-        self.g["Z"] = np.mean(g["cry"], axis=2)
+        raw_balance = nc.Dataset(os.path.join(path, "balance.nc"))
+        
+        ## Need to transpose to get over the backwards convention compared to MATLAB
+        bal = {}
+        for key in raw_balance.variables:
+            bal[key] = raw_balance[key][:].transpose()
+            
+        self.bal = bal
+        
+        raw_balance.close()
+            
+            
+        # g = self.g = read_b2fgmtry(where=path)
+        
+        self.params = list(bal.keys())
+        self.params.sort()
         
         # Set up geometry
         
-        omp = int((g["rightcut"][0] + g["rightcut"][1])/2) + 1
-        imp = int((g["leftcut"][0] + g["leftcut"][1])/2) + 1
-        upper_break = int(imp + (omp - imp)/2) - 2
-        sep = min(g["topcut"][0], g["topcut"][1]) +1
+        g = self.g = {}
         
-        self.g["sep"] = sep
-        self.g["imp"] = imp
-        self.g["upper_break"] = upper_break
-        self.g["sep"] = sep
-
+        # Get cell centre coordinates
+        R = self.g["R"] = np.mean(bal["crx"], axis=0)
+        Z = self.g["Z"] = np.mean(bal["cry"], axis=0)
+        self.g["hx"] = bal["hx"]
+        self.g["hy"] = bal["hy"]
+        self.g["crx"] = bal["crx"]
+        self.g["cry"] = bal["cry"]
+        self.g["nx"] = self.g["crx"].shape[2]
+        self.g["ny"] = self.g["crx"].shape[1]
+        
+        self.g["Btot"] = bal["bb"][3]
+        self.g["Bpol"] = bal["bb"][0]
+        self.g["Btor"] = np.sqrt(self.g["Btot"]**2 - self.g["Bpol"]**2) 
+        
+        
+        
+        leftix = bal["leftix"]+1
+        leftix_diff = np.diff(leftix[:,1])
+        g["xcut"] = xcut = np.argwhere(leftix_diff<0).squeeze()
+        g["leftcut"] = [xcut[0]-2, xcut[1]+2]
+        g["rightcut"] = [xcut[4]-1, xcut[3]-1]
+        
+        omp = self.g["omp"] = int((g["rightcut"][0] + g["rightcut"][1])/2) + 1
+        imp = self.g["imp"] = int((g["leftcut"][0] + g["leftcut"][1])/2)
+        upper_break = self.g["upper_break"] = g["xcut"][2]
+        sep = self.g["sep"] = bal["jsep"][0] + 2
+        
         # poloidal, radial, corners
         # p = [imp, slice(None,None), 0]
 
-        s = {} # slices
-        s["imp"] = [imp, slice(None,None)]
-        s["omp"] = [omp, slice(None,None)]
-        s["outer"] = [slice(upper_break,None), sep]
-        s["outer_lower"] = [slice(omp,None), sep]
-        s["outer_upper"] = [slice(upper_break, omp), sep]
-        s["inner"] = [slice(None, upper_break-1), sep]
-        s["inner_lower"] = [slice(None, imp+1), sep]
-        s["inner_upper"] = [slice(imp, upper_break-1), sep]
-        self.s = s
+        s = self.s = {}
+        s["imp"] = (imp, slice(None,None))
+        s["omp"] = (omp, slice(None,None))
+        s["outer"] = (slice(upper_break,None), sep)
+        s["outer_lower"] = (slice(omp,None), sep)
+        s["outer_upper"] = (slice(upper_break, omp), sep)
+        s["inner"] = (slice(None, upper_break-1), sep)
+        s["inner_lower"] = (slice(None, imp+1), sep)
+        s["inner_upper"] = (slice(imp, upper_break-1), sep)
         
-        # bal.close()
+        
         
     def close(self):
         self.bal.close()
@@ -101,7 +135,7 @@ class SOLPScase():
              separatrix = True):
         
         if len(data)==0:
-            data = self.bal[param][:]
+            data = self.bal[param]
         
         if vmin == None:
             vmin = data.min()
@@ -116,12 +150,11 @@ class SOLPScase():
         # Following SOLPS convention: X poloidal, Y radial
         crx = self.bal["crx"]
         cry = self.bal["cry"]
+        nx, ny = self.g["nx"], self.g["ny"]
         
-        Nx = crx.shape[2]
-        Ny = crx.shape[1]
         
-        print(data.shape)
-        print(Nx, Ny)
+        print(f"Data shape: {data.shape}")
+        print(f"Grid shape: {nx, ny}")
         # print(cry.shape)
         
         
@@ -133,8 +166,8 @@ class SOLPScase():
 
         # Make polygons
         patches = []
-        for i in range(Nx):
-            for j in range(Ny):
+        for i in range(nx):
+            for j in range(ny):
                 p = mpl.patches.Polygon(
                     np.concatenate([crx[:,j,i][tuple(idx)], cry[:,j,i][tuple(idx)]]).reshape(2,5).T,
                     
@@ -144,7 +177,7 @@ class SOLPScase():
                 patches.append(p)
                 
         # Polygon colors
-        colors = data.transpose().flatten()
+        colors = data.flatten()
         polys = mpl.collections.PatchCollection(
             patches, alpha = alpha, norm = norm, cmap = cmap, 
             antialiaseds = antialias,
@@ -159,41 +192,28 @@ class SOLPScase():
         ax.add_collection(polys)
         ax.set_aspect("equal")
         
+        ## Somehow autoscale breaks sometimes
+        xmin, xmax = crx.min(), crx.max()
+        ymin, ymax = cry.min(), cry.max()
+        xspan = xmax - xmin
+        yspan = ymax - ymin
+
+        ax.set_xlim(xmin - xspan*0.05, xmax + xspan*0.05)
+        ax.set_ylim(ymin - yspan*0.05, ymax + yspan*0.05)
+        
+        ax.set_xlabel("R [m]")
+        ax.set_ylabel("Z [m]")
+        ax.set_title(param)
+        
         if separatrix is True:
             self.plot_separatrix(ax = ax)
             
-    def plot_separatrix(self, ax):
+    def plot_separatrix(self, ax, lw = 1, c = "white", ls = "-"):
 
-        # Author: Matteo Moscheni
-        # E-mail: matteo.moscheni@tokamakenergy.co.uk
-        # February 2022
-
-        # try:    b2fgmtry = load_pickle(where = where, verbose = False, what = "b2fgmtry")
-        # except: b2fgmtry = read_b2fgmtry(where = where, verbose = False, save = True)
-        b2fgmtry = self.g
-        colour = "white"
-
-        iy = int(b2fgmtry['ny'] / 2)
-
-        if len(b2fgmtry['rightcut']) == 2:
-            ix_mid = int((b2fgmtry['rightcut'][1] + b2fgmtry['leftcut'][1]) / 2 - 1)
-
-            for ix in range(ix_mid - 2):
-                x01 = [b2fgmtry['crx'][ix,iy,0], b2fgmtry['crx'][ix,iy,1]]
-                y01 = [b2fgmtry['cry'][ix,iy,0], b2fgmtry['cry'][ix,iy,1]]
-                ax.plot(x01, y01, c = colour, lw = 2)
-
-            for ix in range(ix_mid, b2fgmtry['nx']):
-                x01 = [b2fgmtry['crx'][ix,iy,0], b2fgmtry['crx'][ix,iy,1]]
-                y01 = [b2fgmtry['cry'][ix,iy,0], b2fgmtry['cry'][ix,iy,1]]
-                ax.plot(x01, y01, c = colour, lw = 2)
-        else:
-            for ix in range(b2fgmtry['nx']):
-                x01 = [b2fgmtry['crx'][ix,iy,0], b2fgmtry['crx'][ix,iy,1]]
-                y01 = [b2fgmtry['cry'][ix,iy,0], b2fgmtry['cry'][ix,iy,1]]
-                ax.plot(x01, y01, c = colour, lw = 2)
-
-        return
+        R = self.g["crx"][0,:,:]
+        Z = self.g["cry"][0,:,:]
+        ax.plot(R[self.s["inner"]], Z[self.s["inner"]], c, lw = lw, ls = ls)
+        ax.plot(R[self.s["outer"]], Z[self.s["outer"]], c, lw = lw, ls = ls)
         
     def get_1d_radial_data(
         self,
@@ -216,10 +236,51 @@ class SOLPScase():
         df["dist"] = self.g["R"][p[0], p[1]] - self.g["R"][p[0], self.g["sep"]] 
         df["R"] = self.g["R"][p[0], p[1]]
         df["Z"] = self.g["Z"][p[0], p[1]]
-        df[param] = self.bal[param][:].transpose()[p[0], 1:-1] # Drop guard cells
+        df[param] = self.bal[param][p[0], 1:-1] # Drop guard cells
         
         return df
+    
+    def get_1d_poloidal_data(
+        self,
+        param,
+        region = "outer_lower",
+        sepadd = 0
         
+    ):
+        """
+        Returns field line data from the balance file
+        Note that the balance file shape is a transpose of the geometry shape (e.g. crx)
+        and contains guard cells, so R and Z are incorrect because they don't have guards
+        R and Z are provided for checking field line location only.
+        only outer_lower region is provided at the moment.
+        sepadd is the ring index number with sepadd = 0 being the separatrix
+        
+        """
+        
+        yind = self.g["sep"] + sepadd   # Ring index
+        omp = self.g["omp"]
+        hx = self.bal["hx"]
+        
+        if region == "outer_lower":
+            selector = (yind, slice(omp, None))
+        else:
+            raise Exception("Unrecognised region")
+        
+        
+        df = pd.DataFrame()
+        df["dist"] = np.cumsum(hx[selector])  # Poloidal distance
+        # df["R"] = self.g["R"][selector[::-1]]
+        # df["Z"] = self.g["Z"][selector[::-1]]
+        df[param] = self.bal[param][selector]
+        
+        return df
+    
+    def find_param(self, name):
+        """
+        Returns variables that match string
+        """
+        for param in self.params:
+            if name in param: print(param)
         
 def create_norm(logscale, norm, vmin, vmax):
     if logscale:
