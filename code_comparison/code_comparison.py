@@ -459,7 +459,7 @@ def lineplot_compare(
     mode = "log",
     colors = ["black", "red", "black", "red", "navy", "limegreen", "firebrick",  "limegreen", "magenta","cyan", "navy"],
     params = ["Td+", "Te", "Td", "Ne", "Nd"],
-    regions = ["imp", "omp", "outer_lower"],
+    regions = ["imp", "omp", "outer_lower", "outer_fieldline"],
     ylims = (None,None),
     dpi = 120,
     lw = 1.5,
@@ -558,7 +558,7 @@ def lineplot_compare(
                         if all([
                             (code == "SOLEDGE2D"),
                             (combine_molecules is True),
-                            (region == "omp" or region == "imp")
+                            # (region == "omp" or region == "imp")
                         ]):
                             molstyle = {"lw" : 0, "marker" : "x", "ms" : 5, "color": "r", "markeredgewidth":1, "zorder":101}
                             
@@ -599,6 +599,9 @@ def lineplot_compare(
             else:
                 if "T" in param or "N" in param and "outer_lower" not in region:
                     axes[i].set_yscale("log")
+                    
+            if mode == "linear":
+                axes[i].set_yscale("linear")
             xlims = (None,None)
             ylims = (None,None)
             # Set ylims
