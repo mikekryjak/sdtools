@@ -12,6 +12,7 @@ import scipy
 import re
 import netCDF4 as nc
 import matplotlib as mpl
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 onedrive_path = onedrive_path = str(os.getcwd()).split("OneDrive")[0] + "OneDrive"
 sys.path.append(os.path.join(onedrive_path, r"Project\python-packages\gridtools"))
@@ -75,17 +76,17 @@ class SOLPScase():
         g = self.g = {}
         
         # Get cell centre coordinates
-        R = self.g["R"] = np.mean(bal["crx"], axis=0)
-        Z = self.g["Z"] = np.mean(bal["cry"], axis=0)
+        R = self.g["R"] = np.mean(bal["crx"], axis=2)
+        Z = self.g["Z"] = np.mean(bal["cry"], axis=2)
         self.g["hx"] = bal["hx"]
         self.g["hy"] = bal["hy"]
         self.g["crx"] = bal["crx"]
         self.g["cry"] = bal["cry"]
-        self.g["nx"] = self.g["crx"].shape[2]
+        self.g["nx"] = self.g["crx"].shape[0]
         self.g["ny"] = self.g["crx"].shape[1]
         
-        self.g["Btot"] = bal["bb"][3]
-        self.g["Bpol"] = bal["bb"][0]
+        self.g["Btot"] = bal["bb"][:,:,3]
+        self.g["Bpol"] = bal["bb"][:,:,0]
         self.g["Btor"] = np.sqrt(self.g["Btot"]**2 - self.g["Bpol"]**2) 
         
         
@@ -100,6 +101,7 @@ class SOLPScase():
         imp = self.g["imp"] = int((g["leftcut"][0] + g["leftcut"][1])/2)
         upper_break = self.g["upper_break"] = g["xcut"][2]
         sep = self.g["sep"] = bal["jsep"][0] + 2
+        self.g["xpoints"] = self.find_xpoints()
         
         # poloidal, radial, corners
         # p = [imp, slice(None,None), 0]
@@ -169,7 +171,7 @@ class SOLPScase():
         for i in range(nx):
             for j in range(ny):
                 p = mpl.patches.Polygon(
-                    np.concatenate([crx[:,j,i][tuple(idx)], cry[:,j,i][tuple(idx)]]).reshape(2,5).T,
+                    np.concatenate([crx[i,j,:][tuple(idx)], cry[i,j,:][tuple(idx)]]).reshape(2,5).T,
                     
                     fill=False,
                     closed=True,
@@ -188,7 +190,10 @@ class SOLPScase():
         polys.set_array(colors)
         
         if fig != None:
-            fig.colorbar(polys)
+            # From https://joseph-long.com/writing/colorbars/
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            fig.colorbar(polys, cax = cax)
         ax.add_collection(polys)
         ax.set_aspect("equal")
         
@@ -210,8 +215,8 @@ class SOLPScase():
             
     def plot_separatrix(self, ax, lw = 1, c = "white", ls = "-"):
 
-        R = self.g["crx"][0,:,:]
-        Z = self.g["cry"][0,:,:]
+        R = self.g["crx"][:,:,0]
+        Z = self.g["cry"][:,:,0]
         ax.plot(R[self.s["inner"]], Z[self.s["inner"]], c, lw = lw, ls = ls)
         ax.plot(R[self.s["outer"]], Z[self.s["outer"]], c, lw = lw, ls = ls)
         
@@ -281,6 +286,52 @@ class SOLPScase():
         """
         for param in self.params:
             if name in param: print(param)
+            
+    def find_xpoints(self, plot = False):
+        """
+        Returns poloidal IDs of xpoints, works for double null only
+        the IDs are for the cell immediately after the X-point
+        in the direction of ascending X (poloidal) coordinate.
+        They are arranged clockwise starting at inner lower
+        """
+
+        x = range(self.g["nx"])
+        R = self.g["R"][:,self.g["sep"]]
+
+        inner_R = self.g["R"][slice(None, self.g["upper_break"]),self.g["sep"]]
+        inner_x = np.array(range(self.g["upper_break"]))
+
+
+        outer_R = self.g["R"][slice(self.g["upper_break"], None),self.g["sep"]]
+        outer_x = np.array(range(self.g["upper_break"], self.g["nx"]))
+
+        import scipy
+
+        inner_ids = scipy.signal.find_peaks(inner_R, threshold = 0.001)
+        outer_ids = scipy.signal.find_peaks(outer_R*-1, threshold = 0.001)
+
+        if (len(inner_ids[0]) != 2) or (len(outer_ids[0]) != 2):
+            raise Exception("Issue in peak finder")
+
+        if plot is True:
+            fig, axes = plt.subplots(1,2, figsize = (8,4))
+            ax = axes[0]
+            ax.plot(inner_x, inner_R)
+            for i in inner_ids[0]:
+                ax.scatter(inner_x[i], inner_R[i])
+            ax = axes[1]
+            ax.plot(outer_x, outer_R)
+            for i in outer_ids[0]:
+                ax.scatter(outer_x[i], outer_R[i])
+
+        xpoints = [
+            inner_ids[0][0], 
+            inner_ids[0][1]+1, 
+            outer_ids[0][0]+ self.g["upper_break"] + 1, 
+            outer_ids[0][1]+ self.g["upper_break"]
+            ]
+
+        return xpoints
         
 def create_norm(logscale, norm, vmin, vmax):
     if logscale:
