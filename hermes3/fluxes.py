@@ -87,9 +87,10 @@ def calculate_simple_heat_balance(ds, verbose = True):
     places["inner_wall  "] = ds.hermesm.select_region("inner_sol_edge")
     places["outer_wall  "] = ds.hermesm.select_region("outer_sol_edge")
     places["pfr         "] = ds.hermesm.select_region("pfr_edge")
-
+    hflows = {}
+    
     if "Ed_wall_refl" in ds.data_vars:
-        hflows = {}
+        
         for place in places:
             ds_place = places[place]
             hflows[place] = ()
@@ -580,11 +581,9 @@ def calculate_radial_fluxes(ds, force_neumann = False, new_afn = False):
     # PARTICLE FLUXES---------------------------------
        
     for name in m["charged_species"]:   
-        # L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"anomalous_D_{name}"] * ds[f"N{name}"] / ds[f"N{name}"], ds[f"N{name}"])
         L, R  =  Div_a_Grad_perp_upwind_fast(ds, ds[f"anomalous_D_{name}"], ds[f"N{name}"])
-        corr = ds["particle_flux_factor_d"] if "particle_flux_factor_d" in ds.data_vars else 1
-        ds[f"pf_perp_diff_L_{name}"] = L * corr 
-        ds[f"pf_perp_diff_R_{name}"] = R * corr
+        ds[f"pf_perp_diff_L_{name}"] = L 
+        ds[f"pf_perp_diff_R_{name}"] = R
         
         
     for name in m["neutral_species"]:
