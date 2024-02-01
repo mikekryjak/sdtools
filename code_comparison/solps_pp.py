@@ -32,8 +32,8 @@ from hermes3.plotting import *
 from hermes3.grid_fields import *
 from hermes3.accessors import *
 from hermes3.utils import *
-from code_comparison.viewer_2d import *
-from code_comparison.code_comparison import *
+# from code_comparison.viewer_2d import *
+# from code_comparison.code_comparison import *
 
 import gridtools.solps_python_scripts.setup
 # from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d, plot_wall_loads
@@ -64,10 +64,7 @@ class SOLPScase():
         self.bal = bal
         
         raw_balance.close()
-            
-            
-        # g = self.g = read_b2fgmtry(where=path)
-        
+
         self.params = list(bal.keys())
         self.params.sort()
         
@@ -99,24 +96,108 @@ class SOLPScase():
         
         omp = self.g["omp"] = int((g["rightcut"][0] + g["rightcut"][1])/2) + 1
         imp = self.g["imp"] = int((g["leftcut"][0] + g["leftcut"][1])/2)
-        upper_break = self.g["upper_break"] = g["xcut"][2]
+        upper_break = self.g["upper_break"] = g["xcut"][2] + 1
         sep = self.g["sep"] = bal["jsep"][0] + 2
         self.g["xpoints"] = self.find_xpoints()
         
-        # poloidal, radial, corners
-        # p = [imp, slice(None,None), 0]
-
+        
+        ## Prepare selectors
+        
         s = self.s = {}
         s["imp"] = (imp, slice(None,None))
         s["omp"] = (omp, slice(None,None))
-        s["outer"] = (slice(upper_break,None), sep)
-        s["outer_lower"] = (slice(omp,None), sep)
-        s["outer_upper"] = (slice(upper_break, omp), sep)
-        s["inner"] = (slice(None, upper_break-1), sep)
-        s["inner_lower"] = (slice(None, imp+1), sep)
-        s["inner_upper"] = (slice(imp, upper_break-1), sep)
+        s["outer_lower_target"] = (-2, slice(None,None))
+        s["inner_lower_target"] = (1, slice(None,None))
         
         
+        # First SOL rings
+        for name in ["outer", "outer_lower", "outer_upper", "inner", "inner_lower", "inner_upper"]:
+            s[name] = self.make_custom_sol_ring(name, i = 0)
+            
+        # ## Calculate array of radial distance from separatrix
+        # dist = np.cumsum(self.g["hy"][self.s["omp"]])   # hy is radial length
+        # dist = dist - dist[self.g["sep"] - 1]
+        # self.g["radial_dist"] = dist
+        
+    
+    def derive_data(self):
+        """
+        Add new derived variables to the balance file
+        This includes duplicates which are in Hermes-3 convention
+        """
+        
+        bal = self.bal
+        
+        ## EIRENE derived variables have extra values in the arrays
+        ## Either 5 or 2 extra zeros at the end in poloidal depending on topology
+        double_null = True
+        if double_null is True:
+            ignore_idx = 5
+        else:
+            ignore_idx = 2
+        
+        bal["Td+"] = bal["ti"] / constants("q_e")
+        bal["Te"] = bal["te"] / constants("q_e")
+        bal["Ne"] = bal["ne"]
+        bal["Pe"] = bal["ne"] * bal["te"] * constants("q_e")
+        bal["Pd+"] = bal["ne"] * bal["ti"] * constants("q_e")
+
+        bal["Na"] = bal["dab2"][:-ignore_idx, :]  
+        bal["Nm"] = bal["dmb2"][:-ignore_idx, :] 
+        bal["Nn"] = bal["Na"] + bal["Nm"] * 2
+        bal["Ta"] = bal["tab2"][:-ignore_idx, :] / constants("q_e")
+        bal["Tm"] = bal["tmb2"][:-ignore_idx, :] / constants("q_e")
+        bal["Pa"] = bal["Na"] * bal["Ta"] * constants("q_e")
+        bal["Pm"] = bal["Nm"] * bal["Tm"] * constants("q_e")
+
+        bal["Pn"] = bal["Pa"] + bal["Pm"]
+        bal["Tn"] = bal["Pn"] / bal["Nn"] / constants("q_e")
+        
+        self.bal = bal
+
+
+        
+    def make_custom_sol_ring(self, name, i = None, sep_dist = None):
+        """
+        Inputs
+        ------
+            name, str:
+                "outer", "outer_lower", "outer_upper", "inner", "inner_lower", "inner_upper"
+            i, int: 
+                SOL ring index (0 = first inside SOL) 
+            sep_dist, int
+                Separatrix distance in [m]
+                
+        Returns:
+        ------
+            selector tuple as (X,Y)
+            
+        INCLUDES GUARD CELLS
+        """
+        
+        if i != None and sep_dist == None:
+            yid = self.g["sep"] + i
+        if sep_dist != None and i == None:
+            yid = np.argmin(np.abs(self.g["radial_dist"] - sep_dist))
+            if yid < self.g["sep"]:
+                yid = self.g["sep"]
+                print("SOL ring would have been inside the core, forcing to sep")
+        if i != None and sep_dist != None:
+            raise ValueError("Use i or sep_dist but not both")
+        if i == None and sep_dist == None:
+            raise ValueError("Provide either i or sep_dist")
+        
+        selections = {}
+        selections["outer"] =       (slice(self.g["upper_break"],None), yid)
+        selections["outer_lower"] = (slice(self.g["omp"]+1,None), yid)
+        selections["outer_upper"] = (slice(self.g["upper_break"], self.g["omp"]+1), yid)
+        selections["inner"] =       (slice(1, self.g["upper_break"]), yid)
+        selections["inner_lower"] = (slice(1, self.g["imp"]), yid)
+        selections["inner_upper"] = (slice(self.g["imp"], self.g["upper_break"]), yid)
+        
+        return selections[name]
+    
+
         
     def close(self):
         self.bal.close()
@@ -332,6 +413,18 @@ class SOLPScase():
             ]
 
         return xpoints
+    
+    def plot_selection(self, sel):
+        """
+        Plots scatter of selected points according to the tuple sel
+        which contains slices in (X, Y)
+        Examples provided in self.s
+        """
+        
+        fig, ax = plt.subplots(dpi = 150)
+
+        self.plot_2d("ne", fig = fig, ax = ax, cmap = "twilight", antialias = True, linewidth = 0.1, linecolor = "darkorange")
+        ax.scatter(self.g["R"][sel], self.g["Z"][sel], s = 5, c = "deeppink")
         
 def create_norm(logscale, norm, vmin, vmax):
     if logscale:

@@ -22,6 +22,7 @@ except:
 from soledge.wrapper_class import *
 
 from hermes3.utils import *
+from code_comparison.solps_pp import SOLPScase
 
 def save_last10s_subset(solps_path, destination_path):
     solps = file_read(solps_path)
@@ -40,8 +41,12 @@ def name_parser(x, code):
         "Ne" : "ne",
         "Te" : "te",
         "Td+" : "ti",   
-        "Nd" : "pdena",   # Combined atoms+molecules. Custom made by matteo. Atoms: pdena, Molecules: pdenm
-        "Td" : "tdena",    # Compare only atom temperature, ignore molecules (more physical)
+        "Nd" : "pdena",
+        "Na" : "pdena",
+        "Nm" : "pdenm",   
+        "Td" : "tdena",    
+        "Ta" : "tdena", 
+        "Tm" : "tdenm", 
         "Sd+_iz" : "AMJUEL_H.4_2.1.5_3",
         # "R" : "b2ra"
     }
@@ -248,6 +253,77 @@ class SOLPSdata:
         self.imp = pd.DataFrame()
         self.code = "SOLPS"
         
+    def read_from_case(self, casepath):
+        
+        spc = SOLPScase(casepath)
+        spc.derive_data()
+        data = spc.bal
+        
+        
+        regions = {}
+
+        # index = np.cumsum(self.g["hx"][selector])
+        list_params = ["Td+", "Te", "Ne", "Pe", "Pd+", "Na", "Nn", "Nm", "Ta", "Tn", "Tm", "Pa", "Pm", "Pn"]
+
+        ### ALL WITH NO GUARDS
+
+        # OMP
+        
+        for name in ["omp", "imp", "outer_lower_target", "inner_lower_target"]:
+            selector = spc.s[name]
+            dist = np.cumsum(spc.g["hy"][selector])   # hy is radial length
+            dist = dist - dist[spc.g["sep"] - 1]
+            df = pd.DataFrame(index = dist[1:-1])
+            for param in list_params:
+                df[param] = data[param][selector][1:-1] 
+                
+            translate = dict(omp="omp", imp="imp", outer_lower_target="outer_lower", inner_lower_target="inner_lower")
+            
+            regions[translate[name]] = df.copy()
+
+        # # IMP
+        # selector = spc.s["imp"]
+        # df = pd.DataFrame(index = spc.g["radial_dist"][1:-1])
+        # for param in list_params:
+        #     df[param] = data[param][selector][1:-1] 
+        # regions["imp"] = df.copy()
+
+        # # Outer lower target
+        # selector = spc.s["outer_lower_target"]
+        # df = pd.DataFrame(index = spc.g["radial_dist"][1:-1])
+        # for param in list_params:
+        #     df[param] = data[param][selector][1:-1] 
+        # regions["outer_lower"] = df.copy()
+
+        # # Inner lower target
+        # selector = spc.s["inner_lower_target"]
+        # df = pd.DataFrame(index = spc.g["radial_dist"][1:-1])
+        # for param in list_params:
+        #     df[param] = data[param][selector][1:-1] 
+        # regions["inner_lower"] = df.copy()
+
+        # outer_fieldline
+        
+        for name in ["outer_lower", "inner_lower"]:
+            selector = spc.make_custom_sol_ring("outer_lower", i = 0)
+            index = np.cumsum(spc.g["hx"][selector])[:-1]
+            df = pd.DataFrame(index = index)
+            for param in list_params:
+                df[param] = data[param][selector][:-1]
+                
+            translate = dict(outer_lower="outer_fieldline", inner_lower="inner_fieldline")
+            regions[translate[name]] = df.copy()
+
+        # # inner_fieldline
+        # selector = spc.make_custom_sol_ring("inner_lower", i = 0)
+        # index = np.cumsum(spc.g["hx"][selector])[:-1]
+        # df = pd.DataFrame(index = index)
+        # for param in list_params:
+        #     df[param] = data[param][selector][::-1][:-1]
+        # regions["inner_fieldline"] = df.copy()
+
+        self.regions = regions
+        
         
     def read_last10s(self, casepath):
         """
@@ -347,8 +423,9 @@ def parse_solps(param, loc):
         "Te" : "te3",
         "Td+" : "ti3",
         "Ne" : "ne3",
-        "Nd" : "dab23",
-        "Td" : "tab23",
+        "Na" : "dab23",
+        "Nm" : "dmb23",
+        "Ta" : "tab23",
         "Sd+_iz" : "AMJUEL_H.4_2.1.5_3" ,
     }
     
@@ -365,7 +442,9 @@ def parse_solps(param, loc):
 class Hermesdata:
     def __init__(self):
         self.code = "Hermes-3"
-        self.params =  ["Td+", "Td", "Te", "Ne", "Pe", "Pd+", "Pd", "Nd", "Sd+_iz", "Rd+_ex", "Rd+_rec"]
+        self.params =  [
+            "Td+", "Td", "Te", "Ne", "Pe", "Pd+", "Pd", "Nd", 
+            "Sd+_iz", "Rd+_ex", "Rd+_rec"]
         pass
     
     def read_case(self, ds):
@@ -503,18 +582,12 @@ def lineplot_compare(
         scale = 1.3
         fig, axes = plt.subplots(1,len(params), dpi = dpi*scale, figsize = (4.7*len(params)/scale,5/scale), sharex = True)
         fig.subplots_adjust(hspace = 0, wspace = 0.35, bottom = 0.25, left = 0.1, right = 0.9)
-        # fig.suptitle({"omp": "Outer midplane", "imp": "Inner midplane", "outer_lower": "Outer lower target"}[region], 
-        #              x = -0.02, y = 0.6, 
-        #              fontsize = "xx-large", color = "darkslategrey", 
-        #              horizontalalignment = "center",
-        #              verticalalignment = "center",
-        #              rotation = "vertical")
         
         linestyles = {"Hermes-3" : "-", "SOLEDGE2D" : ":", "SOLPS" : "--"}
         styles = {
             "Hermes-3" : {"ls" : "-", "lw" : 3},
             "SOLEDGE2D" : {"ls" : "-", "lw" : 0, "marker" : "x", "ms" : 5, "markerfacecolor":"auto", "markeredgewidth":1, "zorder":100},
-            "SOLPS" : {"ls" : "-", "lw" : 0, "marker" : "x", "ms" : 3, "markeredgewidth":2}
+            "SOLPS" : {"ls" : "-", "lw" : 0, "marker" : "o", "ms" : 3, "markeredgewidth":0}
         }
 
 
@@ -555,26 +628,43 @@ def lineplot_compare(
                         ### Molecule combination
                         atom_override = {}
                         
-                        if all([
-                            (code == "SOLEDGE2D"),
-                            (combine_molecules is True),
-                            # (region == "omp" or region == "imp")
-                        ]):
-                            molstyle = {"lw" : 0, "marker" : "x", "ms" : 5, "color": "r", "markeredgewidth":1, "zorder":101}
+                        if combine_molecules is True:
                             
-                            ## Partial pressures - Pt = Pa + Pm, no factors of 2.
-                            if parsed_param == "Na":
-                                axes[i].plot(data.index*100, data["Na"] + data["Nm"], label = name, **molstyle)
-                            # if parsed_param == "Pa":
-                            #     axes[i].plot(data.index*100, data["Pa"]*0 + data["Pm"], label = name, **molstyle)
-                            if parsed_param == "Ta":
-                                weighted_temp = ((data["Ta"] * data["Na"]) + (data["Tm"] * data["Nm"])) / (data["Na"] + data["Nm"]*2)
-                                axes[i].plot(data.index*100, weighted_temp, label = name, **molstyle) 
                             
-                            # Make atoms grey
-                            if any([x in parsed_param for x in ["Na", "Ta"]]):
-                                atom_override = {"alpha":0.3}
+                            if code == "SOLEDGE2D":
+                                molstyle = {"lw" : 0, "marker" : "x","color":color,  "ms" : 5, "markeredgewidth":1, "zorder":101}
+                                
+                                ## Partial pressures - Pt = Pa + Pm, no factors of 2.
+                                if parsed_param == "Na":
+                                    axes[i].plot(data.index*100, data["Na"] + data["Nm"], label = name, **molstyle)
+                                # if parsed_param == "Pa":
+                                #     axes[i].plot(data.index*100, data["Pa"]*0 + data["Pm"], label = name, **molstyle)
+                                if parsed_param == "Ta":
+                                    weighted_temp = ((data["Ta"] * data["Na"]) + (data["Tm"] * data["Nm"])) / (data["Na"] + data["Nm"]*2)
+                                    axes[i].plot(data.index*100, weighted_temp, label = name, **molstyle) 
+                                
+                                # Make atoms grey
+                                if any([x in parsed_param for x in ["Na", "Ta"]]):
+                                    atom_override = {"alpha":0.3}
+                                    
+                            if code == "SOLPS":
+                                molstyle = {"lw" : 0, "marker" : "v", "color":color, "ms" : 3, "markeredgewidth":1, "zorder":101}
+                                
+                                if param == "Na":
+                                    parsed_atom = parse_solps("Na", region)
+                                    parsed_mol = parse_solps("Nm", region)
 
+                                    axes[i].plot(data.index*100, data[parsed_atom] + data[parsed_mol], label = name, **molstyle)
+                                    
+                                # if param == "Ta":
+                                #     parsed_atom = parse_solps("Ta", region)
+                                #     parsed_mol = parse_solps("Tm", region)
+                                #     # weighted_temp = ((data[parsed_atom
+                                #     axes[i].plot(data.index*100, data[parsed_atom] + data[parsed_mol], label = name, **molstyle)
+                                
+                                # Make atoms grey
+                                if any([x in parsed_param for x in ["Na", "Ta"]]):
+                                    atom_override = {"alpha":0.05}
                         
                         # print(f"Plotting {code}, {region}, {param}, {parsed_param}")
                         input_dict = cases[name]
