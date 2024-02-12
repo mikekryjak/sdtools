@@ -57,18 +57,20 @@ time = args.t
 
 slurmcommand = \
 f"""#!/bin/bash 
-#SBATCH -A ap002-CPU
+#SBATCH -A UKAEA-AP002-CPU
 #SBATCH -J {jobname}
 #SBATCH -N {nodes}
 #SBATCH --tasks-per-node={cores_per_node}
 #SBATCH -p {partition}
-#SBATCH --time={time}
-#SBATCH -o $slogs/{jobname}.out
-#SBATCH -e $slogs/{jobname}.err
+#SBATCH --time=0-{time}
+#SBATCH --exclusive
+#SBATCH --no-requeue
+#SBATCH -o /home/ir-kryj2/rds/rds-ukaea-ap002-mOlK9qn0PlQ/ir-kryj2/slurmlogs/{jobname}.out
+#SBATCH -e /home/ir-kryj2/rds/rds-ukaea-ap002-mOlK9qn0PlQ/ir-kryj2/slurmlogs/{jobname}.err
 #SBATCH --mail-type=BEGIN,END,FAIL               # Mail events (NONE, BEGIN, END, FAIL, ALL)
 #SBATCH --mail-user=mike.kryjak@york.ac.uk        # Where to send mail
 
-source $bscripts/bout.env
+source /home/ir-kryj2/bout-build-scripts/bout.env
 mpirun -n {nodes*cores_per_node} /home/ir-kryj2/BOUT-7152948/BOUT-dev/build/examples/hasegawa-wakatani-3d/hw3d -d {abscasepath} {restartappend}
 
 """
