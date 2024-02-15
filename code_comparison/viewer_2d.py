@@ -18,6 +18,7 @@ sys.path.append(os.path.join(onedrive_path, r"Project\python-packages\soledge"))
 sys.path.append(os.path.join(onedrive_path, r"Project\python-packages"))
 
 from hermes3.utils import *
+from code_comparison.solps_pp import *
 try:
     # import gridtools.solps_python_scripts.setup
     # from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d
@@ -61,7 +62,7 @@ class viewer_2d():
                 plots.append(HermesPlot(case["ds"], param = param))
             
             elif case["code"] == "solps":
-                plots.append(SOLPSplot(case["path"], param = param))
+                plots.append(SOLPSplotOLD(case["path"], param = param))
                 
             elif case["code"] == "soledge":
                 plots.append(SOLEDGEplot(case["path"], param = param))
@@ -352,34 +353,66 @@ class SOLEDGEplot():
             rhs[coord] = np.concatenate([rhs[coord], sep["LOT"].__dict__[coord]])
             
         return lhs, rhs
-    
 class SOLPSplot():
+    def __init__(self, path, data = None, param = None):
+        
+        slc = self.slc = SOLPScase(path)
+        
+    def plot(self, 
+             ax = None,
+             fig = None,
+             norm = None, 
+             cmap = "Spectral_r",
+             antialias = False,
+             linecolor = "k",
+             linewidth = 0,
+             vmin = None,
+             vmax = None,
+             logscale = False,
+             alpha = 1,
+             separatrix = True):
+        
+        self.slc.plot_2d(
+            ax = ax,
+            fig = fig,
+            norm = norm,
+            cmap = cmap,
+            antialias = antialias,
+            linecolor = linecolor,
+            linewidth = linewidth,
+            vmin = vmin,
+            vmax = vmax,
+            logscale = logscale,
+            alpha = alpha,
+            separatrix = separatrix
+        )
+        
+class SOLPSplotOLD():
     """ 
     Wrapper for plotting SOLPS data from a balance file
     """
     def __init__(self, path, data = None, param = None):
            
-        # solpsparam = name_parser(param, "solps")
+        solpsparam = name_parser(param, "solps")
         bal = nc.Dataset(os.path.join(path, "balance.nc"))
-        # print(bal.variables)
+
         
-        
-        # if param != None:
-            # if param == "Nd":
-            #     self.data = bal["dab2"][:] + bal["dmb2"][:]*2   # Add atom and molecular densities
-            # elif param == "Td":
-            #     self.data = bal["tab2"][:]
-            # else:
-            #     self.data = bal[solpsparam][:]
-            # if any([x in param for x in ["Te", "Td+", "Td"]]):
-            #     self.data /= constants("q_e")   # Convert K -> eV
-        # elif data != None:
-        #     self.data = data
-        # else:
-        #     raise Exception("Provide either the data or the parameter name")
+        if param != None:
+            if param == "Nd":
+                self.data = bal["dab2"][:] + bal["dmb2"][:]*2   # Add atom and molecular densities
+            elif param == "Td":
+                self.data = bal["tab2"][:]
+            else:
+                self.data = bal[solpsparam][:]
+            if any([x in param for x in ["Te", "Td+", "Td"]]):
+                self.data /= constants("q_e")   # Convert K -> eV
+        elif data != None:
+            self.data = data
+        else:
+            raise Exception("Provide either the data or the parameter name")
 
         # if data != None:
-        self.data = data
+        # self.data = data
         g = read_b2fgmtry(where=path)
         self.g = g
         

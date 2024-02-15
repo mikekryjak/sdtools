@@ -54,7 +54,7 @@ def impose_fields(source, destination,
     # Pi_src_core = 1e6 * 2/3   # W converted to pressure
     # Pe_src_core = 0.76e6 * 2/3   # W converted to pressure
 
-    # # Anomalous diffusion coefficients
+    # Anomalous diffusion coefficients
     # D_core = 0.3
     # chi_core = 0.45
     # D_sol = 1
@@ -464,6 +464,34 @@ class Field():
         axes[1].scatter(self.mesh.rflat, self.mesh.zflat, c = colors, s = 4)
 
         cbar = mpl.colorbar.ColorbarBase(ax=axes[2], cmap = cmap, norm = norm)
+        
+        
+def compare_grid(
+    mesh1_path,
+    mesh2_path,
+    fields = ["Nd+_src", "Pd+_src", "Pe_src", "D_d+", "D_e", "chi_d+", "chi_e"]):
+    mesh1 = Mesh(mesh1_path)
+    mesh2 = Mesh(mesh2_path)
+
+    for field in fields:
+        print("\n")
+        print(field, (mesh1.mesh[field] == mesh2.mesh[field]).all())
+
+        print(np.mean(mesh1.mesh[field]))
+        print(np.mean(mesh2.mesh[field]))
+        
+    mesh1.close()
+    mesh2.close()
+
+    try:
+        del mesh1
+    except:
+        pass
+    try:
+        del mesh2
+    except:
+        pass
+
 
         
 

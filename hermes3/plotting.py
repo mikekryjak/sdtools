@@ -698,7 +698,6 @@ def plot1d(
             ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
 def lineplot(
     cases,
-    scale = "log",
     colors = ["teal", "darkorange", "deeppink", "limegreen", "firebrick",  "limegreen", "magenta","cyan", "navy"],
     params = ["Td+", "Te", "Td", "Ne", "Nd"],
     regions = ["imp", "omp", "outer_lower"],
@@ -706,7 +705,8 @@ def lineplot(
     xlims = (None,None),
     markersize = 2,
     dpi = 120,
-    clean_guards = True
+    clean_guards = True,
+    logscale = True,
     ):
     
     """
@@ -736,13 +736,13 @@ def lineplot(
             ds = cases[name]
             if region == "omp":
                 region_ds[name] = ds.hermesm.select_region("outer_midplane_a")
-                xlabel = "Distance from separatrix [m]"
+                xlabel = "dist from sep [m]"
             elif region == "imp":
                 region_ds[name] = ds.hermesm.select_region("inner_midplane_a")
-                xlabel = "Distance from separatrix [m]"
+                xlabel = "dist from sep [m]"
             elif region == "outer_lower":
                 region_ds[name] = ds.hermesm.select_region("outer_lower_target")
-                xlabel = "Distance from separatrix [m]"
+                xlabel = "dist from sep [m]"
             elif region == "field_line":
                 region_ds[name] = ds.hermesm.select_custom_sol_ring(ds.metadata["ixseps1"], "outer_lower").squeeze()
                 xlabel = "Distance from midplane [m]"
@@ -791,10 +791,15 @@ def lineplot(
                 axes[i].set_ylim(ylims)
             if xlims != (None, None):
                 axes[i].set_xlim(xlims)
+                
+            if logscale is True:
+                axes[i].set_yscale("symlog")
+            else:
+                axes[i].set_yscale("linear")
             
             axes[i].grid(which="both", alpha = 0.2)
             axes[i].set_xlabel(xlabel, fontsize=9)
-            axes[i].set_yscale(scale)
+            
             axes[i].set_title(f"{region}: {param}")
             axes[i].yaxis.set_major_locator(mpl.ticker.LogLocator(numticks=10))
 
