@@ -64,22 +64,27 @@ def cmonitor(path, save = False, plot = False, table = True):
     dz = get_var("dz")
     J = get_var("J")
     
-    res = {}
-    res["ddtPe"] = get_var("ddt(Pe)")
-    res["ddtPi"] = get_var("ddt(Pd+)")
-    res["ddtPn"] = get_var("ddt(Pd)")
-    res["ddtNe"] = get_var("ddt(Nd+)")
-    res["ddtNn"] = get_var("ddt(Nd)")
-    res["ddtNVi"] = get_var("ddt(NVd+)")
-    res["ddtNVd"] = get_var("ddt(NVd)")
-    dv = dx * dy * dz * J
-
+    
+    
     # Get process parameters
     t = get_var("t") * (1/Omega_ci) * 1000
     Ne = get_var("Ne") * Nnorm
     Nn = get_var("Nd") * Nnorm
     Te = get_var("Te") * Tnorm
     Tn = get_var("Td") * Tnorm
+    
+    res = {}
+    
+    for param in ["ddtPe","ddtPi", "ddtPn", "ddtNe", "ddtNn", "ddtNVi", "ddtNVd"]:
+        try:
+            res[param] = get_var(param)
+        except:
+            res[param] = np.zeros_like(Ne)
+    
+
+    dv = dx * dy * dz * J
+
+    
 
     # Get solver parameters
     wtime = get_var("wtime")
