@@ -255,7 +255,8 @@ def get_cx_rate(ds):
         ln_sigmav += b * lnT_n
         lnT_n *= lnT
         
-    nu_cx = np.exp(ln_sigmav) * 1e-6 * Ne # convert from cm^3/s to m^3/s
+    nu_cx = np.exp(ln_sigmav) * 1e-6  # convert from cm^3/s to m^3/s
+    nu_cx *= Ne    # Convert from m^3/s to 1/s
 
 
     ds["K_cx"] = (["t", "x", "theta"], nu_cx)
