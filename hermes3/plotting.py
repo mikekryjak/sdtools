@@ -746,6 +746,9 @@ def lineplot(
             elif region == "field_line":
                 region_ds[name] = ds.hermesm.select_custom_sol_ring(ds.metadata["ixseps1"], "outer_lower").squeeze()
                 xlabel = "Distance from midplane [m]"
+            elif region == "1d":
+                region_ds[name] = ds.squeeze()
+                xlabel = "Distance from midplane [m]"
             else:
                 raise Exception(f"Region {region} not found")
             
@@ -754,6 +757,9 @@ def lineplot(
                     region_ds[name] = region_ds[name].isel(x=slice(2,-2))
                 elif region == "field_line":
                     region_ds[name] = region_ds[name].isel(theta = slice(None,-2))
+                elif region == "1d":
+                    region_ds[name] = region_ds[name].isel(pos=slice(2,-2))
+                    print("Warning: not including target cell")
                 else:
                     raise Exception(f"{region} guard cleaning not implemented")
                 
@@ -764,8 +770,9 @@ def lineplot(
             for j, name in enumerate(cases.keys()):
                 
                 
-                
-                if region == "field_line":    # Poloidal
+                if region == "1d":
+                    xplot = region_ds[name]["pos"]
+                elif region == "field_line":    # Poloidal
                     m = region_ds[name].metadata
                     xplot = region_ds[name].coords["theta"] - region_ds[name].coords["theta"][0]
                 else:    # Radial, 0 at sep
@@ -1096,3 +1103,74 @@ def plot_density_feedback_controller(ds):
 
     for ax in axes:
         ax.grid()
+        
+def plot_2d_timeslices(ds, param, tinds, 
+                       logscale = True, 
+                       cmap = "Spectral_r", 
+                       vmin = None, vmax = None, 
+                       ylim = (None,None),
+                       xlim = (None,None),
+                       common_scale = True,
+                       **kwargs):
+    """
+    Plot sequence of polygon plots for a number of timesteps of a given parameter
+    
+    Inputs
+    ------
+    ds: xarray dataset
+    param: parameter to plot
+    tinds: list of timestep indices to plot
+    vmin, vmax: min and max values for colorbar (if None, it's auto)
+    """
+
+    nfigs = len(tinds)
+    fig, axes = plt.subplots(1,nfigs, figsize = (3*nfigs,5), dpi = 150, sharey = True)
+    
+    # Get min and max
+    mins, maxes = [], []
+    for i, tind in enumerate(tinds):
+        mins.append(np.nanmin(ds.isel(t=tind)[param].hermesm.clean_guards().values))
+        maxes.append(np.nanmax(ds.isel(t=tind)[param].hermesm.clean_guards().values))
+    
+    if vmin == None: vmin = np.nanmin(mins)
+    if vmax == None: vmax = np.nanmax(maxes)
+
+    # Make norm and get settings 
+    norm = create_norm(logscale, None, vmin, vmax)
+    style = dict(cmap = cmap, antialias = True, linewidth = 0.1, linecolor = "k",
+                add_colorbar = False)
+    
+    style.update(**kwargs)   # Add custom settings
+    
+    # Plot
+    for i, tind in enumerate(tinds):
+        if common_scale is True:
+            ds.isel(t=tind)[param].hermesm.clean_guards().bout.polygon(ax = axes[i], norm = norm, **style)
+        else:
+            ds.isel(t=tind)[param].hermesm.clean_guards().bout.polygon(ax = axes[i], vmin = None, vmax = None, **style)
+        axes[i].set_title(f"t = {ds.isel(t=tind)['t'].values}")
+        
+        if i != 0:
+            axes[i].set_ylabel("")
+            axes[i].tick_params(axis="y", which="both", left=False,labelleft=False)
+        axes[i].set_ylim(-0.9, 0.1)
+        
+        if xlim != (None, None):
+            axes[i].set_xlim(xlim)
+        else:
+            axes[i].set_xlim(0.15, 0.78)
+            
+        if ylim != (None, None):
+            axes[i].set_ylim(ylim)
+        else:
+            axes[i].set_ylim(-0.88, 0.1)
+        
+    # Add colorbar
+    sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+    cax = fig.add_axes([
+        axes[-1].get_position().x1+0.02,
+        axes[-1].get_position().y0,0.01,
+        axes[-1].get_position().height])
+    cbar = plt.colorbar(mappable = sm, cax=cax, label = param) # Similar to fig.colorbar(im, cax = cax)
+        
+    fig.subplots_adjust(wspace = 0)
