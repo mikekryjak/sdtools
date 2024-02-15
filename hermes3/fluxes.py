@@ -55,7 +55,7 @@ def calculate_simple_particle_balance(ds):
     s["pfr_src_n"] = pfr["pf_perp_diff_L_d"].sum(["x", "theta"])
 
     # Wall and pump recycle
-    s["pump_recycle"] = ((domain["Sd_pump_recycle"])*domain["dv"]).sum(["x", "theta"]) * m["Nnorm"] * m["Omega_ci"]
+    s["pump_recycle"] = ((domain["Sd_pump"])*domain["dv"]).sum(["x", "theta"]) * m["Nnorm"] * m["Omega_ci"]
     s["wall_recycle"] = ((domain["Sd_wall_recycle"])*domain["dv"]).sum(["x", "theta"]) * m["Nnorm"] * m["Omega_ci"]
     # target_recycle = ((domain["Sd_target_recycle"])*domain["dv"]).sum(["x", "theta"])
 
