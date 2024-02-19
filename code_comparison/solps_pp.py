@@ -215,7 +215,8 @@ class SOLPScase():
              vmax = None,
              logscale = False,
              alpha = 1,
-             separatrix = True):
+             separatrix = True,
+             grid_only = False):
         
         if len(data)==0:
             data = self.bal[param]
@@ -261,16 +262,27 @@ class SOLPScase():
                 
         # Polygon colors
         colors = data.flatten()
-        polys = mpl.collections.PatchCollection(
-            patches, alpha = alpha, norm = norm, cmap = cmap, 
-            antialiaseds = antialias,
-            edgecolors = linecolor,
-            linewidths = linewidth,
-            joinstyle = "bevel")
-
-        polys.set_array(colors)
         
-        if fig != None:
+        if grid_only is True:
+            polys = mpl.collections.PatchCollection(
+                patches, alpha = alpha, norm = norm, cmap = cmap, 
+                antialiaseds = antialias,
+                edgecolors = linecolor,
+                facecolor = "white",
+                linewidths = linewidth,
+                joinstyle = "bevel")
+        
+        else:
+            polys = mpl.collections.PatchCollection(
+                patches, alpha = alpha, norm = norm, cmap = cmap, 
+                antialiaseds = antialias,
+                edgecolors = linecolor,
+                linewidths = linewidth,
+                joinstyle = "bevel")
+            polys.set_array(colors)
+        
+        ## Cbar
+        if fig != None and grid_only == False:
             # From https://joseph-long.com/writing/colorbars/
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="5%", pad=0.05)
