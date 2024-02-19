@@ -33,7 +33,7 @@ class Load:
         inputfilepath = os.path.join(casepath, "BOUT.inp")
         
         if use_xhermes is True:
-            ds = xhermes.open_hermesdataset(
+            ds = xhermes.load.open_hermesdataset(
                 datapath = datapath, 
                 inputfilepath = inputfilepath, 
                 info = False,
