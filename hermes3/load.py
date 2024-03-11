@@ -28,14 +28,25 @@ class Load:
     def __init__(self):
         pass
 
-    def case_1D(casepath, guard_replace = True, squeeze = True, use_xhermes = True):
+    def case_1D(casepath, 
+                guard_replace = True, 
+                squeeze = True, 
+                use_xhermes = True, 
+                use_squash = False,
+                force_squash = False,
+                verbose = True):
         
-        datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
+        loadfilepath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
+        squashfilepath = os.path.join(casepath, "BOUT.squash.nc") # Squashoutput hardcoded to this filename
+        
+        if use_squash is True:
+            squash(casepath, verbose = verbose, force = force_squash)
+            loadfilepath = squashfilepath
         
         if use_xhermes is True:
             ds = xhermes.load.open_hermesdataset(
-                datapath = datapath, 
+                datapath = loadfilepath, 
                 inputfilepath = inputfilepath, 
                 info = False,
                 keep_yboundaries=True,
@@ -44,7 +55,7 @@ class Load:
         else:
 
             ds = xbout.load.open_boutdataset(
-                    datapath = datapath, 
+                    datapath = loadfilepath, 
                     inputfilepath = inputfilepath, 
                     info = False,
                     keep_yboundaries=True,
