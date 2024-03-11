@@ -22,8 +22,8 @@ sys.path.append(os.path.join(onedrive_path, r"Project\python-packages"))
 
 
 # from gridtools.hypnotoad_tools import *
-from gridtools.b2_tools import *
-from gridtools.utils import *
+# from gridtools.b2_tools import *
+# from gridtools.utils import *
 
 from hermes3.case_db import *
 from hermes3.load import *
@@ -35,7 +35,7 @@ from hermes3.utils import *
 # from code_comparison.viewer_2d import *
 # from code_comparison.code_comparison import *
 
-import gridtools.solps_python_scripts.setup
+# import gridtools.solps_python_scripts.setup
 # from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d, plot_wall_loads
 # from gridtools.solps_python_scripts.read_ft44 import read_ft44
 import ipywidgets as widgets
@@ -208,6 +208,7 @@ class SOLPScase():
              norm = None,
              data = np.array([]),
              cmap = "Spectral_r",
+             custom_cmap = None,
              antialias = False,
              linecolor = "k",
              linewidth = 0,
@@ -216,9 +217,16 @@ class SOLPScase():
              logscale = False,
              alpha = 1,
              separatrix = True,
-             grid_only = False):
+             grid_only = False,
+             cbar = True,
+             axis_labels = True):
         
-        if len(data)==0:
+        if custom_cmap != None:
+            cmap = custom_cmap
+        
+        if grid_only is True:
+            data = np.zeros_like(self.bal["te"])
+        elif len(data)==0:
             data = self.bal[param]
         
         if vmin == None:
@@ -237,8 +245,8 @@ class SOLPScase():
         nx, ny = self.g["nx"], self.g["ny"]
         
         
-        print(f"Data shape: {data.shape}")
-        print(f"Grid shape: {nx, ny}")
+        # print(f"Data shape: {data.shape}")
+        # print(f"Grid shape: {nx, ny}")
         # print(cry.shape)
         
         
@@ -282,7 +290,7 @@ class SOLPScase():
             polys.set_array(colors)
         
         ## Cbar
-        if fig != None and grid_only == False:
+        if fig != None and grid_only == False and cbar == True:
             # From https://joseph-long.com/writing/colorbars/
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -299,14 +307,16 @@ class SOLPScase():
         ax.set_xlim(xmin - xspan*0.05, xmax + xspan*0.05)
         ax.set_ylim(ymin - yspan*0.05, ymax + yspan*0.05)
         
-        ax.set_xlabel("R [m]")
-        ax.set_ylabel("Z [m]")
-        ax.set_title(param)
+        if axis_labels is True:
+            ax.set_xlabel("R [m]")
+            ax.set_ylabel("Z [m]")
+        if grid_only is False:
+            ax.set_title(param)
         
         if separatrix is True:
             self.plot_separatrix(ax = ax)
             
-    def plot_separatrix(self, ax, lw = 1, c = "white", ls = "-"):
+    def plot_separatrix(self, ax, lw = 1, c = "black", ls = "-"):
 
         R = self.g["crx"][:,:,0]
         Z = self.g["cry"][:,:,0]
@@ -461,3 +471,105 @@ def create_norm(logscale, norm, vmin, vmax):
         norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
 
     return norm
+
+def read_display_tallies(path):
+    """ 
+    This reads a csv file coming from a copy paste of the output of the display_tallies SOLPS routine
+    It parses the table into three dataframes corresponding to the volumetric tallies,
+    and the tallies of fluxes between regions in the x and y directions
+    Each variable comes in three flavours: suffixless = total, _n = neutrals, _i = ions
+    """
+    
+    # Read display tallies csv copied from console
+    df = pd.read_csv(path, skiprows=2, names = range(16), sep = r"\s+", index_col = 0)
+
+    # Make a col "param" with parameters - rest of columns are the 0-14 regions (double null only)
+    df = df[df.index.notnull()].reset_index()
+    df.columns = df.columns - 1
+    df = df.rename({-1 : "param"}, axis = 1)
+    
+    # Some lines have no parameter title and the delimiter parsing makes it start as a number
+    # Shift those back to be in line with the others
+    df[df["param"].str.contains("E\+")] = df[df["param"].str.contains("E\+")].shift(axis=1)
+
+    params = df["param"][df["param"].str.contains("D0|D\+|None") == False].values
+
+    for i in df.index:
+        # Empty rows due to the shifting above are now labelled correctly
+        if df.loc[i, "param"] == None:
+            df.loc[i, "param"] = df.loc[i-1, "param"]
+            df.loc[i-1, "param"] = None
+
+        # Label D0 as _n, D+1 as _i and D0 + D+1 as the original parameter
+        if df.loc[i, "param"] == "D0":
+            name = df.loc[i-1, "param"]
+            df.loc[i, "param"] = name+"_n"
+            df.loc[i+1, "param"] = name+"_i"
+            df.loc[i-1] = df.loc[i] + df.loc[i+1]   # The name without suffix becomes sum of neutrals and ions
+            df.loc[i-1, "param"] = name
+            
+    # Remove all None junk
+    df = df[~df["param"].isna()]
+
+    for i in range(15):
+        df[i] = df[i].astype(float)
+
+    # Parse the volumetric regions
+    dfreg = df[((df["param"].str.contains("x|y") == False) & (df["param"].str.contains("reg") == True))]
+    dfreg = dfreg.rename({
+        0 : "total",
+        1 : "inner_core",
+        2 : "inner_sol",
+        3 : "inner_lower_target",
+        4 : "inner_upper_target",
+        5 : "outer_core",
+        6 : "outer_sol",
+        7 : "outer_upper_target",
+        8 : "outer_lower_target"
+    }, axis = 1
+    ).dropna(axis=1)
+
+    # Parse the fluxes between regions in the X direction
+    dfxreg = df[((df["param"].str.contains("xreg") == True))]
+    dfxreg = dfxreg.rename({
+        0 : "total",
+        1 : "inner_lower_target",
+        2 : "inner_lower_entrance",
+        3 : "inner_upper_entrance",
+        4 : "inner_upper_target",
+        5 : "outer_upper_target",
+        6 : "outer_upper_entrance",
+        7 : "outer_lower_entrance",
+        8 : "outer_lower_target",
+        9 : "lower_inner_pfr_to_inner_core",
+        10 : "inner_core_to_inner_upper_pfr",
+        11 : "outer_upper_pfr_to_outer_core",
+        12 : "outer_core_to_outer_lower_pfr"
+    }, axis = 1
+    ).dropna(axis=1)
+    
+    # Parse the fluxes between regions in the Y direction
+    dfyreg = df[((df["param"].str.contains("yreg") == True))]
+    dfyreg = dfyreg.rename({
+        0 : "total",
+        1 : "inner_lower_pfr",
+        2 : "inner_core",
+        3 : "inner_upper_pfr",
+        4 : "inner_separatrix",
+        5 : "inner_lower_sol",
+        6 : "inner_sol",
+        7 : "inner_upper_sol",
+        8 : "outer_upper_pfr",
+        9 : "outer_core",
+        10 : "outer_lower_pfr",
+        11 : "outer_separatrix",
+        12 : "outer_upper_sol",
+        13 : "outer_sol",
+        14 : "outer_lower_sol"
+    }, axis = 1
+    ).dropna(axis=1)
+    
+    for dfout in [dfreg, dfxreg, dfyreg]:
+        dfout.index = dfout.pop("param")
+
+    return {"reg":dfreg, "xreg":dfxreg, "yreg":dfyreg }
