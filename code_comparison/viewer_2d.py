@@ -242,32 +242,41 @@ class SOLEDGEplot():
     """
     def __init__(self, path, param):
         
-        soledgeparam = name_parser(param, "soledge")
+        
         
         with HiddenPrints():
             Plasmas = load_plasma_files(path, nZones=0, Evolution=0, iPlasmas=[0,1])
-        if soledgeparam.endswith("e"):
-            # Electrons are index 0
-            species_idx = 0
-        elif soledgeparam.endswith("i"):
-            # Ions and neutrals are index 1
-            species_idx = 1
-        else:
-            raise Exception("Parameter name must end in e or i")
+        
 
-        # Extract parameter data and find ranges
-        iPar = Plasmas[species_idx][0].Triangles.VNames.index(soledgeparam)	
+        
         
 
         if param == "Nd":
             print("SOLEDGE: Combining Nmi and Nni")
-            iPar = Plasmas[species_idx][0].Triangles.VNames.index("Nni")	
+            iPar = Plasmas[1][0].Triangles.VNames.index("Nni")	
             self.data = Plasmas[1][0].Triangles.Values[iPar]
             
-            iPar = Plasmas[species_idx][0].Triangles.VNames.index("Nmi")	
+            iPar = Plasmas[1][0].Triangles.VNames.index("Nmi")	
             self.data += Plasmas[1][0].Triangles.Values[iPar]
             
+        elif param == "TiTe":  # Ti/Te ratio
+            Ti_i = Plasmas[1][0].Triangles.VNames.index("Tempi")
+            Te_i = Plasmas[1][0].Triangles.VNames.index("Tempe")
+            self.data = Plasmas[1][0].Triangles.Values[Ti_i] / Plasmas[1][0].Triangles.Values[Te_i]
         else:
+            soledgeparam = name_parser(param, "soledge")
+            # Extract parameter data and find ranges
+            
+            if soledgeparam.endswith("e"):
+                # Electrons are index 0
+                species_idx = 0
+            elif soledgeparam.endswith("i"):
+                # Ions and neutrals are index 1
+                species_idx = 1
+            else:
+                raise Exception("Parameter name must end in e or i")
+        
+            iPar = Plasmas[species_idx][0].Triangles.VNames.index(soledgeparam)	
             self.data = Plasmas[species_idx][0].Triangles.Values[iPar]
             
         self.vmin = min(self.data)
