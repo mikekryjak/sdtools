@@ -698,7 +698,7 @@ def plot1d(
             ax.yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1e}"))
 def lineplot(
     cases,
-    colors = ["teal", "darkorange", "deeppink", "limegreen", "firebrick",  "limegreen", "magenta","cyan", "navy"],
+    colors = None,
     params = ["Td+", "Te", "Td", "Ne", "Nd"],
     regions = ["imp", "omp", "outer_lower"],
     ylims = (None,None),
@@ -783,7 +783,9 @@ def lineplot(
                 
                 
                     
-                
+                if colors == None:
+                    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+                    
                 axes[i].plot(xplot, data, label = name, c = colors[j], marker = marker, ms = ms, lw = lw, ls = ls)
                 
              
