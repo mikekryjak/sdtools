@@ -27,11 +27,11 @@ mpl.rcParams["grid.alpha"] = 0.15
 
 mpl.rcParams["legend.loc"] = "best"
 mpl.rcParams["legend.fontsize"] = "medium"
-mpl.rcParams["legend.markerscale"] = 2.0
+mpl.rcParams["legend.markerscale"] = 1.0
 mpl.rcParams["legend.framealpha"] = 0.3
 
 mpl.rcParams["figure.figsize"] = (6,5)
-mpl.rcParams["figure.dpi"] = 120
+mpl.rcParams["figure.dpi"] = 110
 mpl.rcParams["figure.facecolor"] = "white"
 
 def change_colors(theme):
