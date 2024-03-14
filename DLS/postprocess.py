@@ -4,6 +4,7 @@ import scipy as sp
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from ThermalFrontFormulation import *
 
 class DLSoutput():
     """
@@ -15,7 +16,13 @@ class DLSoutput():
         self.r = result
         
 
-def plot_profile_histories(p, s, list_idx, title = "", rad_threshold = 0.6, mode = "temp", axis = "parallel"):        
+def plot_profile_histories(p, s, list_idx, title = "", 
+                           rad_threshold = 0.7, 
+                           mode = "temp", 
+                           axis = "parallel",
+                           use_prad = True   # Use radiation in W rather than W/m2 for front width?
+                           ):  
+          
     fig, axes = plt.subplots(1,4,figsize = (15*len(list_idx)/4,4))
     
     axstore = {}
@@ -33,19 +40,38 @@ def plot_profile_histories(p, s, list_idx, title = "", rad_threshold = 0.6, mode
         else:
             raise ValueError("axis must be 'parallel' or 'poloidal'")
         
+        Xpoint = s["Xpoints"][idx]
+        
         R = s["Rprofiles"][idx]
         R = pad_profile(x, R)
         
-
+        q = pad_profile(x, s["Qprofiles"][idx])  # W/m2
+        Btot = np.array(s["Btotprofiles"][idx])  # T
+        Bpol = np.array(s["Bpolprofiles"][idx])  # T
         T = pad_profile(x, s["Tprofiles"][idx])
         P = T[-1] * s["cvar"][idx]
         N = P/T
 
+        ## Radiated power in W/m2 (includes B effects)
         Rcum = sp.integrate.cumulative_trapezoid(y = R, x = x, initial = 0)
-        # integral = np.cumsum(data)
         Rcum /= Rcum.max()
-        front_start_idx = np.argmin(abs(Rcum - Rcum[Rcum>0][0]))
-        front_end_idx = np.argmin(abs(Rcum - rad_threshold))
+        
+        # qradial is the uniform upstream heat source
+        qradial = np.ones_like(x)
+        qradial[Xpoint:] = s["state"].qradial
+        
+        ## Radiated power in W (excludes B effects)
+        Prad = np.gradient(q/Btot, x) + qradial/Btot
+        Pradcum = sp.integrate.cumulative_trapezoid(y = Prad, x = x, initial = 0)
+        Pradcum /= Pradcum.max()
+        
+        if use_prad is True:
+            Rchoice = Pradcum
+        else:
+            Rchoice = Rcum
+        
+        front_start_idx = np.argmin(abs(Rchoice - Rchoice[Rchoice> 0.01*Rchoice.max()][0]))
+        front_end_idx = np.argmin(abs(Rchoice - rad_threshold))
 
         ## Axis 1, radiation
         # ax.plot(x, R, label = "Radiation", marker = "o", ms = 0, lw = 2)
@@ -55,12 +81,12 @@ def plot_profile_histories(p, s, list_idx, title = "", rad_threshold = 0.6, mode
         # ax.yaxis.label.set_color(color = "teal")
         ax1.set_yscale("log")
         
-        # ax1.axvline(x = x[p["Xpoint"]], c = "k", ls = ":", lw = 1.5)
+        # ax1.axvline(x = x[Xpoint], c = "k", ls = ":", lw = 1.5)
 
         ## Axis 2, radiation integral
         ax2 = axstore[i]["ax2"] = ax1.twinx()
         c = "blue"
-        ax2.plot(x, Rcum, color = c, ls = "-", label = "Cumulative radiation integral", lw = 2,   alpha = 1)
+        ax2.plot(x, Rchoice, color = c, ls = "-", label = "Cumulative radiation integral", lw = 2,   alpha = 1)
         ax2.set_ylabel("Cumulative radiation fraction")
         ax2.spines["right"].set_color(c)
         ax2.tick_params(axis = "y", colors = c)
@@ -147,13 +173,15 @@ def plot_profile_histories(p, s, list_idx, title = "", rad_threshold = 0.6, mode
     fig.subplots_adjust(wspace = 0)
     fig.suptitle(title)
         
-def get_front_widths(p, s, Rcutoff = 0.7, dynamicGrid = True):
+def get_front_widths(p, s, Rcutoff = 0.7, dynamicGrid = True, use_prad = True):
     """
     Inputs
     -----
     p: dictionary containing the profile data (e.g. Btot)
     s: output store dictionary containing results (e.g. SpolPlot, crel)
     Rcutoff: define front to be where total cumulative radiation crosses this threshold
+    
+    
     """
 
     df = pd.DataFrame()
@@ -166,21 +194,60 @@ def get_front_widths(p, s, Rcutoff = 0.7, dynamicGrid = True):
             S = s["Sprofiles"][i]
             Btot = s["Btotprofiles"][i]
             Bpol = s["Bpolprofiles"][i]
+            Xpoint = s["Xpoints"][i]
         else:
             Spol = p["Spol"]
             S = p["S"]
             Btot = p["Btot"]
             Bpol = p["Bpol"]
+            Xpoint = p["Xpoint"]
             
+        q = pad_profile(S, s["Qprofiles"][i])  # W/m2
         T = pad_profile(S, s["Tprofiles"][i])
         R = pad_profile(S, s["Rprofiles"][i])
         
+        Tu = s["Tprofiles"][i][-1]
+        Nu = s["state"].nu
+        Pu = Tu * s["state"].nu
+        N = Pu / T
+        Lfunc = s["constants"]["Lfunc"]
+        Lz = np.array([Lfunc(x) for x in T])
+        
+        Rcum = sp.integrate.cumulative_trapezoid(y = R, x = S, initial = 0)
+        Rcum /= Rcum.max()
+        
+        Beff = np.sqrt(sp.integrate.trapezoid(y = q*R, x = S) / sp.integrate.trapezoid(y = q*R/Btot**2, x = S))
+        Beff_old = sp.integrate.trapezoid(y = R*Btot, x = S) / sp.integrate.trapezoid(y = R, x = S)
+        
+        
+        if use_prad is True:
+                
+
+            ## Radiated power in W (includes B effects)
+            Prad = np.gradient(q/Btot, S)
+            
+            if s["radios"]["upstreamGrid"] is True:
+                # qradial is the uniform upstream heat source
+                qradial = np.ones_like(S)
+                qradial[Xpoint:] = s["state"].qradial
+                Prad += qradial/Btot
+            
+            Pradcum = sp.integrate.cumulative_trapezoid(y = Prad, x = S, initial = 0)
+            Pradcum /= np.nanmax(Pradcum)
+            Rchoice = Pradcum
+            if np.nanmax(Pradcum) == np.inf:
+                raise Exception("Radiation is inf")
+
+            
+        else:
+            Rcum = sp.integrate.cumulative_trapezoid(y = R, x = S, initial = 0)
+            Rcum /= np.nanmax(Rcum)
+            Rchoice = Rcum
 
         def get_front_ends(x):
-            Rcum = sp.integrate.cumulative_trapezoid(y = R, x = x, initial = 0)
-            Rcum /= Rcum.max()
-            front_start_idx = np.argmin(abs(Rcum - Rcum[Rcum>0][0]))
-            front_end_idx = np.argmin(abs(Rcum - 0.70))
+            
+            front_start_idx = np.argmin(abs(Rchoice - Rchoice[Rchoice> 0.01*Rchoice.max()][0]))
+            front_end_idx = np.argmin(abs(Rchoice - Rcutoff))
             
             return x[front_start_idx], x[front_end_idx]
         
@@ -201,14 +268,96 @@ def get_front_widths(p, s, Rcutoff = 0.7, dynamicGrid = True):
         
         df.loc[i, "Btot"] = np.interp(df.loc[i, "Spar"], S, Btot)
         
-        Rint = sp.integrate.trapezoid(y = R, x = S)
-        Beff = sp.integrate.trapezoid(y = R*Btot, x = S) / Rint
         df.loc[i, "Btot_eff"] = Beff
+        df.loc[i, "Btot_eff_old"] = Beff_old
+    
         
         df.loc[i, "Tu"] = s["Tprofiles"][i][-1]
     
     return df
 
+def get_detachment_scalings(profiles, stores, kappa0 = 2500):
+    
+
+    ## NOTE: Using power in W/m2 because we are using this calc to weigh Beff!
+    front_dfs = [get_front_widths(profiles[x], stores[x], Rcutoff = 0.5, use_prad = True) for x in profiles]
+
+    df = pd.DataFrame()
+    df["thresholds"] = np.array([stores[x]["threshold"] for x in profiles])
+    df["windows"] = np.array([stores[x]["window_ratio"] for x in profiles]) 
+    df["L"] = np.array([profiles[x].get_connection_length() for x in profiles])
+    df["BxBt"] = np.array([profiles[x].get_total_flux_expansion() for x in profiles])
+    df["frac_gradB"] = np.array([profiles[x].get_average_frac_gradB() for x in profiles])
+    df["avgB_ratio"] = np.array([profiles[x].get_average_B_ratio() for x in profiles])
+    df["BxBt_eff"] = [df["Btot_eff"].iloc[-1] / df["Btot_eff"].iloc[0] for df in front_dfs]
+    df["BxBt_eff_old"] = [df["Btot_eff_old"].iloc[-1] / df["Btot_eff_old"].iloc[0] for df in front_dfs]
+    df["Lx"] = [profiles[x]["S"][profiles[x]["Xpoint"]] for x in profiles]
+    df["Tu"] = [stores[x]["Tprofiles"][0][-1] for x in profiles]
+
+    ## Get effective avgB ratio
+    avgB_ratio_eff = []
+    for fdf in front_dfs:
+        newS = np.linspace(fdf["Spar"].iloc[0], fdf["Spar"].iloc[-1], 100)
+        Btot_eff_interp = sp.interpolate.make_interp_spline(fdf["Spar"], fdf["Btot_eff"])(newS)
+        avgB_ratio_eff.append(fdf["Btot"].iloc[-1] / np.mean(Btot_eff_interp))
+        
+    df["avgB_ratio_eff"] = avgB_ratio_eff
+    
+    ### Get C0, classic DLS thresholds
+    for i, key in enumerate(stores):
+        store = stores[key]
+        profile = profiles[key]
+        S = profile["S"]   # Careful, this is the input profile not the profile the DLS ran with which is refined
+        Lpar = S[-1]
+        Xpoint = profile["Xpoint"]
+        Sx = S[Xpoint]
+        B = profile["Btot"]
+        Bx = B[Xpoint]
+        qpar = store["Qprofiles"][0]
+        Lfunc = store["constants"]["Lfunc"]
+    
+        ## C0
+        x = store["Sprofiles"][0]
+        T = pad_profile(x, store["Tprofiles"][0])
+        L = [Lfunc(x) for x in T]
+
+
+        df.loc[i, "C0"] = 7**(-2/7) * (2*kappa0)**(-3/14) * (sp.integrate.trapezoid(y = L, x = T))**0.5
+    
+        ## Classic DLS thresholds
+        df.loc[i, "DLS_thresholds"] = CfInt(
+                                            spar = profile["S"], 
+                                            B_field = profile["Btot"], 
+                                            sx = profile["S"][profile["Xpoint"]], 
+                                            L = profile["S"][-1],
+                                            sh = store["Splot"][0]
+                                        )
+        
+        ## Linear upstream integral
+        # Accounts for the fact that qpar is comes in to the domain gradually upstream
+        abovex = sp.integrate.trapezoid(y = B[Xpoint:]/Bx * (Lpar - S[Xpoint:])/(Lpar - Sx), x = S[Xpoint:])
+        belowx = sp.integrate.trapezoid(y = B[:Xpoint]/Bx, x = S[:Xpoint])
+        df.loc[i, "upstream_integrals_linear"] = abovex + belowx 
+        
+        ## Upstream integral
+        df.loc[i, "qpar_integral"] = sp.integrate.trapezoid(y = qpar, x = S)
+        
+
+    return df
+
+def get_c0(store, Lfunc, kappa0 = 2500):
+    idx = 0
+    
+    x = store["Sprofiles"][idx]
+    T = pad_profile(x, store["Tprofiles"][idx])
+    Tgrid = np.linspace(T.min(), T.max(), 1000)
+    
+    L = [Lfunc(x) for x in T]
+
+
+    C0 = 7**(-2/7) * (2*kappa0)**(-3/14) * (sp.integrate.trapezoid(y = L, x = T))**0.5
+    
+    return C0
 
 def pad_profile(S, data):
     """
