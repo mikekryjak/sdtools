@@ -310,19 +310,20 @@ def get_detachment_scalings(profiles, stores, kappa0 = 2500):
         S = profile["S"]   # Careful, this is the input profile not the profile the DLS ran with which is refined
         Lpar = S[-1]
         Xpoint = profile["Xpoint"]
+        Btot = store["Btotprofiles"][0]
         Sx = S[Xpoint]
-        B = profile["Btot"]
-        Bx = B[Xpoint]
+        Bx = Btot[Xpoint]
         qpar = store["Qprofiles"][0]
         Lfunc = store["constants"]["Lfunc"]
     
         ## C0
         x = store["Sprofiles"][0]
         T = pad_profile(x, store["Tprofiles"][0])
-        L = [Lfunc(x) for x in T]
+        Lz = [Lfunc(x) for x in T]
 
 
-        df.loc[i, "C0"] = 7**(-2/7) * (2*kappa0)**(-3/14) * (sp.integrate.trapezoid(y = L, x = T))**0.5
+        df.loc[i, "C0"] = 7**(-2/7) * (2*kappa0)**(-3/14) * (sp.integrate.trapezoid(y = Lz*T**0.5, x = T))**(-0.5)
+        # df.loc[i, "C0"] = 7**(-2/7) * (2*kappa0)**(-3/14) * (sp.integrate.trapezoid(y = Lz*T**0.5 * Btot**(-2), x = T))**(-0.5)
     
         ## Classic DLS thresholds
         df.loc[i, "DLS_thresholds"] = CfInt(
@@ -335,12 +336,26 @@ def get_detachment_scalings(profiles, stores, kappa0 = 2500):
         
         ## Linear upstream integral
         # Accounts for the fact that qpar is comes in to the domain gradually upstream
-        abovex = sp.integrate.trapezoid(y = B[Xpoint:]/Bx * (Lpar - S[Xpoint:])/(Lpar - Sx), x = S[Xpoint:])
-        belowx = sp.integrate.trapezoid(y = B[:Xpoint]/Bx, x = S[:Xpoint])
+        # Which means the L and Bx/Bt and other effects will also come in gradually
+        abovex = sp.integrate.trapezoid(y = Btot[Xpoint:]/Bx * (Lpar - S[Xpoint:])/(Lpar - Sx), x = S[Xpoint:])
+        belowx = sp.integrate.trapezoid(y = Btot[:Xpoint]/Bx, x = S[:Xpoint])
         df.loc[i, "upstream_integrals_linear"] = abovex + belowx 
         
         ## Upstream integral
+        S = store["Sprofiles"][0]
         df.loc[i, "qpar_integral"] = sp.integrate.trapezoid(y = qpar, x = S)
+        
+        ## Cyd correction
+        # Something to do with the upstream heat flux being gradually admitted and having an effect
+        # that's distinct to the above one, and specifically about converting from a distance to a 
+        # temperature integral that is no longer easy to do in DLS-Extended
+        
+        Xpoint = store["Xpoints"][0]
+        S = store["Sprofiles"][0]
+        Btot = store["Btotprofiles"][0]
+        
+        df.loc[i, "cyd_correction"] = np.sqrt(sp.integrate.trapz(y = qpar[Xpoint:]/(Btot[Xpoint:])**2, x = S[Xpoint:]) * store["state"].qradial)
+
         
 
     return df
