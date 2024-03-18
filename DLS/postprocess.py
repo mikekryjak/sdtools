@@ -298,7 +298,8 @@ def get_detachment_scalings(profiles, stores, kappa0 = 2500):
     avgB_ratio_eff = []
     for fdf in front_dfs:
         newS = np.linspace(fdf["Spar"].iloc[0], fdf["Spar"].iloc[-1], 100)
-        Btot_eff_interp = sp.interpolate.make_interp_spline(fdf["Spar"], fdf["Btot_eff"])(newS)
+        # Btot_eff_interp = sp.interpolate.make_interp_spline(fdf["Spar"], fdf["Btot_eff"])(newS)
+        Btot_eff_interp = np.interp(newS, fdf["Spar"], fdf["Btot_eff"])
         avgB_ratio_eff.append(fdf["Btot"].iloc[-1] / np.mean(Btot_eff_interp))
         
     df["avgB_ratio_eff"] = avgB_ratio_eff
@@ -587,3 +588,444 @@ def plot_morph_results(profiles,
     axes[0,2].set_ylabel(r"$(\frac{1}{B}) \frac{dB}{ds_{pol}}$")
     axes[1,2].set_ylabel("$S_{front, final} \ /\  S_{pol, x}$")
     fig.tight_layout()
+    
+    
+def plot_profiles(base, stages, profiles, poloidal = True,  ylims = (None,None), reverse_S = True):
+
+    fig, axes = plt.subplots(3,2, figsize = (10,10), dpi = 140)
+    
+    if poloidal is True:
+        Schoice = "Spol"
+    else:
+        Schoice = "S"
+        
+    if reverse_S is True:
+        plotx = lambda p: p[Schoice][-1] - p[Schoice][:p.Xpoint]
+    else:
+        plotx = lambda p: p[Schoice][:p.Xpoint] - p[Schoice][-1]
+
+    ax = axes[0,0]
+    ax.plot(base.R, base.Z, lw = 3, c = "k")
+    
+    for i, stage in enumerate(stages):
+
+        if i > 0:
+            kwargs = dict(markersettings = {"c" : "r"}, linesettings = {"c" : "r"})
+        else:
+            kwargs = {}
+        stage.plot_control_points(ax = ax, **kwargs)
+        
+    # d_outer = eqb["SPR45"]["ol"]
+    # ax.plot(d_outer["R"], d_outer["Z"], linewidth = 3, marker = "o", markersize = 0, color = "black", alpha = 1)
+    ax.legend(fontsize = "small")
+    if ylims != (None, None):
+        ax.set_ylim(ylims)
+
+    ax = axes[0,1]
+    colors = [plt.cm.get_cmap("viridis", 5)(x) for x in range(5)]
+    for idx, i in enumerate(profiles):
+        p = profiles[i]
+        ax.plot(p.R, p.Z, zorder = 100, alpha = 1, color = colors[idx], lw = 2, ls = "-")
+        ax.scatter(p.R[0], p.Z[0], color= colors[idx], s = 10)
+    ax.set_ylim(None, -5.5)
+    ax.grid(alpha = 0.3, color = "k")
+    ax.set_aspect("equal")
+    if ylims != (None, None):
+        ax.set_ylim(ylims)
+
+    ax = axes[1,0]
+    ax.set_title("Btot")
+    for idx, i in enumerate(profiles):
+        p = profiles[i]
+        ax.plot(plotx(p), p.Btot[:p.Xpoint], zorder = 100, alpha = 1, color = colors[idx], lw = 2, ls = "-")
+        
+    ax = axes[1,1]
+    # ax.set_title("Pitch")
+    # for idx, i in enumerate(profiles):
+    #     p = profiles[i]
+    #     ax.plot((p.S[-1] - p.S), p.Bpol / p.Btot, zorder = 100, alpha = 1, color = colors[idx], lw = 2, ls = "-")
+    
+    ax.set_title("Fractional B par gradient")
+    for idx, i in enumerate(profiles):
+        p = profiles[i]
+        ax.plot(plotx(p), np.gradient(p.Btot[:p.Xpoint], p.S[:p.Xpoint])/p.Btot[:p.Xpoint], zorder = 100, alpha = 1, color = colors[idx], lw = 2, ls = "-")
+        
+    ax = axes[2,0]
+    L = [p.get_connection_length() for p in profiles.values()]
+    L = L/L[0]
+    BxBt = [p.get_total_flux_expansion() for p in profiles.values()]
+    BxBt /= BxBt[0]
+    # ax.plot((L/L[0]), zorder = 100, alpha = 1, color = colors[idx], lw = 0, marker = "o", ms = 10,  ls = "-")
+    for idx, _ in enumerate(profiles):
+        Lkwargs = dict(zorder = 100, alpha = 1, color = colors[idx], lw = 0, marker = "o", ms = 10,  ls = "-")
+        BxBtkwargs = dict(zorder = 100, alpha = 1, color = colors[idx], lw = 0, marker = "x", ms = 10, markeredgewidth = 5, ls = "-")
+        
+        if idx == 0: Lkwargs["label"] = "Lc"
+        if idx == 0: BxBtkwargs["label"] = "$B_{X} \/ B_{t}$"
+        ax.plot(idx, L[idx], **Lkwargs)
+        ax.plot(idx, BxBt[idx], **BxBtkwargs)
+        
+    ax.legend()
+        
+    ax = axes[2,1]
+    ax.set_title("Bpol")
+    for idx, i in enumerate(profiles):
+        p = profiles[i]
+        ax.plot(plotx(p), p.Bpol[:p.Xpoint], zorder = 100, alpha = 1, color = colors[idx], lw = 2, ls = "-")
+        
+    ax.legend()
+    fig.tight_layout()
+    
+
+def plot_results(
+    stores, 
+    mode,
+    ax = None, 
+    title = "DLS results"):
+    
+    spines = True
+    
+    if ax == None:
+        fig, ax = plt.subplots(dpi = 170)
+        
+    style = dict(lw = 2, ms = 0)
+
+    cmap = mpl.cm.get_cmap('viridis', 5)
+    colors = [cmap(x) for x in np.linspace(0,1, len(stores))]
+    allx = []
+    ally = []
+    for i, id in enumerate(stores):
+        s = stores[id]
+        x = s["cvar_trim"] / s["cvar_trim"][-1]
+        cchoice = "cvar"
+        # x = s[f"{cchoice}_trim"]
+        y = s["SpolPlot"] - s["SpolPlot"][-1]
+        ax.plot(x, y, label = f"{id:.2f}", color = colors[i], **style, marker = "o")
+        
+        if i == 0: ax.scatter(x[-1], y[-1], color = "darkslategrey", marker = "x", linewidths = 4, s = 200, zorder = 10)
+        ax.scatter(x[0], y[0], color = colors[i], marker = "o", linewidths = 4, s = 20, zorder = 10)
+        
+        if np.isnan(x).any():
+            
+            pointx = x[~np.isnan(x)][0]
+            ax.plot([pointx, pointx], [y[np.where(x == pointx)[0][0]], y.min()], color = colors[i], linestyle = ":", linewidth = 2)
+            
+        allx += list(x)
+        ally += list(y)
+        
+    # ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(10))
+    ax.xaxis.set_minor_locator(mpl.ticker.MaxNLocator(40))
+    ax.yaxis.set_minor_locator(mpl.ticker.MaxNLocator(40))
+        
+    # if max(allx) > 3:
+    #     # Xaxis major, minor
+    #     ax.xaxis.set_major_locator(mpl.ticker.MultipleLocator(0.4))
+    #     ax.xaxis.set_minor_locator(mpl.ticker.MultipleLocator(0.2))
+    # else:
+    #     ax.xaxis.set_major_locator(mpl.ticker.MultipleLocator(0.2))
+    #     ax.xaxis.set_minor_locator(mpl.ticker.MultipleLocator(0.1))
+        
+        
+    # if max(ally) > 2:
+    #     # Yaxis major, minor
+    #     ax.yaxis.set_major_locator(mpl.ticker.MultipleLocator(0.4))
+    #     ax.yaxis.set_minor_locator(mpl.ticker.MultipleLocator(0.2))
+    # else:
+    #     # Yaxis major, minor
+    #     ax.yaxis.set_major_locator(mpl.ticker.MultipleLocator(0.2))
+    #     ax.yaxis.set_minor_locator(mpl.ticker.MultipleLocator(0.1))
+    
+    def custom_formatter(x, pos):
+        if x < 0:
+            return f'{-x:.1f}'  # Multiply by -1 and format to 2 decimal places
+        else:
+            return f'{x:.1f}'
+    
+    ax.yaxis.set_major_formatter(custom_formatter)
+    
+    ax.grid(which = "major", visible = True,   alpha = 0.6)
+    ax.grid(which = "minor", visible = True,  alpha = 0.3)
+    ax.set_xlim(ax.get_xlim()[::-1])
+    ax.set_xlabel("Power increase factor $[Wm^{-2}]$")
+    ax.set_ylabel("Poloidal distance from X-point $[m]$")
+    ax.set_title(title, fontsize = "xx-large", color = "black")
+    
+    if spines is True:
+            for spine in ["top", "left", "right", "bottom"]:
+                ax.spines[spine].set_visible(True)
+                
+                
+    fig.show()
+    
+    
+ 
+class plotProfiles():
+    
+    def __init__(self,
+                 profiles,
+                 colors = None,
+                 basis = "Spol", 
+                 side = "outer",
+                 names = []):
+    
+        
+        self.xlabel = dict(
+                # Spol = r"$S_{\theta}\ [m]$",
+                # S = r"$S_{\parallel}\ [m]$"
+                Spol = r"Poloidal distance from X-point",
+                S = r"Parallel distance from X-point"
+            )[basis]
+        
+        self.side = side
+        self.basis = basis
+        self.profiles = profiles
+        self.titlesize = "x-large"
+        self.colors = plt.rcParams['axes.prop_cycle'].by_key()['color'] if colors == None else colors
+        self.lw = 3
+        self.figsize = (7,5)
+        self.titlecolor = "black" #"#5D2785"
+        self.spines = True
+        
+    def gridplot(self, field_list, eqbchoice):
+        fig, axes = plt.subplots(2,2, dpi = 120, figsize = (12,9),
+                         width_ratios = (3,2))
+
+        self.plot_designs(eqbchoice, ax = axes[0,0], ylims = (-8.6, -6.0))
+        self.plot_Lc_BxBt(ax = axes[1,0])
+        self.plot_field(field_list[0], ax = axes[0,1])
+        self.plot_field(field_list[1], ax = axes[1,1])
+
+        fig.tight_layout()
+        fig.subplots_adjust(hspace = 0.3)
+        
+    def plot_designs(self, eqbchoice, ax = [], ylims = (None, None)):
+        """
+        Plots profiles in R,Z space. Has both the inner and outer in the background, Needs eqb.
+        The eqb dict must end with keys [il] and [ol]
+        """
+        
+        if ax is None:
+            fig, ax = plt.subplots(figsize = self.figsize)
+        else: 
+            ax = ax
+
+        for side in ["il", "ol"]:
+            ax.plot(eqbchoice[side]["R"], eqbchoice[side]["Z"], c = "darkslategrey", alpha = 0.5, lw = 3)
+            
+        for i, key in enumerate(self.profiles.keys()):
+            p = self.profiles[key]
+            ax.plot(p["R"][:p["Xpoint"]], p["Z"][:p["Xpoint"]], color = self.colors[i], lw = self.lw)
+                    
+        ax.set_aspect("equal")
+        ax.yaxis.margin = 0
+        ax.spines["bottom"].set_visible(False)
+        ax.autoscale()
+
+        if ylims != (None, None):
+            ax.set_ylim(ylims)
+        else:
+            ax.set_ylim(None, -6.0)
+            
+        ax.set_xlabel("R [m]")
+        ax.set_ylabel("Z [m]")
+        ax.set_title("Profiles", fontsize = self.titlesize, color = self.titlecolor)
+        
+        if self.spines is True:
+            for spine in ["top", "left", "right", "bottom"]:
+                ax.spines[spine].set_visible(True)
+        
+    def plot_Lc_BxBt(self, ax = None, xlabels = False, figsize = None):
+        """
+        Plot summary of connection length and flux expansion
+        """
+        if ax == None:
+            fig, ax = plt.subplots(figsize = self.figsize if figsize == None else figsize)
+        else:
+            ax = ax
+            
+        profiles = self.profiles
+        colors = self.colors
+        
+        
+        for i, key in enumerate(profiles.keys()):
+            p = profiles[key]
+            selector = slice(None,p.Xpoint)
+            xplot = (p[self.basis] - p[self.basis][p.Xpoint])[selector]
+            
+            L = [p.get_connection_length() for p in profiles.values()]
+            L = L/L[0]
+            BxBt = [p.get_total_flux_expansion() for p in profiles.values()]
+            BxBt /= BxBt[0]
+            Lkwargs = dict(zorder = 100, alpha = 1, color = colors[i], lw = 0, marker = "o", ms = 10,  ls = "-")
+            BxBtkwargs = dict(zorder = 100, alpha = 1, color = colors[i], lw = 0, marker = "x", ms = 10, markeredgewidth = 5, ls = "-")
+            
+            if i == 0: Lkwargs["label"] = "Connection length factor"
+            if i == 0: BxBtkwargs["label"] = "Flux expansion factor"
+            ax.plot(i, L[i], **Lkwargs)
+            ax.plot(i, BxBt[i], **BxBtkwargs)
+            
+        # ax.set_title("Flux expansion and connection length", fontsize = self.titlesize, color = self.titlecolor)
+        ax.set_ylabel("Factor")
+        leg = ax.legend(loc = "upper left", bbox_to_anchor = (0.02,0.95), fontsize = "large")
+        leg.get_frame().set_linewidth(0)
+        
+        
+        if xlabels is True:
+            ax.set_xticks(range(len(profiles)))
+            ax.set_xticklabels(self.profiles.keys())
+        else:
+            ax.set_xticklabels([])
+            ax.spines["bottom"].set_visible(False)
+            ax.tick_params(axis = "x", which = "both", length = 0)
+            ax.grid(axis = "x", which = "both", alpha = 0)
+        
+        ax.set_ylabel("Factor")
+        if self.spines is True:
+            for spine in ["top", "left", "right", "bottom"]:
+                ax.spines[spine].set_visible(True)
+        else:
+            ax.spines["left"].set_visible(True)
+            ax.spines["bottom"].set_visible(False)
+            
+        ax.set_title("Profile properties", fontsize = self.titlesize, color = self.titlecolor)
+        
+        
+    def plot_field(self, mode, ax = None, figsize = None):
+        """
+        Plot profiles of either the field, field gradient or pitch
+        """
+        
+        if ax == None:
+            fig, ax = plt.subplots(figsize = self.figsize if figsize == None else figsize)
+        else:
+            ax = ax
+            
+        profiles = self.profiles
+        colors = self.colors
+        
+        data = dict(
+                Btot = {"y" : lambda x: x.Btot, 
+                        "ylabel" : r"$B_{tot}\ [T]$",
+                        "title" : r"Total field"},
+                
+                Bpol = {"y" : lambda x: x.Bpol, 
+                        "ylabel" : r"$B_{\theta}\ [T]$",
+                        "title" : "Poloidal field"},
+                
+                Btotgrad = {"y" : lambda x: (np.gradient(x.Btot, x.S)/x.Btot), 
+                            "ylabel" : r"$\frac{1}{B} \frac{dB}{dS_{\parallel}}\ [T]$",
+                            "title" : "Parallel fractional B gradient"},
+                
+                Bpitch = {"y" : lambda x: (x.Bpol/x.Btot), 
+                          "ylabel" : r"$B_{tot} \/ B_{\theta}$",
+                          "title" : "Field pitch"}
+            )
+        
+        for i, key in enumerate(profiles.keys()):
+            
+            p = profiles[key]
+            selector = slice(None,p.Xpoint)
+            xplot = (p[self.basis] - p[self.basis][p.Xpoint])[selector] * -1
+            
+
+            ax.plot(xplot, data[mode]["y"](p)[selector], label = key, color = colors[i], lw = self.lw)
+            ax.set_title(data[mode]["title"], fontsize = self.titlesize, color = self.titlecolor)
+            ax.set_xlabel(self.xlabel)
+            ax.set_ylabel(data[mode]["ylabel"])
+            
+        if self.side == "inner":
+            ax.set_xlim(ax.get_xlim()[::-1])
+            
+        if self.spines is True:
+            for spine in ["top", "left", "right", "bottom"]:
+                ax.spines[spine].set_visible(True)
+        
+    
+            
+        
+def plot_designs(profiles, colors = None, basis = "Spol", mode = "outer"):
+    fig, axes = plt.subplots(2,3, figsize = self.figsize)
+    titlesize = "x-large"
+    lw = 3
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color'] if colors == None else colors
+    spines = True
+    
+    
+    for i, key in enumerate(profiles.keys()):
+        p = profiles[key]
+        ax = axes[0,0]
+        ax.plot(p.R - p.R[p.Xpoint], p.Z - p.Z[p.Xpoint], label = key, color = colors[i], lw = lw)
+        ax.set_aspect("equal")
+        ax.set_ylim(-3.0, 1)
+        ax.set_title("Design", fontsize = titlesize)
+        ax.set_xlabel(r"$R - R_{Xpoint}\ [m]$")
+        ax.set_ylabel(r"$Z - Z_{Xpoint}\ [m]$")
+        ax.legend()
+        
+        selector = slice(None,p.Xpoint)
+        
+        xplot = (p[basis] - p[basis][p.Xpoint])[selector] 
+        
+        ## Reverse X so that inner can go from left to right
+        # Distance still m from X-point
+        # if mode == "inner":
+        #     xplot *= -1
+            
+        xplot *= -1
+            
+        xlabel = dict(
+            Spol = r"$S_{\theta}\ [m]$",
+            S = r"$S_{\parallel}\ [m]$"
+        )[basis]
+            
+        
+        
+        ax = axes[1,0]
+        L = [p.get_connection_length() for p in profiles.values()]
+        L = L/L[0]
+        BxBt = [p.get_total_flux_expansion() for p in profiles.values()]
+        BxBt /= BxBt[0]
+        Lkwargs = dict(zorder = 100, alpha = 1, color = colors[i], lw = 0, marker = "o", ms = 10,  ls = "-")
+        BxBtkwargs = dict(zorder = 100, alpha = 1, color = colors[i], lw = 0, marker = "x", ms = 10, markeredgewidth = 5, ls = "-")
+        
+        if i == 0: Lkwargs["label"] = "Lc"
+        if i == 0: BxBtkwargs["label"] = "$B_{X} \/ B_{t}$"
+        ax.plot(i, L[i], **Lkwargs)
+        ax.plot(i, BxBt[i], **BxBtkwargs)
+        ax.set_title("Flux expansion and connection length", fontsize = titlesize)
+        ax.legend(bbox_to_anchor = (0.3,0.95))
+        
+        ax = axes[0,1]
+        ax.plot(xplot, p.Btot[selector], label = key, color = colors[i], lw = lw)
+        ax.set_title(r"Total field", fontsize = titlesize)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(r"$B_{tot}\ [T]$")
+        
+        ax = axes[1,1]
+        ax.plot(xplot, p.Bpol[selector], label = key, color = colors[i], lw = lw)
+        ax.set_title(r"Poloidal field", fontsize = titlesize)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(r"$B_{\theta}\ [T]$")
+        
+        ax = axes[0,2]
+        ax.plot(xplot, (np.gradient(p.Btot, p.S)/p.Btot)[selector], label = key, color = colors[i], lw = lw)
+        ax.set_title(r"Parallel B gradient", fontsize = titlesize)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(r"$\frac{1}{B} \frac{dB}{dS_{\parallel}}\ [T]$")
+        
+        ax = axes[1,2]
+        ax.plot(xplot, (p.Bpol/p.Btot)[selector], label = key, color = colors[i], lw = lw)
+        ax.set_title(r"Field pitch", fontsize = titlesize)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(r"$B_{tot} \/ B_{\theta}$")
+        
+    # Reverse axes so inner goes left to right
+    if mode == "inner":
+        for ax in [axes[0,1], axes[1,1], axes[0,2], axes[1,2]]:
+            ax.set_xlim(ax.get_xlim()[::-1])
+        
+    fig.tight_layout()
+    
+    if spines is True:
+        for spine in ["top", "left", "right", "bottom"]:
+            ax.spines[spine].set_visible(True)
