@@ -50,8 +50,8 @@ mpl.rcParams['legend.borderaxespad'] = 0
 # mpl.rcParams['legend.frameon'] = False
 mpl.rcParams['legend.facecolor'] = "white"
 
-mpl.rcParams["axes.spines.right"] = False
-mpl.rcParams["axes.spines.top"] = False
+# mpl.rcParams["axes.spines.right"] = False
+# mpl.rcParams["axes.spines.top"] = False
 mpl.rcParams["axes.spines.left"] = True
 mpl.rcParams["figure.figsize"] = (6,5)
 mpl.rcParams["figure.dpi"] = 120
