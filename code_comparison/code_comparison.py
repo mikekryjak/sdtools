@@ -276,6 +276,8 @@ class SOLPSdata:
             df = pd.DataFrame(index = dist[1:-1])
             for param in list_params:
                 df[param] = data[param][selector][1:-1] 
+                if any([x in param for x in ["Pe", "Pd+"]]):
+                    df[param] /= constants("q_e")
                 
             translate = dict(omp="omp", imp="imp", outer_lower_target="outer_lower", inner_lower_target="inner_lower")
             
@@ -310,6 +312,8 @@ class SOLPSdata:
             df = pd.DataFrame(index = index)
             for param in list_params:
                 df[param] = data[param][selector][:-1]
+                if any([x in param for x in ["Pe", "Pd+"]]):
+                    df[param] /= constants("q_e")
                 
             translate = dict(outer_lower="outer_fieldline", inner_lower="inner_fieldline")
             regions[translate[name]] = df.copy()
@@ -589,6 +593,8 @@ def lineplot_compare(
             "SOLEDGE2D" : {"ls" : "-", "lw" : 0, "marker" : "x", "ms" : 5, "markerfacecolor":"auto", "markeredgewidth":1, "zorder":100},
             "SOLPS" : {"ls" : "-", "lw" : 0, "marker" : "o", "ms" : 3, "markeredgewidth":0}
         }
+        
+        xmult = 100
 
 
         ### For each parameter
@@ -637,12 +643,12 @@ def lineplot_compare(
                                 
                                 ## Partial pressures - Pt = Pa + Pm, no factors of 2.
                                 if parsed_param == "Na":
-                                    axes[i].plot(data.index*100, data["Na"] + data["Nm"], label = name, **molstyle)
+                                    axes[i].plot(data.index*xmult, data["Na"] + data["Nm"], label = name, **molstyle)
                                 # if parsed_param == "Pa":
-                                #     axes[i].plot(data.index*100, data["Pa"]*0 + data["Pm"], label = name, **molstyle)
+                                #     axes[i].plot(data.index*xmult, data["Pa"]*0 + data["Pm"], label = name, **molstyle)
                                 if parsed_param == "Ta":
                                     weighted_temp = ((data["Ta"] * data["Na"]) + (data["Tm"] * data["Nm"])) / (data["Na"] + data["Nm"]*2)
-                                    axes[i].plot(data.index*100, weighted_temp, label = name, **molstyle) 
+                                    axes[i].plot(data.index*xmult, weighted_temp, label = name, **molstyle) 
                                 
                                 # Make atoms grey
                                 if any([x in parsed_param for x in ["Na", "Ta"]]):
@@ -655,12 +661,12 @@ def lineplot_compare(
                                     # parsed_atom = parse_solps("Na", region)
                                     # parsed_mol = parse_solps("Nm", region)
 
-                                    axes[i].plot(data.index*100, data["Na"] + data["Nm"], label = name, **molstyle)
+                                    axes[i].plot(data.index*xmult, data["Na"] + data["Nm"], label = name, **molstyle)
                                     
                                 if param == "Ta":
 
                                     weighted_temp = ((data["Ta"] * data["Na"]) + (data["Tm"] * data["Nm"])) / (data["Na"] + data["Nm"]*2)
-                                    axes[i].plot(data.index*100, weighted_temp, label = name, **molstyle)
+                                    axes[i].plot(data.index*xmult, weighted_temp, label = name, **molstyle)
                                 
                                 # Make atoms grey
                                 if any([x in parsed_param for x in ["Na", "Ta"]]):
@@ -673,7 +679,7 @@ def lineplot_compare(
                             if val != "data": custom_kwargs[val] = input_dict[val]
                         style_kwargs = {**styles[code], **custom_kwargs, **atom_override}
                         
-                        axes[i].plot(data.index*100, data[parsed_param], label = name,  **style_kwargs)
+                        axes[i].plot(data.index*xmult, data[parsed_param], label = name,  **style_kwargs)
                         
                         # Collect min and max for later
                         ymin.append(case.regions[region][parsed_param].min())
@@ -715,13 +721,13 @@ def lineplot_compare(
                     axes[i].set_xlim(xlims)
                     
                 if region == "omp":
-                    axes[i].set_xlim(-0.06*100, 0.05*100)
+                    axes[i].set_xlim(-0.06*xmult, 0.05*xmult)
                 elif region == "imp":
-                    axes[i].set_xlim(-0.11*100, 0.09*100)
+                    axes[i].set_xlim(-0.11*xmult, 0.09*xmult)
                 elif region == "outer_lower":
-                    axes[i].set_xlim(-0.03*100, 0.065*100 )
+                    axes[i].set_xlim(-0.03*xmult, 0.065*xmult )
                 elif region == "inner_lower":
-                    axes[i].set_xlim(-0.06*100, 0.10*100 )
+                    axes[i].set_xlim(-0.06*xmult, 0.10*xmult )
             
             axes[i].grid(which="both", color = "k", alpha = 0.1, lw = 0.5)
             
