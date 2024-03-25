@@ -160,14 +160,14 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
         
         else:
             
-            axes[0,3].plot(t, Te_sol, c = "limegreen", lw = lw)
-            axes[0,3].set_title("$T_{e}^{omp,sol}$")
+            axes[0,1].plot(t, Te_sol, c = "limegreen", lw = lw)
+            axes[0,1].set_title("$T_{e}^{omp,sol}$")
             
             axes[0,2].plot(t, Ne_target, c = "deeppink", lw = lw)
             axes[0,2].set_title("$N_{e}^{targ,max}$")
             
-            axes[0,1].plot(t, Te_target, c = "darkorchid", lw = lw)
-            axes[0,1].set_title("$T_{e}^{targ,max}$")
+            axes[0,3].plot(t, Te_target, c = "darkorchid", lw = lw)
+            axes[0,3].set_title("$T_{e}^{targ,max}$")
             
             
             
