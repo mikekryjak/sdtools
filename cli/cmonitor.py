@@ -117,12 +117,12 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
         return np.insert(x,0,x[0])
     # Second row of plots
     stime = np.diff(t, prepend = t[0]*0.99)
-    wtime_per_stime = wtime/stime
+    ms_per_24hrs = (stime) / (wtime/(60*60*24))  # ms simulated per 24 hours
     lratio = np.diff(nliters, prepend=nliters[1]*0.99) / np.diff(nniters, prepend=nniters[1]*0.99)   # Ratio of linear to nolinear iterations
     fails = np.diff(nfails, prepend = nfails[1]*0.99)
     fails[0] = fails[1]
     lorder[0] = lorder[1]
-    wtime_per_stime[0] = wtime_per_stime[1]
+    ms_per_24hrs[0] = ms_per_24hrs[1]
     
     # ddt
     res = {}
@@ -172,8 +172,8 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
             
             
             
-        axes[1,0].plot(t, wtime_per_stime/1e4, c = "k", lw = lw)
-        axes[1,0].set_title("wtime/(1e4*stime)")
+        axes[1,0].plot(t, ms_per_24hrs, c = "k", lw = lw)
+        axes[1,0].set_title("ms $t_{sim}$ / 24hr $t_{wall}$")
         # axes[1,0].set_yscale("log")
         axes[1,1].plot(t, lratio, c = "k", lw = lw)
         axes[1,1].set_title("linear/nonlinear")
