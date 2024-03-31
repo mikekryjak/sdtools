@@ -250,7 +250,8 @@ if __name__ == "__main__":
     parser.add_argument("-p", action="store_true", help = "Plot?")
     parser.add_argument("-t", action="store_true", help = "Table?")
     parser.add_argument("-s", action="store_true", help = "Save figure?")
+    parser.add_argument("-neutrals", action="store_true", help = "Neutral focused plot?")
     
     # Extract arguments and call function
     args = parser.parse_args()
-    cmonitor(args.path, plot = args.p, table = args.t, save = args.s)
+    cmonitor(args.path, plot = args.p, table = args.t, save = args.s, neutrals = args.neutrals)
