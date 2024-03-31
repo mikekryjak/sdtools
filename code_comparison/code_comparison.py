@@ -630,6 +630,7 @@ def lineplot_compare(
                         
                         if combine_molecules is True:
                             
+                            atom_alpha = 0
                             
                             if code == "SOLEDGE2D":
                                 molstyle = {"lw" : 0, "marker" : "x","color":color,  "ms" : 5, "markeredgewidth":1, "zorder":101}
@@ -645,26 +646,25 @@ def lineplot_compare(
                                 
                                 # Make atoms grey
                                 if any([x in parsed_param for x in ["Na", "Ta"]]):
-                                    atom_override = {"alpha":0.3}
+                                    atom_override = {"alpha":atom_alpha}
                                     
                             if code == "SOLPS":
-                                molstyle = {"lw" : 0, "marker" : "v", "color":color, "ms" : 3, "markeredgewidth":1, "zorder":101}
+                                molstyle = {"lw" : 0, "marker" : "o", "color":color, "ms" : 3, "markeredgewidth":1, "zorder":101}
                                 
                                 if param == "Na":
-                                    parsed_atom = parse_solps("Na", region)
-                                    parsed_mol = parse_solps("Nm", region)
+                                    # parsed_atom = parse_solps("Na", region)
+                                    # parsed_mol = parse_solps("Nm", region)
 
-                                    axes[i].plot(data.index*100, data[parsed_atom] + data[parsed_mol], label = name, **molstyle)
+                                    axes[i].plot(data.index*100, data["Na"] + data["Nm"], label = name, **molstyle)
                                     
-                                # if param == "Ta":
-                                #     parsed_atom = parse_solps("Ta", region)
-                                #     parsed_mol = parse_solps("Tm", region)
-                                #     # weighted_temp = ((data[parsed_atom
-                                #     axes[i].plot(data.index*100, data[parsed_atom] + data[parsed_mol], label = name, **molstyle)
+                                if param == "Ta":
+
+                                    weighted_temp = ((data["Ta"] * data["Na"]) + (data["Tm"] * data["Nm"])) / (data["Na"] + data["Nm"]*2)
+                                    axes[i].plot(data.index*100, weighted_temp, label = name, **molstyle)
                                 
                                 # Make atoms grey
                                 if any([x in parsed_param for x in ["Na", "Ta"]]):
-                                    atom_override = {"alpha":0.05}
+                                    atom_override = {"alpha":atom_alpha}
                         
                         # print(f"Plotting {code}, {region}, {param}, {parsed_param}")
                         input_dict = cases[name]

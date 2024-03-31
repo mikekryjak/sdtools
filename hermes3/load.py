@@ -14,13 +14,14 @@ from boututils.datafile import DataFile
 from boutdata.collect import collect
 from boutdata.data import BoutData
 from boutdata.squashoutput import squashoutput
+import xhermes
 import xbout
 
 from hermes3.utils import *
 from hermes3.named_selections import *
 from hermes3.plotting import *
 from hermes3.fluxes import *
-import xhermes
+
 
 
 class Load:

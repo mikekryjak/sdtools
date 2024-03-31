@@ -63,11 +63,8 @@ class CaseDB():
     
     def load_case_2D(self, 
                     casename,
-                    verbose = False, 
-                    squeeze = True, 
-                    unnormalise_geom = True,
-                    unnormalise = True,
-                    use_squash = False):
+                    **kwargs
+                    ):
 
         casepath = self.casepaths[casename]
         gridfilepath = self.get_grid_path(casename)
@@ -75,10 +72,6 @@ class CaseDB():
         return Load.case_2D(
                     casepath = casepath,
                     gridfilepath = gridfilepath,
-                    verbose = verbose,
-                    squeeze = squeeze,
-                    unnormalise_geom = unnormalise_geom,
-                    unnormalise = unnormalise,
-                    use_squash = use_squash
+                    **kwargs
                 )
 
