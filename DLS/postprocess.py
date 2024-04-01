@@ -729,7 +729,7 @@ def plot_results(
     colors = None,
     ax = None, 
     dot_unstable = True,
-    title = "DLS results"):
+    title = "DLS-Extended results"):
     
     spines = True
     
@@ -768,8 +768,8 @@ def plot_results(
         ally += list(y)
         
     # ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(10))
-    ax.xaxis.set_minor_locator(mpl.ticker.MaxNLocator(40))
-    ax.yaxis.set_minor_locator(mpl.ticker.MaxNLocator(40))
+    ax.xaxis.set_minor_locator(mpl.ticker.AutoMinorLocator(5))
+    ax.yaxis.set_minor_locator(mpl.ticker.AutoMinorLocator(5))
         
     # if max(allx) > 3:
     #     # Xaxis major, minor
@@ -835,8 +835,8 @@ class plotProfiles():
         self.side = side
         self.basis = basis
         self.profiles = profiles
-        self.titlesize = "medium"
-        self.labelsize = "large"
+        self.titlesize = "x-large"
+        self.labelsize = "x-large"
         self.colors = plt.rcParams['axes.prop_cycle'].by_key()['color'] if colors == None else colors
         self.lw = 3
         self.figsize = (7,5)
@@ -847,19 +847,41 @@ class plotProfiles():
     def gridplot(self, field_list, eqbchoice, 
                  designs_xlims = (None,None),
                  designs_ylims = (None, None),
-                 plot_all = False):
+                 plot_all = False,
+                 plot_simple = True):
         figscale = 0.7
         if plot_all is True:
             fig, axes = plt.subplots(2,3, dpi = self.dpi, figsize = (18*figscale,9*figscale),
                             width_ratios = (3,2,2))
+        elif plot_simple is True:
+            figscale = 0.7
+            fig = plt.figure(dpi = self.dpi, figsize = (14*figscale,11*figscale))
+            shape = (4,6)
+            # ax1 = plt.subplot2grid(shape = shape, loc = (0,0), colspan = 3, rowspan = 2)
+            # ax2 = plt.subplot2grid(shape = shape, loc = (2,0), colspan = 3, rowspan = 2)
+            # ax3 = plt.subplot2grid(shape = shape, loc = (1,3), colspan = 2, rowspan = 2)
+            
+            ax1 = plt.subplot2grid(shape = shape, loc = (0,0), colspan = 3, rowspan = 4)
+            ax2 = plt.subplot2grid(shape = shape, loc = (0,3), colspan = 3, rowspan = 2)
+            ax3 = plt.subplot2grid(shape = shape, loc = (2,3), colspan = 3, rowspan = 2)
+
+            axes = [ax1, ax2, ax3]
+            
         else:
             fig, axes = plt.subplots(2,2, dpi = self.dpi, figsize = (12*figscale,9*figscale),
                          width_ratios = (3,2))
 
-        self.plot_designs(eqbchoice, ax = axes[0,0], 
-                          ylims = designs_ylims,
-                          xlims = designs_xlims)
-        self.plot_Lc_BxBt(ax = axes[1,0])
+        if plot_simple is True:
+            self.plot_designs(eqbchoice, ax = axes[0], 
+                            ylims = designs_ylims,
+                            xlims = designs_xlims)
+            self.plot_Lc_BxBt(ax = axes[1])
+            
+        else:
+            self.plot_designs(eqbchoice, ax = axes[0,0], 
+                            ylims = designs_ylims,
+                            xlims = designs_xlims)
+            self.plot_Lc_BxBt(ax = axes[1,0])
         
         
         if plot_all is True:
@@ -867,12 +889,18 @@ class plotProfiles():
             self.plot_field("Bpol", ax = axes[1,1])
             self.plot_field("Btotgrad", ax = axes[0,2])
             self.plot_field("Bpitch", ax = axes[1,2])
+        elif plot_simple is True:
+            self.plot_field(field_list[1], ax = axes[2])
         else:
             self.plot_field(field_list[0], ax = axes[0,1])
             self.plot_field(field_list[1], ax = axes[1,1])
 
         fig.tight_layout()
-        fig.subplots_adjust(hspace = 0.4)
+        
+        if plot_simple:
+            fig.subplots_adjust(hspace = 0.9, wspace = 3.5)
+        else:
+            fig.subplots_adjust(hspace = 0.4)
         
     def plot_designs(self, eqbchoice, ax = [], 
                      xlims = (None, None),
@@ -952,8 +980,9 @@ class plotProfiles():
             
         # ax.set_title("Flux expansion and connection length", fontsize = self.titlesize, color = self.titlecolor)
         ax.set_ylabel("Factor", fontsize = self.labelsize)
+        ax.set_xlabel("Profile change", fontsize = self.labelsize)
         # leg = ax.legend(loc = "upper left", bbox_to_anchor = (0.02,0.95), fontsize = "medium")
-        leg = ax.legend(fontsize = "medium")
+        leg = ax.legend(fontsize = "medium", frameon = False)
         leg.get_frame().set_linewidth(0)
         
         
