@@ -88,3 +88,13 @@ Crimson
 Dark Slate Gray
 
 """
+
+class colordb():
+    def __init__(self):
+        pass
+    
+    def cycle(self):
+        plt.rcParams['axes.prop_cycle'].by_key()['color']
+        
+    def colors_from_cmap(self, cmap, N):
+        mpl.colormaps[cmap](np.linspace(0, 1, N))
