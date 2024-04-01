@@ -11,7 +11,12 @@ class CaseDB():
     """ 
     Find all simulations and grids in the provided directories
     store their paths in dictionaries casepaths and gridpaths.
-    Defaults to a hardcoded relative OneDrive path
+    Defaults to a hardcoded relative OneDrive path.
+    
+    Inputs
+    ------
+    case_dir : path where cases are
+    grid_dir : path where grids are 
     """
     def __init__(self, case_dir = None,
                        grid_dir = None):
