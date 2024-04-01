@@ -114,7 +114,21 @@ class SOLPScase():
         for name in ["outer", "outer_lower", "outer_upper", "inner", "inner_lower", "inner_upper"]:
             s[name] = self.make_custom_sol_ring(name, i = 0)
             
-        # ## Calculate array of radial distance from separatrix
+        # BOUT++ style regions - needs implementing leftcut, rightcut
+        # s["lower_inner_pfr"] = (slice(None, leftcut[0]+2), slice(None, sep+2))
+        # s["lower_inner_SOL"] = (slice(None, leftcut[0]+2), slice(sep+2, None))
+        # s["inner_core"] = (slice(leftcut[0]+2, leftcut[1]+2), slice(None, sep+2))
+        # s["inner_SOL"] = (slice(leftcut[0]+2, leftcut[1]+2), slice(sep+2, None))
+        # s["upper_inner_PFR"] = (slice(leftcut[1]+2, upper_break), slice(None, sep+2))
+        # s["upper_inner_SOL"] = (slice(leftcut[1]+2, upper_break), slice(sep+2, None))
+        # s["upper_outer_PFR"] = (slice(upper_break, rightcut[1]+2), slice(None, sep+2))
+        # s["upper_outer_SOL"] = (slice(upper_break, rightcut[1]+2), slice(sep+2, None))
+        # s["outer_core"] = (slice(rightcut[1]+2, rightcut[0]+2), slice(None, sep+2))
+        # s["outer_SOL"] = (slice(rightcut[1]+2, rightcut[0]+2), slice(sep+2, None))
+        # s["lower_outer_PFR"] = (slice(rightcut[0]+2, None), slice(None, sep+2))
+        # s["lower_outer_SOL"] = (slice(rightcut[0]+2, None), slice(sep+2, None))
+            
+        # ## Csalculate array of radial distance from separatrix
         # dist = np.cumsum(self.g["hy"][self.s["omp"]])   # hy is radial length
         # dist = dist - dist[self.g["sep"] - 1]
         # self.g["radial_dist"] = dist
@@ -204,7 +218,6 @@ class SOLPScase():
         
     def plot_2d(self, param,
              ax = None,
-             fig = None,
              norm = None,
              data = np.array([]),
              cmap = "Spectral_r",
@@ -217,6 +230,7 @@ class SOLPScase():
              logscale = False,
              alpha = 1,
              separatrix = True,
+             separatrix_kwargs = {},
              grid_only = False,
              cbar = True,
              axis_labels = True):
@@ -237,6 +251,8 @@ class SOLPScase():
             norm = create_norm(logscale, norm, vmin, vmax)
         if ax == None:
             fig, ax = plt.subplots(dpi = 150)
+        else:
+            fig = ax.get_figure()
         
 
         # Following SOLPS convention: X poloidal, Y radial
@@ -295,6 +311,7 @@ class SOLPScase():
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="5%", pad=0.05)
             fig.colorbar(polys, cax = cax)
+            cax.grid(visible = False)
         ax.add_collection(polys)
         ax.set_aspect("equal")
         
@@ -314,14 +331,16 @@ class SOLPScase():
             ax.set_title(param)
         
         if separatrix is True:
-            self.plot_separatrix(ax = ax)
+            self.plot_separatrix(ax = ax, **separatrix_kwargs)
             
-    def plot_separatrix(self, ax, lw = 1, c = "black", ls = "-"):
+    def plot_separatrix(self, ax, **separatrix_kwargs):
+        
+        kwargs = {**{"c" : "black", "ls" : "-"}, **separatrix_kwargs}
 
         R = self.g["crx"][:,:,0]
         Z = self.g["cry"][:,:,0]
-        ax.plot(R[self.s["inner"]], Z[self.s["inner"]], c, lw = lw, ls = ls)
-        ax.plot(R[self.s["outer"]], Z[self.s["outer"]], c, lw = lw, ls = ls)
+        ax.plot(R[self.s["inner"]], Z[self.s["inner"]], **kwargs)
+        ax.plot(R[self.s["outer"]], Z[self.s["outer"]], **kwargs)
         
     def get_1d_radial_data(
         self,
@@ -436,17 +455,28 @@ class SOLPScase():
 
         return xpoints
     
-    def plot_selection(self, sel):
+    def plot_selection(self, sel, ylims = (None, None), xlims = (None, None)):
         """
         Plots scatter of selected points according to the tuple sel
         which contains slices in (X, Y)
         Examples provided in self.s
         """
         
-        fig, ax = plt.subplots(dpi = 150)
+        data = self.bal["ne"][:]
+        data = np.zeros_like(data)
 
-        self.plot_2d("ne", fig = fig, ax = ax, cmap = "twilight", antialias = True, linewidth = 0.1, linecolor = "darkorange")
-        ax.scatter(self.g["R"][sel], self.g["Z"][sel], s = 5, c = "deeppink")
+        data[sel] = 1
+
+        self.plot_2d("", data = data, cmap = mpl.colors.ListedColormap(["lightgrey", "deeppink"]),
+             antialias = True, 
+             cbar = False,
+             separatrix_kwargs = dict(lw = 0.5, c = "skyblue"))
+        
+        if xlims != (None, None):
+            ax.set_xlim(xlims)
+            
+        if ylims != (None, None):
+            ax.set_ylim(ylims)
         
 def create_norm(logscale, norm, vmin, vmax):
     if logscale:
