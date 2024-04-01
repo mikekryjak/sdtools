@@ -803,7 +803,8 @@ def lineplot(
             axes[i].set_xlabel(xlabel, fontsize=9)
             
             axes[i].set_title(f"{region}: {param}")
-            axes[i].yaxis.set_major_locator(mpl.ticker.LogLocator(numticks=10))
+            if logscale is True:
+                axes[i].yaxis.set_major_locator(mpl.ticker.LogLocator(numticks=10))
 
             
         legend_items = []
