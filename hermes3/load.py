@@ -236,14 +236,14 @@ class Case:
                 "long_name": "Neutral temperature (h)",
                 })
 
-        if "Pd" in ds.data_vars:
-            ds["Td"] = ds["Pd"] / (ds["Nd"] * q_e)
-            ds["Td"].attrs.update(
-                {
-                "units": "eV",
-                "standard_name": "neutral temperature (d)",
-                "long_name": "Neutral temperature (d)",
-                })
+        # if "Pd" in ds.data_vars:
+        #     ds["Td"] = ds["Pd"] / (ds["Nd"] * q_e)
+        #     ds["Td"].attrs.update(
+        #         {
+        #         "units": "eV",
+        #         "standard_name": "neutral temperature (d)",
+        #         "long_name": "Neutral temperature (d)",
+        #         })
 
         if "Pd+" in ds.data_vars:
             ds["Td+"] = ds["Pd+"] / (ds["Nd+"] * q_e)
