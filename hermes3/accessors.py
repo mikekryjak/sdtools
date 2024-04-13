@@ -60,6 +60,32 @@ class HermesDatasetAccessor(BoutDatasetAccessor):
     def select_custom_sol_ring(self, i, region):
         return _select_custom_sol_ring(self.data, i, region)
 
+    def get_floors(self):
+        """
+        Returns density and temperature floor in normalised and SI units
+        """
+        
+        ds = self.data
+        o = ds.options["d"]
+        
+        if "nn_floor" in o.keys():
+            nn_floor = o["nn_floor"]
+        else:
+            nn_floor = 1e-5
+        
+        if "pn_floor" in o.keys():
+            pn_floor = o["pn_floor"]
+        else:
+            pn_floor = 1e-8
+            
+        Nnorm = ds.metadata["Nnorm"]
+        Tnorm = ds.metadata["Tnorm"]
+        Pnorm = Nnorm * Tnorm * constants("q_e")
+            
+        nn_floor_si = nn_floor * Nnorm
+        pn_floor_si = pn_floor * Pnorm
+            
+        return {"nn_floor" : nn_floor, "pn_floor" : pn_floor, "nn_floor_si" : nn_floor_si, "pn_floor_si" : pn_floor_si}    
 
 def _select_region(ds, name):
     """
