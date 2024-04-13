@@ -52,6 +52,12 @@ class SOLPScase():
         X, Y convention in the results. This is not intended and it reads as X, Y in MATLAB.
         You MUST transpose everything so that it's Y,X (large then small number) so it's consistent with geometry
         which is the opposite
+        
+        NOTES ON GUARD CELLS IN SOLPS
+        - Total cell count is nx+2, ny+2. Guard cells are there for upper targets but somehow don't get counted (?!). 
+          All of the balance file results are with guard cells and this function plots them by default.
+          Their position/mask can be found in resignore available in b2fgmtry. 
+        - Guard cells are always really tiny!!!
         """
         
         raw_balance = nc.Dataset(os.path.join(path, "balance.nc"))
@@ -222,7 +228,7 @@ class SOLPScase():
              data = np.array([]),
              cmap = "Spectral_r",
              custom_cmap = None,
-             antialias = False,
+             antialias = True,
              linecolor = "k",
              linewidth = 0,
              vmin = None,
