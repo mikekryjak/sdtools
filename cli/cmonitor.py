@@ -141,7 +141,7 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
         fig, axes = plt.subplots(2,4, figsize=figsize, dpi = dpi)
 
         fig.subplots_adjust(hspace=0.4, top = 0.85)
-        fig.suptitle(casename)
+        fig.suptitle(casename, y = 1.02)
 
         lw = 2
         axes[0,0].plot(t, Ne_sep, c = "darkorange", lw = lw)
@@ -201,7 +201,7 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
             plt.show()  
             
         if save:
-            fig.savefig(f"mon_{casename}.png")
+            fig.savefig(f"mon_{casename}.png", bbox_inches="tight", pad_inches = 0.2)
             print("..saved figures", end="")
 
     ### Print table
