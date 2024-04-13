@@ -734,7 +734,7 @@ def plot_results(
     spines = True
     
     if ax == None:
-        fig, ax = plt.subplots(dpi = 170)
+        fig, ax = plt.subplots(figsize = (6.5,6.5), dpi = 250)
         
     if len(stores) == 25:
         stores = {1 : stores}
@@ -802,9 +802,9 @@ def plot_results(
     
     if mode == "inner":
         ax.set_xlim(ax.get_xlim()[::-1])
-    ax.set_xlabel("Power increase factor")
-    ax.set_ylabel("Poloidal distance from X-point $[m]$")
-    ax.set_title(title, fontsize = "xx-large", color = "black")
+    ax.set_xlabel("Power increase factor", fontsize = "large")
+    ax.set_ylabel("Poloidal distance from X-point $[m]$", fontsize = "large")
+    ax.set_title(title, fontsize = "x-large", color = "black")
     
     if spines is True:
             for spine in ["top", "left", "right", "bottom"]:
@@ -848,11 +848,21 @@ class plotProfiles():
                  designs_xlims = (None,None),
                  designs_ylims = (None, None),
                  plot_all = False,
-                 plot_simple = True):
+                 plot_simple = True,
+                 profiles_only = False,
+                 high_scale = False):
         figscale = 0.7
         if plot_all is True:
             fig, axes = plt.subplots(2,3, dpi = self.dpi, figsize = (18*figscale,9*figscale),
                             width_ratios = (3,2,2))
+            
+        elif profiles_only is True:
+            if high_scale is True:
+                scale = 1.8
+            else:
+                scale = 1
+            fig, ax = plt.subplots(figsize = (8/scale,8/scale), dpi = 300*scale)
+            
         elif plot_simple is True:
             figscale = 0.7
             fig = plt.figure(dpi = self.dpi, figsize = (14*figscale,11*figscale))
@@ -871,7 +881,15 @@ class plotProfiles():
             fig, axes = plt.subplots(2,2, dpi = self.dpi, figsize = (12*figscale,9*figscale),
                          width_ratios = (3,2))
 
-        if plot_simple is True:
+        if profiles_only is True:
+            self.plot_designs(eqbchoice, ax = ax, 
+                            ylims = designs_ylims,
+                            xlims = designs_xlims)
+            ylims = ax.get_ylim()
+            ax.vlines(0, *ylims, color = "k", ls = "--")
+            ax.set_ylim(ylims)
+            
+        elif plot_simple is True:
             self.plot_designs(eqbchoice, ax = axes[0], 
                             ylims = designs_ylims,
                             xlims = designs_xlims)
@@ -883,8 +901,9 @@ class plotProfiles():
                             xlims = designs_xlims)
             self.plot_Lc_BxBt(ax = axes[1,0])
         
-        
-        if plot_all is True:
+        if profiles_only is True:
+            pass
+        elif plot_all is True:
             self.plot_field("Btot", ax = axes[0,1])
             self.plot_field("Bpol", ax = axes[1,1])
             self.plot_field("Btotgrad", ax = axes[0,2])
@@ -942,7 +961,7 @@ class plotProfiles():
             
         ax.set_xlabel("R [m]", fontsize = self.labelsize)
         ax.set_ylabel("Z [m]", fontsize = self.labelsize)
-        ax.set_title("Profiles", fontsize = self.titlesize, color = self.titlecolor)
+        ax.set_title("Divertor configuration", fontsize = self.titlesize, color = self.titlecolor)
         
         if self.spines is True:
             for spine in ["top", "left", "right", "bottom"]:
@@ -967,16 +986,24 @@ class plotProfiles():
             xplot = (p[self.basis] - p[self.basis][p.Xpoint])[selector]
             
             L = [p.get_connection_length() for p in profiles.values()]
-            L = L/L[0]
             BxBt = [p.get_total_flux_expansion() for p in profiles.values()]
+            gradB = [p.get_gradB_integral() for p in profiles.values()]
+            Bpitch = [p.get_Bpitch_integral() for p in profiles.values()]
+            
+            L = L/L[0]
             BxBt /= BxBt[0]
+            gradB /= gradB[0]
+            Bpitch /= Bpitch[0]
+            
             Lkwargs = dict(zorder = 100, alpha = 1, color = colors[i], lw = 0, marker = "o", ms = 10,  ls = "-")
             BxBtkwargs = dict(zorder = 100, alpha = 1, color = colors[i], lw = 0, marker = "x", ms = 10, markeredgewidth = 5, ls = "-")
             
             if i == 0: Lkwargs["label"] = "Connection length factor"
             if i == 0: BxBtkwargs["label"] = "Flux expansion factor"
-            ax.plot(i, L[i], **Lkwargs)
-            ax.plot(i, BxBt[i], **BxBtkwargs)
+            # ax.plot(i, L[i], **Lkwargs)
+            # ax.plot(i, BxBt[i], **BxBtkwargs)
+            
+            ax.plot(i, gradB[i], marker = "o", c = "k")
             
         # ax.set_title("Flux expansion and connection length", fontsize = self.titlesize, color = self.titlecolor)
         ax.set_ylabel("Factor", fontsize = self.labelsize)
@@ -1005,6 +1032,68 @@ class plotProfiles():
             
         ax.set_title("Profile properties", fontsize = self.titlesize, color = self.titlecolor)
         
+    def plot_summary(self, ax = None, xlabels = False, figsize = None):
+        """
+        Plot summary of connection length and flux expansion
+        """
+        if ax == None:
+            fig, ax = plt.subplots(figsize = self.figsize if figsize == None else figsize)
+        else:
+            ax = ax
+            
+        profiles = self.profiles
+        colors = self.colors
+        
+        
+        L = [p.get_connection_length() for p in profiles.values()]
+        BxBt = [p.get_total_flux_expansion() for p in profiles.values()]
+        gradB = [p.get_gradB_average() for p in profiles.values()]
+        Bpitch = [p.get_Bpitch_average() for p in profiles.values()]
+        
+        L = L/L[0]
+        BxBt /= BxBt[0]
+        gradB /= gradB[0]
+        Bpitch /= Bpitch[0]
+        
+        # Lkwargs = dict(zorder = 100, alpha = 1, color = "darkorange", lw = 0, marker = "o", ms = 10,  ls = "-")
+        # BxBtkwargs = dict(zorder = 100, alpha = 1, color = "purple", lw = 0, marker = "x", ms = 10, markeredgewidth = 5, ls = "-")
+        
+        common_kwargs = dict(zorder = 100, alpha = 1, lw = 3, ms = 5)
+        
+        x = range(len(profiles))
+        
+        ax.plot(x, L, label = "Connection length factor", marker = "o", c = "darkorange", **common_kwargs)
+        ax.plot(x, BxBt, label = "Flux expansion factor", marker = "o", c = "purple", **common_kwargs)
+        
+        ax.plot(x, gradB, label = "Average B gradient", ls = "--", c = "forestgreen", **common_kwargs)
+        ax.plot(x, Bpitch, label = "Average of B pitch", ls = "--", c = "deeppink", **common_kwargs)
+            
+        # ax.set_title("Flux expansion and connection length", fontsize = self.titlesize, color = self.titlecolor)
+        ax.set_ylabel("Factor", fontsize = self.labelsize)
+        ax.set_xlabel("Profile change", fontsize = self.labelsize)
+        # leg = ax.legend(loc = "upper left", bbox_to_anchor = (0.02,0.95), fontsize = "medium")
+        leg = ax.legend(fontsize = "medium", frameon = False)
+        leg.get_frame().set_linewidth(0)
+        
+        
+        if xlabels is True:
+            ax.set_xticks(range(len(profiles)))
+            ax.set_xticklabels(self.profiles.keys())
+        else:
+            ax.set_xticklabels([])
+            ax.spines["bottom"].set_visible(False)
+            ax.tick_params(axis = "x", which = "both", length = 0)
+            ax.grid(axis = "x", which = "both", alpha = 0)
+        
+        ax.set_ylabel("Factor", fontsize = self.labelsize)
+        if self.spines is True:
+            for spine in ["top", "left", "right", "bottom"]:
+                ax.spines[spine].set_visible(True)
+        else:
+            ax.spines["left"].set_visible(True)
+            ax.spines["bottom"].set_visible(False)
+            
+        ax.set_title("Profile properties", fontsize = self.titlesize, color = self.titlecolor)
         
     def plot_field(self, mode, ax = None, figsize = None):
         """
@@ -1028,13 +1117,13 @@ class plotProfiles():
                         "ylabel" : r"$B_{\theta}\ [T]$",
                         "title" : "Poloidal field"},
                 
-                Btotgrad = {"y" : lambda x: (np.gradient(x.Btot, x.S)/x.Btot), 
-                            "ylabel" : r"$\frac{1}{B}\ \frac{dB}{dS_{\parallel}}\ [m^{-1}]$",
-                            "title" : "Parallel fractional B gradient"},
+                Btotgrad = {"y" : lambda x: (np.gradient(x.Btot, x.Spol)/x.Btot), 
+                            "ylabel" : r"$\frac{1}{B}\ \frac{dB}{dS_{\theta}}\ [m^{-1}]$",
+                            "title" : "B field gradient"},
                 
                 Bpitch = {"y" : lambda x: (x.Bpol/x.Btot), 
                           "ylabel" : r"$B_{\theta}\ /\ B_{tot}$",
-                          "title" : "Field pitch"}
+                          "title" : "B field pitch"}
             )
         
         for i, key in enumerate(profiles.keys()):
