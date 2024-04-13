@@ -794,17 +794,22 @@ def lineplot(
             if xlims != (None, None):
                 axes[i].set_xlim(xlims)
                 
-            if logscale is True:
+            datarange = abs(axes[i].get_ylim()[1] / axes[i].get_ylim()[0])
+
+            
+            if logscale is True and datarange > 10:
                 axes[i].set_yscale("symlog")
+                # axes[i].yaxis.set_major_locator(mpl.ticker.LogLocator(numticks=10))
             else:
                 axes[i].set_yscale("linear")
+                
+            axes[i].autoscale()
             
             axes[i].grid(which="both", alpha = 0.2)
             axes[i].set_xlabel(xlabel, fontsize=9)
             
             axes[i].set_title(f"{region}: {param}")
-            if logscale is True:
-                axes[i].yaxis.set_major_locator(mpl.ticker.LogLocator(numticks=10))
+                
 
             
         legend_items = []
