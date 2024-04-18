@@ -776,13 +776,12 @@ def lineplot(
                     m = region_ds[name].metadata
                     xplot = region_ds[name].coords["theta"] - region_ds[name].coords["theta"][0]
                 else:    # Radial, 0 at sep
-                    sep_R = region_ds[name].coords["R"][ds.metadata["ixseps1"]- ds.metadata["MXG"]]
+                    sep_R = region_ds[name].coords["R"][region_ds[name].metadata["ixseps1"]- region_ds[name].metadata["MXG"]]
                     xplot = region_ds[name].coords["R"] - sep_R
                     
                 data = region_ds[name][param]
                 
-                
-                    
+
                 if colors == None:
                     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
                     
