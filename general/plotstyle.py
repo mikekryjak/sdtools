@@ -18,6 +18,7 @@ newcycle = ["#0C9481", "#EC9714", "#18569A", "#EC6D14"]
 newcycle = ["#02A992", "#105BAF", "#FF9C04", "#FF6C04"]
 newcycle = ["#02A992", "#0B76AA", "#FF8A04", "#FF6C04"]  # Hue 206, dist 15deg
 newcycle = ["#43B7C2", "#024B79", "#FFAD48", "#BA5800"]
+newcycle = ["#43B7C2", "#FFAD48", "#024B79", "#BA5800"]
 mpl.rcParams["axes.prop_cycle"] = cycler("color", newcycle + ["darkorchid", "limegreen", "deeppink", 
                                                    "#1E90FF", "forestgreen", "#4169e1", "darkgoldenrod", "#9370db", "crimson", "#2f4f4f" ])
 # mpl.rcParams["axes.prop_cycle"] = cycler("color", ["teal", "darkorange", "#fb8072", "#4daf4a", "#1f78b4", "darkorchid", "deeppink"])

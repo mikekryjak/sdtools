@@ -44,7 +44,7 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
         return  boutdata.collect(
             name,
             path = path,
-            yguards = True,  # Akways with guards to minimise mistakes
+            yguards = "include_upper",  # Akways with guards to minimise mistakes
             xguards = True,  # Always with guards to minimise mistakes
             strict = True,   # To prevent reading wrong variable by accident
             info = False,
