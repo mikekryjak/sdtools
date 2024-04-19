@@ -2197,7 +2197,7 @@ class AMJUEL():
         print("WARNING: CHECK RATE CSVs FOR DECIMAL POINTS!!!!!!!")
         print("Excel saves precision as it appears, not as what the number has.......")
         print("*****************************")
-        self.get_amjuel_data()
+        # self.get_amjuel_data()
 
     def read_amjuel_2d(self, path):
         """
@@ -2233,7 +2233,7 @@ class AMJUEL():
         return np.array(rate)
 
     def amjuel_2d(
-        self, name, Te, E, mode = "default", second_param = "Ne", pop_ratio = False):
+        self, name, Te, E, data = None, mode = "default", second_param = "Ne", pop_ratio = False):
         """
         Read 2D AMJUEL coefficients and calculate rate
         - Inputs: reaction name, single value of T and E
@@ -2246,8 +2246,10 @@ class AMJUEL():
         uses cm-3. So to scale and convert to m-3 it's 1e-14.
         H.4 2.1.5 and H.10 2.1.5 ionisation and excitation energy rates use density.
         """
-
-        data = self.amjuel_data[name]
+        if type(data) != np.ndarray:
+            data = self.amjuel_data[name]
+        else:
+            data = pd.DataFrame(data)
 
         if second_param == "Ne":
             E = E * 1e-14 
