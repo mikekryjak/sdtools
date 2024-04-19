@@ -61,7 +61,7 @@ mpl.rcParams["figure.facecolor"] = "white"
 
 mpl.rcParams['savefig.bbox'] = 'tight'
 # mpl.rcParams['savefig.dpi'] = 500
-mpl.rcParams['savefig.transparent'] = True
+mpl.rcParams['savefig.transparent'] = False
 
 # mpl.rcParams["font.family"] = "sans-serif"
 # mpl.rcParams["font.sans-serif"] = ["Helvetica"]
