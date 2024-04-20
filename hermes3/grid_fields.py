@@ -347,17 +347,104 @@ class Mesh():
         ax.set_xlabel("Y index (incl. guards)")
         ax.set_ylabel("X index (excl. guards)")
 
+    # def plot_rz_grid(self, ax, xlim = (None,None), ylim = (None,None)):
+    #     ax.set_title("R, Z space")
+    #     ax.scatter(self.rflat, self.zflat, s = 0.1, c = "black")
+    #     ax.set_axisbelow(True)
+    #     ax.grid()
+    #     ax.plot(self.Rxy[:,self.j1_1g], self.Zxy[:,self.j1_1g], label = "j1_1g",     color = self.colors[0], alpha = 0.7)
+    #     ax.plot(self.Rxy[:,self.j1_2g], self.Zxy[:,self.j1_2g], label = "j1_2g", color = self.colors[1], alpha = 0.7)
+    #     ax.plot(self.Rxy[:,self.j2_1g], self.Zxy[:,self.j2_1g], label = "j2_1g",     color = self.colors[2], alpha = 0.7)
+    #     ax.plot(self.Rxy[:,self.j2_2g], self.Zxy[:,self.j2_2g], label = "j2_2g", color = self.colors[3], alpha = 0.7)
+    #     ax.plot(self.Rxy[self.ixseps1,:], self.Zxy[self.ixseps1,:], label = "ixseps1", color = self.colors[4], alpha = 0.7, lw = 2)
+    #     ax.plot(self.Rxy[self.ixseps2,:], self.Zxy[self.ixseps2,:], label = "ixseps2", color = self.colors[5], alpha = 0.7, lw = 2, ls=":")
+
+    #     if xlim != (None,None):
+    #         ax.set_xlim(xlim)
+    #     if ylim != (None,None):
+    #         ax.set_ylim(ylim)
+            
     def plot_rz_grid(self, ax, xlim = (None,None), ylim = (None,None)):
+        
+        linecolor = "k"
+        linewidth = 0.5
         ax.set_title("R, Z space")
-        ax.scatter(self.rflat, self.zflat, s = 0.1, c = "black")
+        
+        
+        if "Rxy_lower_right_corners" in self.mesh.keys():
+            r_nodes = [
+                "Rxy",
+                "Rxy_corners",
+                "Rxy_lower_right_corners",
+                "Rxy_upper_left_corners",
+                "Rxy_upper_right_corners",
+            ]
+            z_nodes = [
+                "Zxy",
+                "Zxy_corners",
+                "Zxy_lower_right_corners",
+                "Zxy_upper_left_corners",
+                "Zxy_upper_right_corners",
+            ]
+            cell_r = np.concatenate(
+                [np.expand_dims(self.mesh[x], axis=2) for x in r_nodes], axis=2
+            )
+            cell_z = np.concatenate(
+                [np.expand_dims(self.mesh[x], axis=2) for x in z_nodes], axis=2
+            )
+        else:
+            raise Exception("Cell corners not present in mesh, cannot do polygon plot")
+
+        Nx = len(cell_r)
+        Ny = len(cell_r[0])
+        patches = []
+
+        # https://matplotlib.org/2.0.2/examples/api/patch_collection.html
+
+        idx = [np.array([1, 2, 4, 3, 1])]
+        patches = []
+        for i in range(Nx):
+            for j in range(Ny):
+                p = mpl.patches.Polygon(
+                    np.concatenate((cell_r[i][j][tuple(idx)], cell_z[i][j][tuple(idx)]))
+                    .reshape(2, 5)
+                    .T,
+                    fill=False,
+                    closed=True,
+                    facecolor=None,
+                )
+                patches.append(p)
+                
+        cmap = mpl.colors.ListedColormap(["white"])
+        colors =np.zeros_like(cell_r).flatten()
+        polys = mpl.collections.PatchCollection(
+            patches,
+            alpha=0.5,
+            # norm=norm,
+            cmap=cmap,
+            # fill = False,
+            antialiaseds=True,
+            edgecolors=linecolor,
+            linewidths=linewidth,
+            joinstyle="bevel",
+        )
+
+        polys.set_array(colors)
+        ax.add_collection(polys)
+        ax.set_aspect("equal", adjustable="box")
+        ax.set_xlabel("R [m]")
+        ax.set_ylabel("Z [m]")
+        ax.set_ylim(cell_z.min(), cell_z.max())
+        ax.set_xlim(cell_r.min(), cell_r.max())
+        
         ax.set_axisbelow(True)
         ax.grid()
         ax.plot(self.Rxy[:,self.j1_1g], self.Zxy[:,self.j1_1g], label = "j1_1g",     color = self.colors[0], alpha = 0.7)
         ax.plot(self.Rxy[:,self.j1_2g], self.Zxy[:,self.j1_2g], label = "j1_2g", color = self.colors[1], alpha = 0.7)
         ax.plot(self.Rxy[:,self.j2_1g], self.Zxy[:,self.j2_1g], label = "j2_1g",     color = self.colors[2], alpha = 0.7)
         ax.plot(self.Rxy[:,self.j2_2g], self.Zxy[:,self.j2_2g], label = "j2_2g", color = self.colors[3], alpha = 0.7)
-        ax.plot(self.Rxy[self.ixseps1,:], self.Zxy[self.ixseps1,:], label = "ixseps1", color = self.colors[4], alpha = 0.7, lw = 2)
-        ax.plot(self.Rxy[self.ixseps2,:], self.Zxy[self.ixseps2,:], label = "ixseps2", color = self.colors[5], alpha = 0.7, lw = 2, ls=":")
+        ax.plot(self.Rxy[self.ixseps1,:], self.Zxy[self.ixseps1,:], label = "ixseps1", color = self.colors[4], alpha = 0.7, lw = 1)
+        ax.plot(self.Rxy[self.ixseps2,:], self.Zxy[self.ixseps2,:], label = "ixseps2", color = self.colors[5], alpha = 0.7, lw = 1, ls=":")
 
         if xlim != (None,None):
             ax.set_xlim(xlim)
