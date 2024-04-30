@@ -1,3 +1,5 @@
+import numpy as np
+
 def loglog_cooling_curve_fit(name, T, Lz, data_limits = (2,2000), fit_limits = (1,2000), plot_output = True, print_output = True):
     """ 
     Tool to produce fixed fraction impurity curves.
@@ -154,7 +156,7 @@ def AMJUEL_rates(name):
         2.935080031599e-14]
         ])
 
-    rates["cx"] = np.array([
+    rates["rec"] = np.array([
         [-28.58858570847, 0.02068671746773, -0.007868331504755, 0.003843362133859,
         -0.0007411492158905, 9.273687892997e-05, -7.063529824805e-06, 3.026539277057e-07,
         -5.373940838104e-09],
