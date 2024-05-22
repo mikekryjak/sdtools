@@ -47,7 +47,7 @@ mpl.rcParams["grid.alpha"] = 0.5
 mpl.rcParams["legend.loc"] = "best"
 mpl.rcParams["legend.fontsize"] = "medium"
 mpl.rcParams["legend.markerscale"] = 1.0
-mpl.rcParams['legend.borderaxespad'] = 0
+mpl.rcParams['legend.borderaxespad'] = 0.1
 # mpl.rcParams['legend.frameon'] = False
 mpl.rcParams['legend.facecolor'] = "white"
 
