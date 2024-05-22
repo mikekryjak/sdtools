@@ -113,11 +113,101 @@ def calculate_simple_heat_balance(ds, verbose = True):
     if verbose: print(f"Total       : {en_rec:.3f} [MW]")
     
     return hflows
-    
-    
-    
-    
 
+def calculate_neutral_heat_balance(ds, mode = "default"):
+    
+    if ds["t"].shape != ():
+        raise Exception("Please supply a single time slice")
+    
+    if len([x for x in ds.data_vars if "pf" in x]) == 0:
+        print("WARNING: radial fluxes not found, calculating")
+        ds = calculate_radial_fluxes(ds)
+    
+    def get_sum(param, loc = None):
+    # ds = cs["base"].ds.isel(t=-1)
+    
+        if param in ds.data_vars:
+            
+            data = ds[param].hermesm.clean_guards()
+            dv = ds["dv"]
+            if loc != None:
+                data = data.hermesm.select_region(loc)
+                dv = ds.hermesm.select_region(loc)["dv"]
+                
+            val = (data * dv).sum(["x", "theta"]) * 1e-6
+            
+            if any([x in param for x in ["iz", "rec"]]):
+                val *= -1
+            return val
+        else:
+            return np.nan
+        
+    def get_bndry_flux(species, boundary, type = "convection"):
+        if "core" in boundary:
+            LR = "L"
+        elif "sol" in boundary:
+            LR = "R"
+        else:
+            raise Exception(f"{boundary} not implemented")
+            
+        if type == "convection":
+            param = f"hf_perp_conv_{LR}_{species}"
+            scale = 1e-6
+        else:
+            raise Exception(f"{type} not implemented")
+            
+        if param in ds.data_vars:
+            return ds.hermesm.select_region("core_edge")[param].sum("theta").values * 1e-6
+        else:
+            print(f"Warning: {param} not found in dataset")
+            return np.nan
+        
+    df = pd.DataFrame()
+    df.loc["target_refl", "d"] = get_sum("Ed_target_refl")
+    df.loc["inner_sol_refl", "d"] = get_sum("Ed_wall_refl", loc = "inner_sol_edge")
+    df.loc["outer_sol_refl", "d"] = get_sum("Ed_wall_refl", loc = "outer_sol_edge")
+    df.loc["pfr_refl", "d"] = get_sum("Ed_wall_refl", loc = "pfr_edge")
+    df.loc["target_trefl", "d"] = get_sum("Edd*_target_refl")
+    df.loc["wall_trefl", "d"] = get_sum("Edd*_wall_refl")
+    df.loc["target_recycle", "d"] = get_sum("Ed_target_recycle") * -1
+    df.loc["wall_recycle", "d"] = get_sum("Ed_wall_recycle") * -1
+    df.loc["core_escape", "d"] = get_bndry_flux("d", "core_edge", type = "convection")
+    df.loc["sol_escape", "d"] = get_bndry_flux("d", "sol_edge", type = "convection")
+    df.loc["iz", "d"] = get_sum("Edd+_iz")
+    df.loc["rec", "d"] = get_sum("Ed+_rec")
+    df.loc["cx", "d"] = get_sum("Edd+_cx")
+    df.loc["cxt", "d"] = get_sum("Edd+_cxt")
+    df.loc["src", "d"] = get_sum("Pd_src") * 3/2
+
+    df.loc["target_refl", "d*"] = get_sum("Ed*_target_refl")
+    df.loc["inner_sol_refl", "d*"] = get_sum("Ed*_wall_refl", loc = "inner_sol_edge")
+    df.loc["outer_sol_refl", "d*"] = get_sum("Ed*_wall_refl", loc = "outer_sol_edge")
+    df.loc["pfr_refl", "d*"] = get_sum("Ed*_wall_refl", loc = "pfr_edge")
+    df.loc["target_trefl", "d*"] = get_sum("Edd*_target_refl") * -1
+    df.loc["wall_trefl", "d*"] = get_sum("Edd*_wall_refl") * -1
+    df.loc["target_recycle", "d*"] = get_sum("Ed*_target_recycle")
+    df.loc["wall_recycle", "d*"] = get_sum("Ed*_wall_recycle")
+    df.loc["core_escape", "d*"] = get_bndry_flux("d*", "core_edge", type = "convection")
+    df.loc["sol_escape", "d*"] = get_bndry_flux("d*", "sol_edge", type = "convection")
+    df.loc["iz", "d*"] = get_sum("Ed*d+_iz")
+    df.loc["rec", "d*"] = get_sum("Ed*d+_rec")
+    df.loc["cx", "d*"] = get_sum("Ed*d+_cx")
+    df.loc["cxt", "d*"] = get_sum("Ed*d+_cxt")
+    
+    df["total"] = df.sum(axis=1)
+
+    df.loc["TOTAL BALANCE", :] = df[~df.index.isin(["target_trefl", "wall_trefl"])].sum(axis=0)
+    
+    if mode == "reflection":
+        dfrefl = df.transpose()[["outer_sol_refl", "inner_sol_refl", "target_refl", "pfr_refl"]].copy()
+        dfrefl = dfrefl.rename(columns = {"outer_sol_refl" : "outer_wall", "inner_sol_refl" : "inner_wall", "target_refl" : "targets", "pfr_refl" : "pfr"})
+        dfrefl.loc["total", :] = dfrefl.sum(axis=0)
+        dfrefl *= -1        
+        return dfrefl
+    
+    else:
+        
+        return df
 
 def calculate_heat_balance(ds, merge_targets = True):
 
@@ -463,7 +553,7 @@ def calculate_target_fluxes(ds):
     return ds
         
 
-def calculate_radial_fluxes(ds, force_neumann = False, new_afn = False):   
+def calculate_radial_fluxes(ds, force_neumann = False, new_afn = True):   
     
     def zero_to_nan(x):
         return np.where(x==0, np.nan, x)
@@ -529,12 +619,8 @@ def calculate_radial_fluxes(ds, force_neumann = False, new_afn = False):
         # Perpendicular heat convection NOTE: 3/2 factor was initially omitted by accident
         L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*ds[f"P{name}"], np.log(Plim))
         
-        if new_afn is True:
-            corr = ds["particle_flux_factor_d"]    # Convection limited by particle diffusion factor
-        elif "heat_flux_factor_d" in ds.data_vars:
-            corr = ds["heat_flux_factor_d"]
-        elif "convective_heat_flux_factor_d" in ds.data_vars:
-            corr = ds["convective_heat_flux_factor_d"]
+        if new_afn is True and f"particle_flux_factor_{name}" in ds.data_vars:
+            corr = ds[f"particle_flux_factor_{name}"]    # Convection limited by particle diffusion factor
         else:
             corr = 1
         
@@ -544,12 +630,8 @@ def calculate_radial_fluxes(ds, force_neumann = False, new_afn = False):
         # Perpendicular heat conduction NOTE: this is actually energy not pressure like above, so no factor needed
         L, R  =  Div_a_Grad_perp_fast(ds, ds[f"Dnn{name}"]*Nd, constants("q_e")*Td)
         
-        if new_afn is True:
-            corr = ds["heat_flux_factor_d"]     # Conduction limited by heat flux factor
-        elif "heat_flux_factor_d" in ds.data_vars:
-            corr = ds["heat_flux_factor_d"]
-        elif "conductive_heat_flux_factor_d" in ds.data_vars:
-            corr = ds["conductive_heat_flux_factor_d"]
+        if new_afn is True and f"heat_flux_factor_{name}" in ds.data_vars:
+            corr = ds[f"heat_flux_factor_{name}"]     # Conduction limited by heat flux factor
         else:
             corr = 1
             
