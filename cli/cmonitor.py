@@ -112,6 +112,7 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
     Te_target = np.max((0.5*(Te[:,x_ng, -2] + Te[:,x_ng,-3])), axis = 1)
     Tn_sol = Tn[:, -3, y_omp]
     Te_sol = Te[:, -3, y_omp]
+    Tn_core_avg = np.mean(Tn[:, slice(3,x_sep)], axis = (1,2))
 
     def append_first(x):
         return np.insert(x,0,x[0])
@@ -152,8 +153,8 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
             axes[0,3].plot(t, Tn_sol, c = "limegreen", lw = lw)
             axes[0,3].set_title("$T_{n}^{omp,sol}$")
             
-            axes[0,1].plot(t, Tn_target, c = "darkorchid", lw = lw)
-            axes[0,1].set_title("$T_{n}^{targ,max}$")
+            axes[0,1].plot(t, Tn_core_avg, c = "darkorchid", lw = lw)
+            axes[0,1].set_title("$T_{n}^{core,avg}$")
 
             axes[0,2].plot(t, Nn_target, c = "deeppink", lw = lw)
             axes[0,2].set_title("$N_{n}^{targ,max}$")

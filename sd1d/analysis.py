@@ -2193,10 +2193,7 @@ class AMJUEL():
     Also contains lots of rates itself.
     """
     def __init__(self):
-        print("*****************************")
-        print("WARNING: CHECK RATE CSVs FOR DECIMAL POINTS!!!!!!!")
-        print("Excel saves precision as it appears, not as what the number has.......")
-        print("*****************************")
+        pass
         # self.get_amjuel_data()
 
     def read_amjuel_2d(self, path):
@@ -2209,6 +2206,11 @@ class AMJUEL():
         # because it's not scientific notation by default.
         # Needs Pandas
         """
+        print("*****************************")
+        print("WARNING: CHECK RATE CSVs FOR DECIMAL POINTS!!!!!!!")
+        print("Excel saves precision as it appears, not as what the number has.......")
+        print("*****************************")
+
         rate = pd.read_csv(path, header = None)
         rate = pd.concat([rate.loc[2:10,:3].reset_index(), rate.loc[13:21,:3].reset_index(), rate.loc[24:32,:3].reset_index()], axis = 1, ignore_index = True)
         rate = rate.drop(columns = [0,1,5,6,10,11])

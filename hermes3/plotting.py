@@ -779,7 +779,11 @@ def lineplot(
                     sep_R = region_ds[name].coords["R"][region_ds[name].metadata["ixseps1"]- region_ds[name].metadata["MXG"]]
                     xplot = region_ds[name].coords["R"] - sep_R
                     
-                data = region_ds[name][param]
+                if param in region_ds[name].data_vars:
+                    data = region_ds[name][param]
+                else: 
+                    data = np.zeros_like(region_ds[name]["Ne"])
+                    print(f"Warning: {param} not found!")
                 
 
                 if colors == None:

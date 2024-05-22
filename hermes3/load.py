@@ -153,17 +153,16 @@ class Case:
             print("Unnormalising with xHermes")
             
         self.derive_vars()
-        self.guard_replaced = False
         
         if self.is_2d is True:
             self.extract_2d_tokamak_geometry()
             vol = self.ds.dv.values.sum()
             # print(f"CHECK: Total domain volume is {vol:.3E} [m3]")
         else:
-            self.extract_1d_tokamak_geometry()
-            # self.clean_guards()
+            self.ds = self.ds.hermes.extract_1d_tokamak_geometry()
             if guard_replace:
-                self.guard_replace()
+                self.ds = self.ds.hermes.guard_replace_1d()
+            # self.clean_guards()
             
         # self.ds = calculate_radial_fluxes(ds)
         # self.ds = calculate_target_fluxes(ds)
@@ -264,34 +263,34 @@ class Case:
         for param in to_clean:
             self.ds[param]
         
-        
-    def guard_replace(self):
-        pass
-        if self.is_2d == False:
-            if self.ds.metadata["keep_yboundaries"] == 1:
-                # Replace inner guard cells with values at cell boundaries
-                # Hardcoded dimension order: t, y
-                # Cell order at target:
-                # ... | last | guard | second guard
-                #            ^target   ^not used
-                #     |  -3  |  -2   |      -1
+    # Now in xHermes
+    # def guard_replace(self):
+    #     pass
+    #     if self.is_2d == False:
+    #         if self.ds.metadata["keep_yboundaries"] == 1:
+    #             # Replace inner guard cells with values at cell boundaries
+    #             # Hardcoded dimension order: t, y
+    #             # Cell order at target:
+    #             # ... | last | guard | second guard
+    #             #            ^target   ^not used
+    #             #     |  -3  |  -2   |      -1
 
-                if self.guard_replaced == False:
-                    for var_name in self.ds.data_vars:
-                        var = self.ds[var_name]
+    #             if self.guard_replaced == False:
+    #                 for var_name in self.ds.data_vars:
+    #                     var = self.ds[var_name]
                         
-                        if "pos" in var.dims:
-                            var[{"pos":-2}] = (var[{"pos":-3}] + var[{"pos":-2}])/2
-                            var[{"pos":1}] = (var[{"pos":1}] + var[{"pos":2}])/2
+    #                     if "pos" in var.dims:
+    #                         var[{"pos":-2}] = (var[{"pos":-3}] + var[{"pos":-2}])/2
+    #                         var[{"pos":1}] = (var[{"pos":1}] + var[{"pos":2}])/2
                             
-                else:
-                    raise Exception("Guards already replaced!")
+    #             else:
+    #                 raise Exception("Guards already replaced!")
                         
-                self.guard_replaced = True
-            else:
-                raise Exception("Y guards are missing from file!")
-        else:
-            raise Exception("2D guard replacement not done yet!")
+    #             self.guard_replaced = True
+    #         else:
+    #             raise Exception("Y guards are missing from file!")
+    #     else:
+    #         raise Exception("2D guard replacement not done yet!")
 
 
     def unnormalise_xhermes(self, ds):
