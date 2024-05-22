@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import os, sys, pathlib
 import xarray
 from sd1d.analysis import AMJUEL
+from general.rates import AMJUEL_rates
 from hermes3.utils import *
 from hermes3.fluxes import *
 
@@ -17,7 +18,7 @@ class NeutralTransport():
         
         self.inputs = inputs
         
-    def get_rates(self, reproduce_bug = True):
+    def get_rates(self, reproduce_bug = False):
         """
         Reproduce collisionalities from Hermes-3
         Can reproduce bugs:
@@ -44,21 +45,11 @@ class NeutralTransport():
         vth_n = np.sqrt(q_e*Ta / (mp*2))
         
         # IZ/CX (tables) ----------------
-        # CSV precision may affect results
-        # rtools = AMJUEL()
-        nu_iz = np.zeros_like(Ta)
-        # nu_cx = np.zeros_like(Ta)
-        
-        # if len(Ne.shape) == 1:
-        #     for i, _ in enumerate(Te):
-        #         nu_iz[i] = rtools.amjuel_2d("H.4 2.1.5", Te[i], Ne[i]) * Ne[i]
-        #         nu_cx[i] = rtools.amjuel_1d("H.2 3.1.8", (Ta[i] + Ti[i])/2) * Ne[i]
-                
-        # elif len(Ne.shape) == 2:
-        #     for i in range(Te.shape[0]):
-        #         for j in range(Te.shape[1]):
-        #             nu_iz[i,j] = rtools.amjuel_2d("H.4 2.1.5", Te[i,j], Ne[i,j]) * Ne[i,j]
-        #             nu_cx[i,j] = rtools.amjuel_1d("H.2 3.1.8", (Ta[i,j] + Ti[i,j])/2) * Ne[i,j]
+        amj = AMJUEL()
+
+        # rate is in m3s-1, have to multiply it by electron density to get s-1
+        nu_iz = amj.amjuel_2d("iz", Te, Ne, data = AMJUEL_rates("iz")) * Ne
+        nu_rec = amj.amjuel_2d("rec", Te, Ne, data = AMJUEL_rates("rec")) * Ne
                     
         # CX (Hermes-3) ----------------
         ln_sigmav = -18.5028
@@ -104,6 +95,7 @@ class NeutralTransport():
         self.k = {
             "cx" : nu_cx,
             "iz" : nu_iz,
+            "rec" : nu_rec,
             "nn" : nu_nn,
             "en" : nu_en,
             "ne" : nu_ne,
