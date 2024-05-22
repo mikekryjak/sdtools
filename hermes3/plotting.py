@@ -863,10 +863,11 @@ def camera_view(ax, loc, tokamak = "ST40"):
     ax.set_ylim(lims["y"])
     
     
-def plot_perp_heat_fluxes(ds, ax = None, loc = "omp_integral", 
+def plot_perp_heat_fluxes(ds, ax = None, loc = "omp", 
                           neutrals_only = False, 
                           ylim = (None,None),
-                          particle_fluxes = False):
+                          particle_fluxes = False,
+                          species = "d"):
     """
     Plots poloidal integrals of radial heat fluxes
     Plot is for LHS cell edges and then the outermost RHS cell edge is appended
