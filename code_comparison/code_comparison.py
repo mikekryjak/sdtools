@@ -447,16 +447,18 @@ class Hermesdata:
     def __init__(self):
         self.code = "Hermes-3"
         self.params =  [
-            "Td+", "Td", "Te", "Ne", "Pe", "Pd+", "Pd", "Nd", 
+            "Td+", "Td", "Te", "Ne", "Pe", "Pd+", "Pd", "Nd",  "Pd*", "Nd*", "Td*",
             "Sd+_iz", "Rd+_ex", "Rd+_rec"]
         pass
     
     def read_case(self, ds):
+        # NOTE: please provide dataset with guard cells. The selections below are incosnsitent, targets already 
+        # missing guards
 
         self.ds = ds
         self.regions = dict()
-        self.regions["omp"] = self.get_radial_data(ds.hermesm.select_region("outer_midplane_a"))
-        self.regions["imp"] = self.get_radial_data(ds.hermesm.select_region("inner_midplane_a"))
+        self.regions["omp"] = self.get_radial_data(ds.hermesm.select_region("outer_midplane_a").isel(x = slice(2,-2)))
+        self.regions["imp"] = self.get_radial_data(ds.hermesm.select_region("inner_midplane_a").isel(x = slice(2,-2)))
         self.regions["outer_lower"] = self.get_radial_data(ds.hermesm.select_region("outer_lower_target"))
         self.regions["outer_upper"] = self.get_radial_data(ds.hermesm.select_region("outer_upper_target"))
         self.regions["inner_lower"] = self.get_radial_data(ds.hermesm.select_region("inner_lower_target"))
@@ -487,7 +489,10 @@ class Hermesdata:
             
             df = pd.DataFrame(index = dist)
             df.index.name = "pos"
-            df[param] = ds[param]
+            if param in ds.data_vars:
+                df[param] = ds[param]
+            else:
+                df[param] = np.nan
             x.append(df)
             
         df = pd.concat(x, axis = 1)
@@ -527,7 +532,10 @@ class Hermesdata:
 
 
         for param in self.params:
-            df[param] = fl[param].values
+            if param in fl.data_vars:
+                df[param] = fl[param].values
+            else:
+                df[param] = np.nan
             
         return df
     
@@ -549,6 +557,7 @@ def lineplot_compare(
     set_xlim = True,
     legend_nrows = 2,
     combine_molecules = False,
+    solps_noD2 = False,
     titles = "long"
     ):
     
@@ -636,10 +645,11 @@ def lineplot_compare(
                         
                         if combine_molecules is True:
                             
-                            atom_alpha = 0
+                            atom_alpha = 1
                             
                             if code == "SOLEDGE2D":
                                 molstyle = {"lw" : 0, "marker" : "x","color":color,  "ms" : 5, "markeredgewidth":1, "zorder":101}
+                                atomstyle = {"lw" : 0, "marker" : "*","color":color,  "ms" : 5, "markeredgewidth":1, "zorder":101}
                                 
                                 ## Partial pressures - Pt = Pa + Pm, no factors of 2.
                                 if parsed_param == "Na":
@@ -652,9 +662,9 @@ def lineplot_compare(
                                 
                                 # Make atoms grey
                                 if any([x in parsed_param for x in ["Na", "Ta"]]):
-                                    atom_override = {"alpha":atom_alpha}
+                                    atom_override = dict(alpha = atom_alpha, marker = "o", markerfacecolor = "None")
                                     
-                            if code == "SOLPS":
+                            if code == "SOLPS" and solps_noD2 is False:
                                 molstyle = {"lw" : 0, "marker" : "o", "color":color, "ms" : 3, "markeredgewidth":1, "zorder":101}
                                 
                                 if param == "Na":
@@ -670,7 +680,7 @@ def lineplot_compare(
                                 
                                 # Make atoms grey
                                 if any([x in parsed_param for x in ["Na", "Ta"]]):
-                                    atom_override = {"alpha":atom_alpha}
+                                    atom_override = dict(alpha = atom_alpha, marker = "o")
                         
                         # print(f"Plotting {code}, {region}, {param}, {parsed_param}")
                         input_dict = cases[name]
@@ -678,6 +688,7 @@ def lineplot_compare(
                         for val in input_dict:
                             if val != "data": custom_kwargs[val] = input_dict[val]
                         style_kwargs = {**styles[code], **custom_kwargs, **atom_override}
+                        style_kwargs = {**style_kwargs, **atom_override}
                         
                         axes[i].plot(data.index*xmult, data[parsed_param], label = name,  **style_kwargs)
                         
@@ -785,6 +796,7 @@ def lineplot_compare(
             
         ### Make legend
         legend_items = []
+        legend_labels = []
         for j, name in enumerate(cases.keys()):
             if "SOLPS" in name:
                 ls = linestyles["SOLPS"]
@@ -795,8 +807,12 @@ def lineplot_compare(
                 
             style_kwargs = styles[cases[name]["data"].code]
             legend_items.append(mpl.lines.Line2D([0], [0], color=cases[name]["color"], **style_kwargs))
-            
-        fig.legend(legend_items, cases.keys(), ncol = int(len(cases)/legend_nrows), 
+            legend_labels.append(name)
+            if "SOLEDGE" in name and combine_molecules is True:
+                legend_items.append(mpl.lines.Line2D([0], [0], color=cases[name]["color"], **{**style_kwargs, **dict(marker = "o", markerfacecolor = "None")}))
+                legend_labels.append(f"{name} (atoms)")
+
+        fig.legend(legend_items, legend_labels, ncol = int(len(cases)/legend_nrows), 
                    loc = "upper center", bbox_to_anchor=(0.5,0.10),
                    fontsize = "large", frameon = False, labelcolor ="darkslategrey")
         # fig.legend(legend_items, cases.keys(), ncol = 1, loc = "upper right", bbox_to_anchor=(0.05,0.90))
