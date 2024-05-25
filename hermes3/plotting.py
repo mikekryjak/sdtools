@@ -600,6 +600,31 @@ def plot_selection(ds, selection, dpi = 100, rz_only = False, show_selection = T
         axes[1].scatter(rselect, zselect, s = 20, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 1, zorder = 100)
 
     
+
+def plot_performance(cs):
+    """
+    Do a plot showing simulation speed in ms sim time / 24hrs compute time
+    Takes a dictionary of datasets
+
+    """
+    fig, ax = plt.subplots(figsize=(12,6), dpi = 120)
+
+    for name in cs:
+        ds = cs[name].ds.isel(t=slice(10,None))
+        m = ds.metadata
+        # data = ds.hermesm.select_region("outer_midplane_a")["Ne"].isel(x=10)
+        wtime = ds["wtime"]
+        t = ds["t"].values
+        stime = np.diff(t, prepend = t[0])
+        ms_per_24hrs = (stime) / (wtime/(60*60*24))  # ms simulated per 24 hours
+        ax.plot(t - t[0], ms_per_24hrs, label = name)
+        
+    ax.legend()
+    ax.set_title("ms simulation time per 24hrs compute time")
+    ax.set_ylabel("ms / 24hr")
+    ax.set_xlabel("Sim time [s]")
+    ax.set_yscale("log")
+
     
 def plot_xy_grid(ds, ax):
 

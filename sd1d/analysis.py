@@ -156,7 +156,9 @@ class Case:
             if "Fdd+_cx" in self.norm_data.keys():
                 self.norm_data["Fcx"] = self.norm_data["Fdd+_cx"]
                 self.norm_data["Ecx"] = self.norm_data["Edd+_cx"]
-            self.dneut = self.options["neutral_parallel_diffusion"]["dneut"]
+            
+            if "neutral_parallel_diffusion" in self.options:
+                self.dneut = self.options["neutral_parallel_diffusion"]["dneut"]
         else:
             # self.norm_data["Vi"] = self.norm_data["NVi"] / self.norm_data["Ne"] # in SD1D AA is in normalisation update: this is already in file...
             self.dneut = self.options["sd1d"]["dneut"]
@@ -812,7 +814,7 @@ class Case:
             return (x[-2] + x[-3])/2
 
         # ----- Recycling
-        recycle_multiplier = float(o["d+"]["recycle_multiplier"])
+        recycle_multiplier = float(o["d+"]["target_recycle_multiplier"])
 
         # ----- Boundary flux
         sheath_area = get_boundary(J) / np.sqrt(get_boundary(g_22))
