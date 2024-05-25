@@ -1216,3 +1216,49 @@ def plot_2d_timeslices(ds, param, tinds,
     cbar = plt.colorbar(mappable = sm, cax=cax, label = param) # Similar to fig.colorbar(im, cax = cax)
         
     fig.subplots_adjust(wspace = 0)
+
+def plot2d(
+    toplot,
+    clean_guards = True,
+    ylim = (None, None),
+    xlim = (None, None),
+    title = "",
+    tight_layout = True,
+    cmap = "Spectral_r",
+    save_path = ""):
+
+    """
+    User friendly plot of a number of dataarrays in a row
+    Input: 
+        [dict(data = da, **kwargs)]
+    """
+
+    numplots = len(toplot)
+    fig, axes = plt.subplots(1, numplots, dpi = 150, figsize = (11/3*numplots,4))
+    if len(toplot) == 1: axes = [axes]
+
+    kwargs = {
+        "targets" : False, "cmap" : cmap, "antialias": True, 
+        "separatrix_kwargs" : dict(linewidth = 1, color = "white", linestyle = "-")}
+
+    for i, inputs in enumerate(toplot):
+        defaults = {"vmin" : None, "vmax" : None, "logscale" : True}
+        data = inputs.pop("data")
+        figtitle = inputs.pop("title") if "title" in inputs else data.name
+        settings = {**defaults, **inputs, **kwargs}    
+        if clean_guards == True: data = data.hermesm.clean_guards() 
+
+        data.bout.polygon(ax = axes[i], **settings)
+        axes[i].set_title(figtitle)
+
+    for ax in axes:
+
+        if ylim != (None, None): ax.set_ylim(ylim)
+        if xlim != (None, None): ax.set_xlim(xlim)
+
+    fig.suptitle(title)
+    if tight_layout is True: fig.tight_layout(w_pad = -6)
+
+    if save_path != "":
+        plt.savefig(save_path)
+    
