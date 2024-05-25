@@ -1232,7 +1232,7 @@ def plot2d(
         if xlim != (None, None): ax.set_xlim(xlim)
 
     fig.suptitle(title)
-    if tight_layout is True: fig.tight_layout(w_pad = -6)
+    if tight_layout is True: fig.tight_layout(w_pad = -2)
 
     if save_path != "":
         plt.savefig(save_path)
