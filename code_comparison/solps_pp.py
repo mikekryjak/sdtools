@@ -350,7 +350,7 @@ class SOLPScase():
         
     def get_1d_radial_data(
         self,
-        param,
+        params,
         region = "omp",
         verbose = False
     ):
@@ -359,6 +359,9 @@ class SOLPScase():
         Note that the balance file shape is a transpose of the geometry shape (e.g. crx)
         and contains guard cells.        
         """
+
+        if type(params) == str:
+            params = [params]
         
         if any([region in name for name in ["omp", "imp"]]):
             p = self.s[region] 
@@ -369,7 +372,9 @@ class SOLPScase():
         df["dist"] = self.g["R"][p[0], p[1]] - self.g["R"][p[0], self.g["sep"]] 
         df["R"] = self.g["R"][p[0], p[1]]
         df["Z"] = self.g["Z"][p[0], p[1]]
-        df[param] = self.bal[param][p[0], 1:-1] # Drop guard cells
+
+        for param in params:
+            df[param] = self.bal[param][p[0], :]
         
         return df
     
