@@ -1225,6 +1225,7 @@ def plot2d(
     title = "",
     tight_layout = True,
     cmap = "Spectral_r",
+    dpi = 150,
     save_path = ""):
 
     """
@@ -1234,7 +1235,7 @@ def plot2d(
     """
 
     numplots = len(toplot)
-    fig, axes = plt.subplots(1, numplots, dpi = 150, figsize = (11/3*numplots,4))
+    fig, axes = plt.subplots(1, numplots, dpi = dpi, figsize = (11/3*numplots,4))
     if len(toplot) == 1: axes = [axes]
 
     kwargs = {
@@ -1257,7 +1258,7 @@ def plot2d(
         if xlim != (None, None): ax.set_xlim(xlim)
 
     fig.suptitle(title)
-    if tight_layout is True: fig.tight_layout(w_pad = -2)
+    if tight_layout is True: fig.tight_layout(w_pad = 0)
 
     if save_path != "":
         plt.savefig(save_path)
