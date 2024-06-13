@@ -341,7 +341,7 @@ class SOLPScase():
             
     def plot_separatrix(self, ax, **separatrix_kwargs):
         
-        kwargs = {**{"c" : "black", "ls" : "-"}, **separatrix_kwargs}
+        kwargs = {**{"c" : "white", "ls" : "-"}, **separatrix_kwargs}
 
         R = self.g["crx"][:,:,0]
         Z = self.g["cry"][:,:,0]

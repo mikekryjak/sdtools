@@ -600,6 +600,31 @@ def plot_selection(ds, selection, dpi = 100, rz_only = False, show_selection = T
         axes[1].scatter(rselect, zselect, s = 20, c = "red", marker = "s", edgecolors = "darkorange", linewidths = 1, zorder = 100)
 
     
+
+def plot_performance(cs):
+    """
+    Do a plot showing simulation speed in ms sim time / 24hrs compute time
+    Takes a dictionary of datasets
+
+    """
+    fig, ax = plt.subplots(figsize=(12,6), dpi = 120)
+
+    for name in cs:
+        ds = cs[name].ds.isel(t=slice(10,None))
+        m = ds.metadata
+        # data = ds.hermesm.select_region("outer_midplane_a")["Ne"].isel(x=10)
+        wtime = ds["wtime"]
+        t = ds["t"].values
+        stime = np.diff(t, prepend = t[0])
+        ms_per_24hrs = (stime) / (wtime/(60*60*24))  # ms simulated per 24 hours
+        ax.plot(t - t[0], ms_per_24hrs, label = name)
+        
+    ax.legend()
+    ax.set_title("ms simulation time per 24hrs compute time")
+    ax.set_ylabel("ms / 24hr")
+    ax.set_xlabel("Sim time [s]")
+    ax.set_yscale("log")
+
     
 def plot_xy_grid(ds, ax):
 
@@ -780,7 +805,11 @@ def lineplot(
                     sep_R = region_ds[name].coords["R"][region_ds[name].metadata["ixseps1"]- region_ds[name].metadata["MXG"]]
                     xplot = region_ds[name].coords["R"] - sep_R
                     
-                data = region_ds[name][param]
+                if param in region_ds[name].data_vars:
+                    data = region_ds[name][param]
+                else: 
+                    data = np.zeros_like(region_ds[name]["Ne"])
+                    print(f"Warning: {param} not found!")
                 
 
                 if colors == None:
@@ -866,10 +895,11 @@ def camera_view(ax, loc, tokamak = "ST40"):
     ax.set_ylim(lims["y"])
     
     
-def plot_perp_heat_fluxes(ds, ax = None, loc = "omp_integral", 
+def plot_perp_heat_fluxes(ds, ax = None, loc = "omp", 
                           neutrals_only = False, 
                           ylim = (None,None),
-                          particle_fluxes = False):
+                          particle_fluxes = False,
+                          species = "d"):
     """
     Plots poloidal integrals of radial heat fluxes
     Plot is for LHS cell edges and then the outermost RHS cell edge is appended
@@ -1189,3 +1219,49 @@ def plot_2d_timeslices(ds, param, tinds,
     cbar = plt.colorbar(mappable = sm, cax=cax, label = param) # Similar to fig.colorbar(im, cax = cax)
         
     fig.subplots_adjust(wspace = 0)
+
+def plot2d(
+    toplot,
+    clean_guards = True,
+    ylim = (None, None),
+    xlim = (None, None),
+    title = "",
+    tight_layout = True,
+    cmap = "Spectral_r",
+    save_path = ""):
+
+    """
+    User friendly plot of a number of dataarrays in a row
+    Input: 
+        [dict(data = da, **kwargs)]
+    """
+
+    numplots = len(toplot)
+    fig, axes = plt.subplots(1, numplots, dpi = 150, figsize = (11/3*numplots,4))
+    if len(toplot) == 1: axes = [axes]
+
+    kwargs = {
+        "targets" : False, "cmap" : cmap, "antialias": True, 
+        "separatrix_kwargs" : dict(linewidth = 1, color = "white", linestyle = "-")}
+
+    for i, inputs in enumerate(toplot):
+        defaults = {"vmin" : None, "vmax" : None, "logscale" : True}
+        data = inputs.pop("data")
+        figtitle = inputs.pop("title") if "title" in inputs else data.name
+        settings = {**defaults, **inputs, **kwargs}    
+        if clean_guards == True: data = data.hermesm.clean_guards() 
+
+        data.bout.polygon(ax = axes[i], **settings)
+        axes[i].set_title(figtitle)
+
+    for ax in axes:
+
+        if ylim != (None, None): ax.set_ylim(ylim)
+        if xlim != (None, None): ax.set_xlim(xlim)
+
+    fig.suptitle(title)
+    if tight_layout is True: fig.tight_layout(w_pad = -2)
+
+    if save_path != "":
+        plt.savefig(save_path)
+    

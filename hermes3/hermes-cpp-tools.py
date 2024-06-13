@@ -66,6 +66,20 @@ if (gx == 3) {
               output << std::setw(10) << nu_12(ix,iy,iz) << "\t" << nu(ix, iy, iz) << "\n";
             }
 
+###################### Options objects
+####### Iterate through children of options:
+
+const auto& colls = species["collision_frequencies"].getChildren();
+
+    for (const auto& coll : colls) {
+      output << coll.second.name() << std::endl;   # endline
+    }
+
+####### Print all options:
+
+output << toString(state["species"]);
+
+###################### TYPES
 
 """
 peter.hill
