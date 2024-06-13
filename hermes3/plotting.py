@@ -707,6 +707,7 @@ def lineplot(
     dpi = 120,
     clean_guards = True,
     logscale = True,
+    save_name = "",
     ):
     
     """
@@ -816,6 +817,8 @@ def lineplot(
             legend_items.append(mpl.lines.Line2D([0], [0], color=colors[j], lw=2, ls = ls))
             
         fig.legend(legend_items, cases.keys(), ncol = len(cases), loc = "upper center", bbox_to_anchor=(0.5,0.15))
+        if save_name != "":
+            fig.savefig(f"{save_name}.png", bbox_inches="tight", pad_inches=0.2)
         # fig.tight_layout()
         
 def create_norm(logscale, norm, vmin, vmax):
