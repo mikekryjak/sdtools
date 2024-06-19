@@ -14,16 +14,17 @@ import time
 parser = argparse.ArgumentParser(description = "Run case")
 parser.add_argument("casepath", type=str, help = "Case to run")
 parser.add_argument("-b", type=str, help = "Branch (build folder name)")
-parser.add_argument("-c", type=str, help = "Number of cores")
-parser.add_argument("-N", type=str, help = "Number of nodes")
-parser.add_argument("-t", type=str, help = "Time in hh:mm:ss")
+parser.add_argument("-c", type=str, help = "Number of cores", default = "40")
+parser.add_argument("-N", type=str, help = "Number of nodes", default = "2")
+parser.add_argument("-t", type=str, help = "Time in hh:mm:ss", default = "3:00:00")
 parser.add_argument("-restart", action="store_true", help = "Restart?")
 parser.add_argument("-append", action="store_true", help = "Append?")
+parser.add_argument("-bout", action="store_true", help = "Run BOUT++ instead of Hermes-3?")
 
 
 args = parser.parse_args()
 
-if args.b == None:
+if args.b == None and args.bout is False:
     print("Please specify branch with --b <branch_name>")
     quit()
     
@@ -54,6 +55,11 @@ cores_per_node = int(int(args.c)/nodes)
 partition = "nodes"
 time = args.t
 
+if args.bout:
+    runcommand = f"mpirun -n {nodes*cores_per_node} /users/mjk557/scratch/BOUT-7152948/BOUT-dev/build/examples/hasegawa-wakatani-3d/hw3d -d {abscasepath} {restartappend}"
+else:
+    runcommand = f"mpirun -n {nodes*cores_per_node} /users/mjk557/scratch/hermes-3/{args.b}/hermes-3 -d {abscasepath} {restartappend}"
+
 slurmcommand = \
 f"""#!/bin/bash 
 #SBATCH -J {jobname}
@@ -61,14 +67,15 @@ f"""#!/bin/bash
 #SBATCH --tasks-per-node={cores_per_node}
 #SBATCH -p {partition}
 #SBATCH --time={time}
-#SBATCH -o /mnt/lustre/users/mjk557/cases/slurmlogs/{jobname}.out
-#SBATCH -e /mnt/lustre/users/mjk557/cases/slurmlogs/{jobname}.err
-#SBATCH --account=phys-bout-2019         # Project account
-#SBATCH --mail-type=BEGIN,END,FAIL               # Mail events (NONE, BEGIN, END, FAIL, ALL)
+#SBATCH --mem=16G                       # Total memory to request
+#SBATCH -o /users/mjk557/scratch/slurmlogs/{jobname}.out
+#SBATCH -e /users/mjk557/scratch/slurmlogs/{jobname}.err
+#SBATCH --account=pet-bout-2019         # Project account
+#SBATCH --mail-type=FAIL               # Mail events (NONE, BEGIN, END, FAIL, ALL)
 #SBATCH --mail-user=mike.kryjak@york.ac.uk        # Where to send mail
 
-source /mnt/lustre/users/mjk557/bout.env
-mpirun -n {nodes*cores_per_node} /mnt/lustre/users/mjk557/hermes-3/{args.b}/hermes-3 -d {abscasepath} {restartappend}
+source /users/mjk557/scratch/bout-build-scripts/bout.env
+{runcommand}
 
 """
 
