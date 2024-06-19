@@ -601,7 +601,7 @@ def plot_selection(ds, selection, dpi = 100, rz_only = False, show_selection = T
 
     
 
-def plot_performance(cs):
+def plot_performance(cs, logscale = True):
     """
     Do a plot showing simulation speed in ms sim time / 24hrs compute time
     Takes a dictionary of datasets
@@ -623,7 +623,7 @@ def plot_performance(cs):
     ax.set_title("ms simulation time per 24hrs compute time")
     ax.set_ylabel("ms / 24hr")
     ax.set_xlabel("Sim time [s]")
-    ax.set_yscale("log")
+    if logscale: ax.set_yscale("log")
 
     
 def plot_xy_grid(ds, ax):
@@ -1262,3 +1262,84 @@ def plot2d(
     if save_path != "":
         plt.savefig(save_path)
     
+
+def plot_cvode_performance(ds):
+    """
+    Print useful CVODE stats
+    """
+
+    nx = 4
+    ny = 2
+    fig, axes = plt.subplots(ny, nx, figsize = (3*nx, 3*ny))
+
+    def get_noncum_cvode(data):
+        data = np.diff(data.values, prepend = data.values[0])
+        for i, x in enumerate(data):
+            if x < 0:
+                data[i] = data[i+1]
+        return data
+
+    toplot = {}
+    t = ds["t"].values * 1e3
+
+    d = {}
+    laststep = ds["cvode_last_step"]
+    nfevals = get_noncum_cvode(ds["cvode_nfevals"])
+    npevals = get_noncum_cvode(ds["cvode_npevals"])
+    nliters = get_noncum_cvode(ds["cvode_nliters"])
+    nniters = get_noncum_cvode(ds["cvode_nniters"])
+    nnfails = get_noncum_cvode(ds["cvode_nonlin_fails"])
+    nfails = get_noncum_cvode(ds["cvode_num_fails"])
+    slims = get_noncum_cvode(ds["cvode_stab_lims"])
+    lorder = ds["cvode_last_order"]
+
+    if "wtime" in ds:
+        wtime = ds["wtime"]
+        stime = np.diff(t, prepend = t[0]*0.99)
+        ms_per_24hrs = (stime) / (wtime/(60*60*24))  # ms simulated per 24 hours
+    else:
+        print("WARNING: wtime not found in dataset, ensure you use the right xBOUT version")
+        ms_per_24hrs = 0
+
+    ax = axes[0,0 ]
+    ax.plot(t, laststep)
+    ax.set_yscale("log")
+    ax.set_title("Last timestep")
+
+    ax = axes[0,1]
+    ax.plot(t[1:], lorder[1:])
+    ax.set_title("Last order")
+
+    ax = axes[0,2]
+    ax.plot(t, nfevals)
+    ax.set_title("Function evals")
+
+    ax = axes[0,3]
+    ax.plot(t, npevals/nfevals)
+    ax.set_title("Precon / function evals")
+
+    ax = axes[1,0]
+    ax.plot(t[1:], ms_per_24hrs[1:])
+    ax.set_title("ms stime / 24hrs wtime")
+
+    ax = axes[1,1]
+    ax.plot(t, nniters, label = "Nonlinear")
+    ax.plot(t, nliters, label = "Linear")
+    ax.set_title("Iterations")
+    ax.legend()
+
+    ax = axes[1,2]
+    ax.plot(t, nliters/nniters)
+    ax.set_title("Linear/nonlinear ratio")
+
+    ax = axes[1,3]
+    ax.plot(t, nnfails, label = "Nonlinear")
+    ax.plot(t, nfails, label = "Linear")
+    ax.set_title("Fails")
+    ax.legend()
+
+    for ax in axes.flatten():
+        ax.set_xlabel("t")
+
+
+    fig.tight_layout()
