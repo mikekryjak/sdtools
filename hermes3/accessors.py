@@ -229,67 +229,73 @@ def _select_region(ds, name):
             -MXG,
             np.r_[slice(MYG, ny_inner + MYG * 1 ), slice(ny_inner + MYG * 3, nyg - MYG)],
         )
+    
+    if MXG == 0:
+        target_xslice = slice(None, None)
+    else:
+        target_xslice = slice(MXG, -MXG)
 
-    slices["inner_lower_target"] = (slice(MXG, -MXG), slice(MYG, MYG + 1))
+    slices["inner_lower_target"] = (target_xslice, slice(MYG, MYG + 1))
+    
     slices["inner_upper_target"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG - 1, ny_inner + MYG),
     )
     slices["outer_upper_target"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG * 3, ny_inner + MYG * 3 + 1),
     )
-    slices["outer_lower_target"] = (slice(MXG, -MXG), slice(nyg - MYG - 1, nyg - MYG))
+    slices["outer_lower_target"] = (target_xslice, slice(nyg - MYG - 1, nyg - MYG))
 
-    slices["inner_lower_target_inner_guards"] = (slice(MXG, -MXG), slice(MYG - 1, MYG))
+    slices["inner_lower_target_inner_guards"] = (target_xslice, slice(MYG - 1, MYG))
     slices["inner_upper_target_inner_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG, ny_inner + MYG + 1),
     )
     slices["outer_upper_target_inner_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG * 3 - 1, ny_inner + MYG * 3),
     )
     slices["outer_lower_target_inner_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(nyg - MYG, nyg - MYG + 1),
     )
     
-    slices["inner_lower_target_guards"] = (slice(MXG, -MXG), slice(0, MYG))
+    slices["inner_lower_target_guards"] = (target_xslice, slice(0, MYG))
     slices["inner_upper_target_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG, ny_inner + MYG * 2),
     )
     slices["outer_upper_target_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG * 2, ny_inner + MYG * 3),
     )
     slices["outer_lower_target_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(nyg - MYG, nyg),
     )
     
-    slices["inner_lower"] = (slice(MXG, -MXG), slice(MYG, j1_1g+1))
+    slices["inner_lower"] = (target_xslice, slice(MYG, j1_1g+1))
     slices["inner_upper"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(j2_1g + 1, ny_inner + MYG),
     )
     slices["outer_upper"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG * 3, j1_2g+1),
     )
-    slices["outer_lower"] = (slice(MXG, -MXG), slice(j2_2g+1, nyg - MYG))
+    slices["outer_lower"] = (target_xslice, slice(j2_2g+1, nyg - MYG))
     
-    slices["inner_lower_noguards"] = (slice(MYG, -MYG), slice(MYG, j1_1g+1))
+    slices["inner_lower_noguards"] = (target_xslice, slice(MYG, j1_1g+1))
     slices["inner_upper_noguards"] = (
-        slice(MYG, -MYG),
+        target_xslice,
         slice(j2_1g + 1, ny_inner + MYG),
     )
     slices["outer_upper_noguards"] = (
-        slice(MYG, -MYG),
+        target_xslice,
         slice(ny_inner + MYG * 3, j1_2g+1),
     )
-    slices["outer_lower_noguards"] = (slice(MYG, -MYG), slice(j2_2g+1, nyg - MYG))
+    slices["outer_lower_noguards"] = (target_xslice, slice(j2_2g+1, nyg - MYG))
 
     slices["inner_lower_pfr"] = (slice(0, ixseps1), slice(None, j1_1g))
     slices["outer_lower_pfr"] = (slice(0, ixseps1), slice(j2_2g + 1, nyg))
