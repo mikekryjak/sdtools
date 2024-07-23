@@ -729,6 +729,7 @@ def lineplot(
     ylims = (None,None),
     xlims = (None,None),
     markersize = 2,
+    lw = 2,
     dpi = 120,
     clean_guards = True,
     logscale = True,
@@ -741,7 +742,7 @@ def lineplot(
     
     marker = "o"
     ms = markersize
-    lw = 2.5
+    lw = lw
     set_ylims = dict()
     set_yscales = dict()
     
@@ -1228,7 +1229,9 @@ def plot2d(
     title = "",
     tight_layout = True,
     cmap = "Spectral_r",
-    save_path = ""):
+    save_path = "",
+    w_pad = -2,
+    **kwargs):
 
     """
     User friendly plot of a number of dataarrays in a row
@@ -1240,14 +1243,23 @@ def plot2d(
     fig, axes = plt.subplots(1, numplots, dpi = 150, figsize = (11/3*numplots,4))
     if len(toplot) == 1: axes = [axes]
 
-    kwargs = {
+    default_kwargs = {
         "targets" : False, "cmap" : cmap, "antialias": True, 
         "separatrix_kwargs" : dict(linewidth = 1, color = "white", linestyle = "-")}
+    
+    kwargs = {**default_kwargs, **kwargs}
 
     for i, inputs in enumerate(toplot):
         defaults = {"vmin" : None, "vmax" : None, "logscale" : True}
         data = inputs.pop("data")
-        figtitle = inputs.pop("title") if "title" in inputs else data.name
+        
+        if "title" in inputs:
+            figtitle = inputs.pop("title")
+        elif "name" in data.attrs:
+            figtitle = data.name
+        else:
+            figtitle = ""
+            print("WARNING: Passed dataarray with no name or title")
         settings = {**defaults, **inputs, **kwargs}    
         if clean_guards == True: data = data.hermesm.clean_guards() 
 
@@ -1260,7 +1272,7 @@ def plot2d(
         if xlim != (None, None): ax.set_xlim(xlim)
 
     fig.suptitle(title)
-    if tight_layout is True: fig.tight_layout(w_pad = -2)
+    if tight_layout is True: fig.tight_layout(w_pad = w_pad)
 
     if save_path != "":
         plt.savefig(save_path)
@@ -1337,7 +1349,7 @@ def plot_cvode_performance(ds):
 
     ax = axes[1,3]
     ax.plot(t, nnfails, label = "Nonlinear")
-    ax.plot(t, nfails, label = "Linear")
+    ax.plot(t, nfails, label = "Local error")
     ax.set_title("Fails")
     ax.legend()
 
