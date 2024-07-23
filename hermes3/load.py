@@ -75,7 +75,18 @@ class Load:
                 unnormalise = True,
                 use_squash = False,
                 force_squash = False,
-                use_xhermes = True):
+                use_xhermes = True,
+                
+                **xbout_kwargs):
+        
+        default_xbout_kwargs = dict(
+            keep_xboundaries = True,
+            keep_yboundaries = True,
+            info = False,
+            cache = False)
+        
+        xbout_kwargs = {**default_xbout_kwargs, **xbout_kwargs}
+
 
         if verbose:
             print(f"- Reading case {os.path.split(casepath)[-1]}")
@@ -94,22 +105,16 @@ class Load:
                         datapath = loadfilepath, 
                         inputfilepath = inputfilepath, 
                         gridfilepath = gridfilepath,
-                        info = False,
-                        cache = True,
                         geometry = "toroidal",
-                        keep_xboundaries=True,
-                        keep_yboundaries=True,
+                        **xbout_kwargs
                         )
         else:
             ds = xbout.load.open_boutdataset(
                             datapath = loadfilepath, 
                             inputfilepath = inputfilepath, 
                             gridfilepath = gridfilepath,
-                            info = False,
-                            cache = True,
                             geometry = "toroidal",
-                            keep_xboundaries=True,
-                            keep_yboundaries=True,
+                            **xbout_kwargs
                             )
         
         if squeeze:
@@ -161,6 +166,7 @@ class Case:
         else:
             self.ds = self.ds.hermes.extract_1d_tokamak_geometry()
             if guard_replace:
+                print("Replacing guard cells")
                 self.ds = self.ds.hermes.guard_replace_1d()
             # self.clean_guards()
             
