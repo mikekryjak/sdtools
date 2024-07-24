@@ -165,7 +165,9 @@ class Case:
         elif use_xhermes is True and unnormalise is True:
             print("Unnormalising with xHermes")
             
-        self.derive_vars()
+        # xhermes now does the derivations
+        if use_xhermes is False:
+            self.derive_vars()
         
         if self.is_2d is True:
             self.extract_2d_tokamak_geometry()
@@ -258,7 +260,7 @@ class Case:
         #         "long_name": "Neutral temperature (d)",
         #         })
 
-        if "Pd+" in ds.data_vars:
+        if "Pd+" in ds.data_vars and ds["Td+"] not in ds.data_vars:
             ds["Td+"] = ds["Pd+"] / (ds["Nd+"] * q_e)
             ds["Td+"].attrs.update(
                {
