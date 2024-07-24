@@ -34,7 +34,8 @@ class Load:
                 use_xhermes = True, 
                 use_squash = False,
                 force_squash = False,
-                verbose = True):
+                verbose = True,
+                unnormalise = True):
         
         loadfilepath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
@@ -50,7 +51,8 @@ class Load:
                 inputfilepath = inputfilepath, 
                 info = False,
                 keep_yboundaries=True,
-                cache = False
+                cache = False,
+                unnormalise = unnormalise
                 )
         else:
 
@@ -64,7 +66,13 @@ class Load:
 
         if squeeze is True: ds = ds.squeeze(drop = True)
 
-        return Case(ds, casepath, unnormalise_geom = True, guard_replace = guard_replace, use_xhermes = use_xhermes)
+        if use_xhermes:
+            unnormalise_in_sdtools = False
+        else:
+            unnormalise_in_sdtools = unnormalise
+            
+        return Case(ds, casepath, unnormalise_geom = True, unnormalise = unnormalise_in_sdtools,
+                    guard_replace = guard_replace, use_xhermes = use_xhermes)
 
     def case_2D(
                 casepath,
@@ -152,9 +160,9 @@ class Case:
 
         if unnormalise is True and use_xhermes is False:
             self.unnormalise(unnormalise_geom)
-        elif use_xhermes is False:
+        elif use_xhermes is False or unnormalise is False:
             print("Skipping unnormalisation")
-        elif use_xhermes is True:
+        elif use_xhermes is True and unnormalise is True:
             print("Unnormalising with xHermes")
             
         self.derive_vars()
