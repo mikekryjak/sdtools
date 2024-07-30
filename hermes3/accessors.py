@@ -59,6 +59,9 @@ class HermesDatasetAccessor(BoutDatasetAccessor):
     
     def select_custom_sol_ring(self, i, region):
         return _select_custom_sol_ring(self.data, i, region)
+    
+    def get_cvode_metrics(self):
+        self.data = _get_cvode_metrics(self.data)
 
     def get_floors(self):
         """
@@ -450,3 +453,37 @@ def _select_custom_sol_ring(ds, i, region):
             raise Exception(f"Region {region} not implemented")
     
     return ds.isel(x = selection[0], theta = selection[1])
+
+
+def _get_cvode_metrics(ds):
+    """
+    Calculate CVODE performance metrics in a more useful format  
+    - ms_per_24hrs : ms plasma time per 24hrs wall clock time
+    - nonlin_fails : number of nonlinear solver failures per timestep
+    - lin_per_nonlin : number of linear solver iterations per nonlinear solver iteration
+    - precon_per_function : number of preconditioner evaluations per function evaluation  
+    """
+    
+    def get_noncum_cvode(data):
+        data = np.diff(data.values, prepend = data.values[0])
+        for i, x in enumerate(data):
+            if x < 0:
+                data[i] = data[i+1]
+        return data
+
+    m = ds.metadata
+    # data = ds.hermesm.select_region("outer_midplane_a")["Ne"].isel(x=10)
+    wtime = ds["wtime"]
+    t = ds["t"]
+    stime = np.diff(t, prepend = t[0])
+    ds["ms_per_24hrs"] = (stime * 1000) / (wtime/(60*60*24))  # ms simulated per 24 hours
+    ds["nonlin_fails"] = get_noncum_cvode(ds["cvode_nonlin_fails"])
+    ds["lin_per_nonlin"] = get_noncum_cvode(ds["cvode_nliters"]) / get_noncum_cvode(ds["cvode_nniters"])
+    ds["precon_per_function"] = get_noncum_cvode(ds["cvode_npevals"]) / get_noncum_cvode(ds["cvode_nfevals"])
+    
+    ds["ms_per_24hrs"].attrs["units"] = "ms plasma time / 24hr wall time"
+    ds["nonlin_fails"].attrs["units"] = "nonlinear fails per step"
+    ds["lin_per_nonlin"].attrs["units"] = "linear its / nonlinear it"
+    ds["precon_per_function"].attrs["units"] = "precon evals / function evals"
+    
+    return ds
