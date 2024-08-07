@@ -1285,9 +1285,9 @@ def plot_cvode_performance(cs):
     
     for name in cs:
         if "ms_per_24hrs" not in cs[name].ds:
-            cs[name].ds.get_cvode_metrics()
+            cs[name].ds.hermesm.get_cvode_metrics()
         
-    for param in ["ms_per_24hrs", "nonlin_fails", "lin_per_nonlin", "precon_per_function"]:
+    for param in ["ms_per_24hrs", "nonlin_fails", "lin_per_nonlin", "precon_per_function", "cvode_last_step"]:
         scale = "log"
         fig, ax = plt.subplots(figsize=(5,4), dpi = 150)
         logscale = True
@@ -1296,7 +1296,7 @@ def plot_cvode_performance(cs):
             ax.plot(ds["t"] - ds["t"][0], ds[param], label = name)
         ax.legend()
         ax.set_title(param)
-        ax.set_ylabel("ms plasma time / 24hr wall time")
+        # ax.set_ylabel("ms plasma time / 24hr wall time")
         ax.set_xlabel("Sim time [s]")    
 
 def plot_cvode_performance_single(ds):
