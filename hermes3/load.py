@@ -1145,6 +1145,7 @@ class Case:
         
     
     def extract_1d_tokamak_geometry(self):
+        print("Extracting 1D geometry with sdtools")
         ds = self.ds
         meta = self.ds.metadata
 
