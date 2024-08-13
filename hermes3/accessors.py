@@ -477,13 +477,19 @@ def _get_cvode_metrics(ds):
     t = ds["t"]
     stime = np.diff(t, prepend = t[0])
     ds["ms_per_24hrs"] = (stime * 1000) / (wtime/(60*60*24))  # ms simulated per 24 hours
-    ds["nonlin_fails"] = get_noncum_cvode(ds["cvode_nonlin_fails"])
-    ds["lin_per_nonlin"] = get_noncum_cvode(ds["cvode_nliters"]) / get_noncum_cvode(ds["cvode_nniters"])
-    ds["precon_per_function"] = get_noncum_cvode(ds["cvode_npevals"]) / get_noncum_cvode(ds["cvode_nfevals"])
-    
     ds["ms_per_24hrs"].attrs["units"] = "ms plasma time / 24hr wall time"
-    ds["nonlin_fails"].attrs["units"] = "nonlinear fails per step"
-    ds["lin_per_nonlin"].attrs["units"] = "linear its / nonlinear it"
-    ds["precon_per_function"].attrs["units"] = "precon evals / function evals"
+    
+    if "cvode_nonlin_fails" in ds:
+        ds["nonlin_fails"] = get_noncum_cvode(ds["cvode_nonlin_fails"])
+        ds["lin_per_nonlin"] = get_noncum_cvode(ds["cvode_nliters"]) / get_noncum_cvode(ds["cvode_nniters"])
+        ds["precon_per_function"] = get_noncum_cvode(ds["cvode_npevals"]) / get_noncum_cvode(ds["cvode_nfevals"])
+        ds["nonlin_fails"].attrs["units"] = "nonlinear fails per step"
+        ds["lin_per_nonlin"].attrs["units"] = "linear its / nonlinear it"
+        ds["precon_per_function"].attrs["units"] = "precon evals / function evals"
+    else:
+        print("CVODE diagnostic variables not found in the dataset! Computing runtime speed only")
+            
+    
+
     
     return ds
