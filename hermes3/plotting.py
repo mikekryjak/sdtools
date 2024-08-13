@@ -1293,7 +1293,10 @@ def plot_cvode_performance(cs):
         logscale = True
         for name in cs:
             ds = cs[name].ds
-            ax.plot(ds["t"] - ds["t"][0], ds[param], label = name)
+            if param in ds:
+                ax.plot(ds["t"] - ds["t"][0], ds[param], label = name)
+            else:
+                print(f"{param} not found in {name}")
         ax.legend()
         ax.set_title(param)
         # ax.set_ylabel("ms plasma time / 24hr wall time")
