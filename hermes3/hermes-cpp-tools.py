@@ -71,6 +71,7 @@ if (gx == 3) {
         output << "\n*****************************\n";
         output << "phisheath = " << phisheath << "\n";
         output << "phi_wall = " << phi_wall << "\n";
+        output << "Me = " << Me << "\n";
         output << "gamma_e = " << gamma_e << "\n";
         output << "tesheath = " << tesheath << "\n";
         output << "nesheath = " << nesheath << "\n";
@@ -78,7 +79,7 @@ if (gx == 3) {
         output << "q_e = " << q << "\n";
         output << "da = " << da << "\n";
         output << "dv = " << dv << "\n";
-        output << "hflux_e = " << power << "\n";
+        output << "q = " << q << "\n";
         output << "q * da / dv = " << q * da / dv << "\n";
         output << "*****************************\n";
 
