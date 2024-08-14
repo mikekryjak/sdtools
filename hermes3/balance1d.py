@@ -34,6 +34,9 @@ class Balance1D():
     def get_terms(self):
         """
         Extract individual balance terms based on available diagnostics
+        Each term in pbal or hbal is in [s^-1] or [W]. All pressure sources
+        have been converted to energy sources and everything has been integrated.
+        This may cause confusion because the names of the variables are unchanged.
         """
         ds = self.ds
         dom = self.dom
@@ -61,7 +64,8 @@ class Balance1D():
                 hbal[param] = integral(dom[param])*1e-6   # MW
 
                 if param.startswith("P"):
-                    hbal[param] *= 3/2    # Convert from pressure to energy
+                    newname = "E" + param[1:]
+                    hbal[newname] = hbal[param] * 3/2    # Convert from pressure to energy
                     
                 if param == "Rar":
                     hbal[param] = -1 * abs(hbal[param])   # Correct inconsistency in sign convention
@@ -100,7 +104,7 @@ class Balance1D():
         ## Heat balance
         hbal = self.hbal
         hbalsum = {}
-        hbalsum["sources_sum"] = hbal["Pd+_src"] + hbal["Pe_src"] + hbal["Pd_src"] 
+        hbalsum["sources_sum"] = hbal["Ed+_src"] + hbal["Ee_src"] + hbal["Ed_src"] 
         hbalsum["R_hydr_sum"] = hbal["Rd+_ex"] + hbal["Rd+_rec"]
         hbalsum["R_imp_sum"] = hbal["Rar"] if "Rar" in ds else np.zeros_like(hbal["Pd+_src"])
         hbalsum["R_sum"] = hbalsum["R_hydr_sum"] + hbalsum["R_imp_sum"]
@@ -207,12 +211,27 @@ class Balance1D():
         pfi_sheath = -1 * visheath * nisheath * dasheath   # [s^-1] ion particle flux into domain 
         pfe_sheath = -1 * vesheath * nesheath * dasheath   # [s^-1] electron particle flux into domain 
 
-        hfi_sheath = pfi_sheath * (self.gamma_i * tisheath*qe + 0.5*Mi*cssheath**2) * 1e-6   # [MW] electron heat flux into domain
-        hfe_sheath = pfe_sheath * (self.gamma_e * tesheath*qe + 0.5*Me*vesheath**2) * 1e-6   # [MW] electron heat flux into domain
+        # hfi_sheath = pfi_sheath * (self.gamma_i * tisheath*qe + 0.5*Mi*cssheath**2) * 1e-6   # [MW] electron heat flux into domain
+        # hfe_sheath = pfe_sheath * (self.gamma_e * tesheath*qe + 0.5*Me*vesheath**2) * 1e-6   # [MW] electron heat flux into domain
+        
+        hfi_sheath = pfi_sheath * self.gamma_i * tisheath*qe * 1e-6   # [MW] electron heat flux into domain
+        hfe_sheath = pfe_sheath * self.gamma_e * tesheath*qe * 1e-6   # [MW] electron heat flux into domain
         
         self.pbal["Sd+_sheath"] = pfi_sheath
         self.hbal["Ee_sheath"] = hfe_sheath 
         self.hbal["Ed+_sheath"] = hfi_sheath
+        
+        self.sheath = dict(
+            da = dasheath,
+            vi = visheath, 
+            ve = vesheath, 
+            ne = nesheath, 
+            ni = nisheath, 
+            te = tesheath, 
+            ti = tisheath, 
+            cs = cssheath, 
+            ion_sum = ion_sum, 
+            phi = phisheath)
         
     def plot_heat_balance(self):
         fig, ax = plt.subplots()
@@ -242,6 +261,125 @@ class Balance1D():
         ax.legend(loc = "upper left", bbox_to_anchor = (1,1))
         ax.set_ylabel("[MW]")
         ax.set_xlabel("Time [s]")
+        
+    def print_balances2(self):
+        """
+        Print in a way to compare Ben's balance script
+        """
+        pbal = self.pbal
+        hbal = self.hbal
+        sheath = self.sheath
+        dom = self.dom
+        
+        ## If more than one time slice, select final one
+        if len(pbal) > 0:
+            for param in pbal:
+                pbal[param] = pbal[param][-1]
+            for param in hbal:
+                hbal[param] = hbal[param][-1]
+            for param in sheath:
+                if param not in ["da"]:
+                    sheath[param] = sheath[param][-1]
+
+        def integral(data):
+            return (data * self.dom["dv"]).sum("pos").values
+        
+        if "t" in dom.dims: dom = dom.isel(t=-1)
+        total_volume = dom['dv'].sum()
+        area_sheath = self.get_target_value(dom['da'])
+        
+        print("\n\n")
+        
+        print("Simulation geometry")
+        print(f"    Volume: {total_volume} m^3")
+        print(f"    Area: {area_sheath} m^2")
+        print(f"    Volume / area: {total_volume / area_sheath} m")
+        print("")
+        
+        
+        ###########################################################
+        # Particle balance
+        
+        
+        particle_source = self.pbal["Sd+_src"]
+        ionization = self.pbal["Sd+_iz"]
+        recombination = self.pbal["Sd+_rec"]
+        total_ion_source = integral(dom["SNd+"])
+        feedback_source = self.pbal["Sd+_feedback"]
+
+        print(f"Total ion particle source:  {total_ion_source}  (check: {particle_source + ionization + recombination + feedback_source}")
+        print(f"  |- External ion source:   {particle_source}")
+        print(f"  |- Feedback source:       {feedback_source}")
+        print(f"  |- Ionization source:     {ionization}")
+        print(f"  |- Recombination source:  {recombination}")
+        print("")
+        
+        
+        
+        total_neutral_source = integral(dom["SNd"])
+        neutral_recycle = integral(dom["Sd_target_recycle"])
+        neutral_source = integral(dom["Sd_src"])
+
+        print(f"Total neutral particle source: {total_neutral_source} (check: {neutral_source - ionization - recombination + neutral_recycle})")
+        print(f"  |- External neutral source:  {neutral_source}")
+        print(f"  |- Target recycling:         {neutral_recycle}")
+        print(f"  |- Ionization source:        {-ionization}")
+        print(f"  |- Recombination source:     {-recombination}")
+        print("")
+        
+        
+        print(f"Sheath")
+        print(f"  Density:     {sheath['ni']} m^-3")
+        print(f"  Sound speed: {sheath['cs']} m/s")
+        print(f"  Flow speed:  {sheath['vi']} m/s")
+        print(f"  Ion sink:    {pbal['Sd+_sheath']} s^-1")
+        print(f"  Neutral recycling: {neutral_recycle} s^-1")
+        print("")
+        
+        
+        ###########################################################
+        
+        ## Pressure sources have already been converted to energy, no need for 3/2 here
+        ion_heating = hbal["Ed+_src"]
+        electron_heating = hbal["Ee_src"]
+
+        print(f"Total input power:     {(ion_heating + electron_heating) * 1e-6} MW")
+        print(f"  |- Ion heating:      {ion_heating * 1e-6} MW")
+        print(f"  |- Electron heating: {electron_heating * 1e-6} MW")
+        print("")
+        
+        recycle_heating = hbal["Ed_target_recycle"]
+        ion_energy_flux = hbal["Ed+_sheath"]
+        electron_energy_flux = hbal["Ee_sheath"]
+        
+        ion_convection = 2.5 * sheath["ni"] * sheath["ti"] * sheath["vi"] * sheath["da"]
+        ion_kinetic = 0.5 * sheath["vi"] * self.Mi * sheath["ni"] * sheath["da"]
+        
+        electron_convection = 2.5 * sheath["ne"] * sheath["te"] * sheath["ve"] * sheath["da"]
+        electron_kinetic = 0.5 * sheath["ve"] * self.Me * sheath["ne"] * sheath["da"]
+        
+        R_rec = hbal["Rd+_rec"]
+        R_ex = hbal["Rd+_ex"]
+
+        print(f"Total power loss: {(ion_energy_flux + electron_energy_flux - recycle_heating - R_ex - R_rec) * 1e-6} MW")
+        print(f"  |- Ions:              {ion_energy_flux * 1e-6} MW")
+        print(f"      |- Convection          {ion_convection * 1e-6} MW")
+        print(f"      |- Kinetic energy      {ion_kinetic * 1e-6} MW")
+        print(f"      |- Conduction          {(ion_energy_flux - ion_kinetic - ion_convection) * 1e-6} MW")
+        print(f"  |- Electrons:         {electron_energy_flux * 1e-6} MW")
+        print(f"      |- Convection          {electron_convection * 1e-6} MW")
+        print(f"      |- Kinetic energy      {electron_kinetic * 1e-6} MW")
+        print(f"      |- Conduction          {(electron_energy_flux - electron_kinetic - electron_convection) * 1e-6} MW")
+        print(f"  |- Recycled neutrals: {-recycle_heating * 1e-6} MW")
+        print(f"  |- Ionization:        {-R_ex * 1e-6} MW")
+        print(f"  |- Recombination:     {-R_rec * 1e-6} MW")
+        print("")
+
+
+
+
+        
+        
         
     def print_balances(self):
         pbal = self.pbal
