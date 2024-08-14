@@ -34,7 +34,8 @@ class Load:
                 use_xhermes = True, 
                 use_squash = False,
                 force_squash = False,
-                verbose = True):
+                verbose = True,
+                unnormalise = True):
         
         loadfilepath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
@@ -50,7 +51,8 @@ class Load:
                 inputfilepath = inputfilepath, 
                 info = False,
                 keep_yboundaries=True,
-                cache = False
+                cache = False,
+                unnormalise = unnormalise
                 )
         else:
 
@@ -64,7 +66,13 @@ class Load:
 
         if squeeze is True: ds = ds.squeeze(drop = True)
 
-        return Case(ds, casepath, unnormalise_geom = True, guard_replace = guard_replace, use_xhermes = use_xhermes)
+        if use_xhermes:
+            unnormalise_in_sdtools = False
+        else:
+            unnormalise_in_sdtools = unnormalise
+            
+        return Case(ds, casepath, unnormalise_geom = True, unnormalise = unnormalise_in_sdtools,
+                    guard_replace = guard_replace, use_xhermes = use_xhermes)
 
     def case_2D(
                 casepath,
@@ -75,7 +83,18 @@ class Load:
                 unnormalise = True,
                 use_squash = False,
                 force_squash = False,
-                use_xhermes = True):
+                use_xhermes = True,
+                
+                **xbout_kwargs):
+        
+        default_xbout_kwargs = dict(
+            keep_xboundaries = True,
+            keep_yboundaries = True,
+            info = False,
+            cache = False)
+        
+        xbout_kwargs = {**default_xbout_kwargs, **xbout_kwargs}
+
 
         if verbose:
             print(f"- Reading case {os.path.split(casepath)[-1]}")
@@ -94,22 +113,16 @@ class Load:
                         datapath = loadfilepath, 
                         inputfilepath = inputfilepath, 
                         gridfilepath = gridfilepath,
-                        info = False,
-                        cache = True,
                         geometry = "toroidal",
-                        keep_xboundaries=True,
-                        keep_yboundaries=True,
+                        **xbout_kwargs
                         )
         else:
             ds = xbout.load.open_boutdataset(
                             datapath = loadfilepath, 
                             inputfilepath = inputfilepath, 
                             gridfilepath = gridfilepath,
-                            info = False,
-                            cache = True,
                             geometry = "toroidal",
-                            keep_xboundaries=True,
-                            keep_yboundaries=True,
+                            **xbout_kwargs
                             )
         
         if squeeze:
@@ -147,12 +160,14 @@ class Case:
 
         if unnormalise is True and use_xhermes is False:
             self.unnormalise(unnormalise_geom)
-        elif use_xhermes is False:
+        elif use_xhermes is False or unnormalise is False:
             print("Skipping unnormalisation")
-        elif use_xhermes is True:
+        elif use_xhermes is True and unnormalise is True:
             print("Unnormalising with xHermes")
             
-        self.derive_vars()
+        # xhermes now does the derivations
+        if use_xhermes is False:
+            self.derive_vars()
         
         if self.is_2d is True:
             self.extract_2d_tokamak_geometry()
@@ -161,6 +176,7 @@ class Case:
         else:
             self.ds = self.ds.hermes.extract_1d_tokamak_geometry()
             if guard_replace:
+                print("Replacing guard cells")
                 self.ds = self.ds.hermes.guard_replace_1d()
             # self.clean_guards()
             
@@ -244,7 +260,7 @@ class Case:
         #         "long_name": "Neutral temperature (d)",
         #         })
 
-        if "Pd+" in ds.data_vars:
+        if "Pd+" in ds.data_vars and ds["Td+"] not in ds.data_vars:
             ds["Td+"] = ds["Pd+"] / (ds["Nd+"] * q_e)
             ds["Td+"].attrs.update(
                {
@@ -1129,6 +1145,7 @@ class Case:
         
     
     def extract_1d_tokamak_geometry(self):
+        print("Extracting 1D geometry with sdtools")
         ds = self.ds
         meta = self.ds.metadata
 

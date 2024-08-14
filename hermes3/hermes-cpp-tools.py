@@ -66,6 +66,36 @@ if (gx == 3) {
               output << std::setw(10) << nu_12(ix,iy,iz) << "\t" << nu(ix, iy, iz) << "\n";
             }
 
+
+
+        output << "\n*****************************\n";
+        output << "phisheath = " << phisheath << "\n";
+        output << "phi_wall = " << phi_wall << "\n";
+        output << "Me = " << Me << "\n";
+        output << "gamma_e = " << gamma_e << "\n";
+        output << "tesheath = " << tesheath << "\n";
+        output << "nesheath = " << nesheath << "\n";
+        output << "vesheath = " << vesheath << "\n";
+        output << "q_e = " << q << "\n";
+        output << "da = " << da << "\n";
+        output << "dv = " << dv << "\n";
+        output << "q = " << q << "\n";
+        output << "q * da / dv = " << q * da / dv << "\n";
+        output << "*****************************\n";
+
+          output << "\n*****************************\n";
+          output << "gamma_i = " << gamma_i << "\n";
+          output << "tisheath = " << tisheath << "\n";
+          output << "nisheath = " << nisheath << "\n";
+          output << "visheath = " << visheath << "\n";
+          output << "q = " << q << "\n";
+          output << "da = " << da << "\n";
+          output << "dv = " << dv << "\n"; 
+          output << "hflux_i = " << hflux_i[i] << "\n";
+          output << "\n*****************************\n";
+
+
+
 ###################### Options objects
 ####### Iterate through children of options:
 

@@ -600,7 +600,7 @@ def plot_selection(ds, selection, dpi = 100, rz_only = False, show_selection = T
 
     
 
-def plot_performance(cs):
+def plot_performance(cs, logscale = True):
     """
     Do a plot showing simulation speed in ms sim time / 24hrs compute time
     Takes a dictionary of datasets
@@ -728,9 +728,11 @@ def lineplot(
     ylims = (None,None),
     xlims = (None,None),
     markersize = 2,
+    lw = 2,
     dpi = 120,
     clean_guards = True,
     logscale = True,
+    save_name = "",
     ):
     
     """
@@ -739,7 +741,7 @@ def lineplot(
     
     marker = "o"
     ms = markersize
-    lw = 2.5
+    lw = lw
     set_ylims = dict()
     set_yscales = dict()
     
@@ -845,6 +847,8 @@ def lineplot(
             legend_items.append(mpl.lines.Line2D([0], [0], color=colors[j], lw=2, ls = ls))
             
         fig.legend(legend_items, cases.keys(), ncol = len(cases), loc = "upper center", bbox_to_anchor=(0.5,0.15))
+        if save_name != "":
+            fig.savefig(f"{save_name}.png", bbox_inches="tight", pad_inches=0.2)
         # fig.tight_layout()
         
 def create_norm(logscale, norm, vmin, vmax):
@@ -1229,7 +1233,9 @@ def plot2d(
     scale = 1,
     grid = True,
     margins = (None, None),
-    save_path = ""):
+    save_path = "",
+    w_pad = -2,
+    **kwargs):
 
     """
     User friendly plot of a number of dataarrays in a row
@@ -1241,14 +1247,23 @@ def plot2d(
     fig, axes = plt.subplots(1, numplots, dpi = dpi/scale, figsize = (11/3*numplots*scale,4*scale))
     if len(toplot) == 1: axes = [axes]
 
-    kwargs = {
+    default_kwargs = {
         "targets" : False, "cmap" : cmap, "antialias": True, 
         "separatrix_kwargs" : dict(linewidth = 1, color = "white", linestyle = "-")}
+    
+    kwargs = {**default_kwargs, **kwargs}
 
     for i, inputs in enumerate(toplot):
         defaults = {"vmin" : None, "vmax" : None, "logscale" : True}
         data = inputs.pop("data")
-        figtitle = inputs.pop("title") if "title" in inputs else data.name
+        
+        if "title" in inputs:
+            figtitle = inputs.pop("title")
+        elif "name" in data.attrs:
+            figtitle = data.name
+        else:
+            figtitle = ""
+            print("WARNING: Passed dataarray with no name or title")
         settings = {**defaults, **inputs, **kwargs}    
         if clean_guards == True: data = data.hermesm.clean_guards() 
 
@@ -1263,10 +1278,115 @@ def plot2d(
         if margins != (None, None): ax.margins(x=margins[0], y = margins[1])
 
     fig.suptitle(title)
-    if tight_layout is True: fig.tight_layout(w_pad = 0)
+    if tight_layout is True: fig.tight_layout(w_pad = w_pad)
 
     if save_path != "":
         plt.savefig(save_path)
+    
+    
+def plot_cvode_performance(cs, logscale = True):
+    """
+    Compare CVODE performance of multiple cases
+    """
+    
+    for name in cs:
+        if "ms_per_24hrs" not in cs[name].ds:
+            cs[name].ds.hermesm.get_cvode_metrics()
+        
+    for param in ["ms_per_24hrs", "nonlin_fails", "lin_per_nonlin", "precon_per_function", "cvode_last_step"]:
+        scale = "log"
+        fig, ax = plt.subplots(figsize=(5,4), dpi = 150)
 
-    
-    
+        for name in cs:
+            ds = cs[name].ds
+            if param in ds:
+                ax.plot((ds["t"] - ds["t"][0])[1:], ds[param][1:], label = name)
+            else:
+                print(f"{param} not found in {name}")
+        ax.legend()
+        ax.set_title(param)
+        # ax.set_ylabel("ms plasma time / 24hr wall time")
+        ax.set_xlabel("Sim time [s]")    
+        if logscale is True:
+            ax.set_yscale("symlog")
+
+def plot_cvode_performance_single(ds):
+    """
+    Print useful CVODE stats
+    """
+
+    nx = 4
+    ny = 2
+    fig, axes = plt.subplots(ny, nx, figsize = (3*nx, 3*ny))
+
+    def get_noncum_cvode(data):
+        data = np.diff(data.values, prepend = data.values[0])
+        for i, x in enumerate(data):
+            if x < 0:
+                data[i] = data[i+1]
+        return data
+
+    toplot = {}
+    t = ds["t"].values * 1e3
+
+    d = {}
+    laststep = ds["cvode_last_step"]
+    nfevals = get_noncum_cvode(ds["cvode_nfevals"])
+    npevals = get_noncum_cvode(ds["cvode_npevals"])
+    nliters = get_noncum_cvode(ds["cvode_nliters"])
+    nniters = get_noncum_cvode(ds["cvode_nniters"])
+    nnfails = get_noncum_cvode(ds["cvode_nonlin_fails"])
+    nfails = get_noncum_cvode(ds["cvode_num_fails"])
+    slims = get_noncum_cvode(ds["cvode_stab_lims"])
+    lorder = ds["cvode_last_order"]
+
+    if "wtime" in ds:
+        wtime = ds["wtime"]
+        stime = np.diff(t, prepend = t[0]*0.99)
+        ms_per_24hrs = (stime) / (wtime/(60*60*24))  # ms simulated per 24 hours
+    else:
+        print("WARNING: wtime not found in dataset, ensure you use the right xBOUT version")
+        ms_per_24hrs = 0
+
+    ax = axes[0,0 ]
+    ax.plot(t, laststep)
+    ax.set_yscale("log")
+    ax.set_title("Last timestep")
+
+    ax = axes[0,1]
+    ax.plot(t[1:], lorder[1:])
+    ax.set_title("Last order")
+
+    ax = axes[0,2]
+    ax.plot(t, nfevals)
+    ax.set_title("Function evals")
+
+    ax = axes[0,3]
+    ax.plot(t, npevals/nfevals)
+    ax.set_title("Precon / function evals")
+
+    ax = axes[1,0]
+    ax.plot(t[1:], ms_per_24hrs[1:])
+    ax.set_title("ms stime / 24hrs wtime")
+
+    ax = axes[1,1]
+    ax.plot(t, nniters, label = "Nonlinear")
+    ax.plot(t, nliters, label = "Linear")
+    ax.set_title("Iterations")
+    ax.legend()
+
+    ax = axes[1,2]
+    ax.plot(t, nliters/nniters)
+    ax.set_title("Linear/nonlinear ratio")
+
+    ax = axes[1,3]
+    ax.plot(t, nnfails, label = "Nonlinear")
+    ax.plot(t, nfails, label = "Local error")
+    ax.set_title("Fails")
+    ax.legend()
+
+    for ax in axes.flatten():
+        ax.set_xlabel("t")
+
+
+    fig.tight_layout()

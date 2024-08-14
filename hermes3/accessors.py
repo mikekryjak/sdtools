@@ -60,6 +60,9 @@ class HermesDatasetAccessor(BoutDatasetAccessor):
     
     def select_custom_sol_ring(self, i, region):
         return _select_custom_sol_ring(self.data, i, region)
+    
+    def get_cvode_metrics(self):
+        self.data = _get_cvode_metrics(self.data)
 
     def get_floors(self):
         """
@@ -234,67 +237,73 @@ def _select_region(ds, name):
             -MXG,
             np.r_[slice(MYG, ny_inner + MYG * 1 ), slice(ny_inner + MYG * 3, nyg - MYG)],
         )
+    
+    if MXG == 0:
+        target_xslice = slice(None, None)
+    else:
+        target_xslice = slice(MXG, -MXG)
 
-    slices["inner_lower_target"] = (slice(MXG, -MXG), slice(MYG, MYG + 1))
+    slices["inner_lower_target"] = (target_xslice, slice(MYG, MYG + 1))
+    
     slices["inner_upper_target"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG - 1, ny_inner + MYG),
     )
     slices["outer_upper_target"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG * 3, ny_inner + MYG * 3 + 1),
     )
-    slices["outer_lower_target"] = (slice(MXG, -MXG), slice(nyg - MYG - 1, nyg - MYG))
+    slices["outer_lower_target"] = (target_xslice, slice(nyg - MYG - 1, nyg - MYG))
 
-    slices["inner_lower_target_inner_guards"] = (slice(MXG, -MXG), slice(MYG - 1, MYG))
+    slices["inner_lower_target_inner_guards"] = (target_xslice, slice(MYG - 1, MYG))
     slices["inner_upper_target_inner_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG, ny_inner + MYG + 1),
     )
     slices["outer_upper_target_inner_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG * 3 - 1, ny_inner + MYG * 3),
     )
     slices["outer_lower_target_inner_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(nyg - MYG, nyg - MYG + 1),
     )
     
-    slices["inner_lower_target_guards"] = (slice(MXG, -MXG), slice(0, MYG))
+    slices["inner_lower_target_guards"] = (target_xslice, slice(0, MYG))
     slices["inner_upper_target_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG, ny_inner + MYG * 2),
     )
     slices["outer_upper_target_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG * 2, ny_inner + MYG * 3),
     )
     slices["outer_lower_target_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(nyg - MYG, nyg),
     )
     
-    slices["inner_lower"] = (slice(MXG, -MXG), slice(MYG, j1_1g+1))
+    slices["inner_lower"] = (target_xslice, slice(MYG, j1_1g+1))
     slices["inner_upper"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(j2_1g + 1, ny_inner + MYG),
     )
     slices["outer_upper"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG * 3, j1_2g+1),
     )
-    slices["outer_lower"] = (slice(MXG, -MXG), slice(j2_2g+1, nyg - MYG))
+    slices["outer_lower"] = (target_xslice, slice(j2_2g+1, nyg - MYG))
     
-    slices["inner_lower_noguards"] = (slice(MYG, -MYG), slice(MYG, j1_1g+1))
+    slices["inner_lower_noguards"] = (target_xslice, slice(MYG, j1_1g+1))
     slices["inner_upper_noguards"] = (
-        slice(MYG, -MYG),
+        target_xslice,
         slice(j2_1g + 1, ny_inner + MYG),
     )
     slices["outer_upper_noguards"] = (
-        slice(MYG, -MYG),
+        target_xslice,
         slice(ny_inner + MYG * 3, j1_2g+1),
     )
-    slices["outer_lower_noguards"] = (slice(MYG, -MYG), slice(j2_2g+1, nyg - MYG))
+    slices["outer_lower_noguards"] = (target_xslice, slice(j2_2g+1, nyg - MYG))
 
     slices["inner_lower_pfr"] = (slice(0, ixseps1), slice(None, j1_1g))
     slices["outer_lower_pfr"] = (slice(0, ixseps1), slice(j2_2g + 1, nyg))
@@ -449,3 +458,43 @@ def _select_custom_sol_ring(ds, i, region):
             raise Exception(f"Region {region} not implemented")
     
     return ds.isel(x = selection[0], theta = selection[1])
+
+
+def _get_cvode_metrics(ds):
+    """
+    Calculate CVODE performance metrics in a more useful format  
+    - ms_per_24hrs : ms plasma time per 24hrs wall clock time
+    - nonlin_fails : number of nonlinear solver failures per timestep
+    - lin_per_nonlin : number of linear solver iterations per nonlinear solver iteration
+    - precon_per_function : number of preconditioner evaluations per function evaluation  
+    """
+    
+    def get_noncum_cvode(data):
+        data = np.diff(data.values, prepend = data.values[0])
+        for i, x in enumerate(data):
+            if x < 0:
+                data[i] = data[i+1]
+        return data
+
+    m = ds.metadata
+    # data = ds.hermesm.select_region("outer_midplane_a")["Ne"].isel(x=10)
+    wtime = ds["wtime"]
+    t = ds["t"]
+    stime = np.diff(t, prepend = t[0])
+    ds["ms_per_24hrs"] = (stime * 1000) / (wtime/(60*60*24))  # ms simulated per 24 hours
+    ds["ms_per_24hrs"].attrs["units"] = "ms plasma time / 24hr wall time"
+    
+    if "cvode_nonlin_fails" in ds:
+        ds["nonlin_fails"] = get_noncum_cvode(ds["cvode_nonlin_fails"])
+        ds["lin_per_nonlin"] = get_noncum_cvode(ds["cvode_nliters"]) / get_noncum_cvode(ds["cvode_nniters"])
+        ds["precon_per_function"] = get_noncum_cvode(ds["cvode_npevals"]) / get_noncum_cvode(ds["cvode_nfevals"])
+        ds["nonlin_fails"].attrs["units"] = "nonlinear fails per step"
+        ds["lin_per_nonlin"].attrs["units"] = "linear its / nonlinear it"
+        ds["precon_per_function"].attrs["units"] = "precon evals / function evals"
+    else:
+        print("CVODE diagnostic variables not found in the dataset! Computing runtime speed only")
+            
+    
+
+    
+    return ds
