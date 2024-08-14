@@ -121,7 +121,7 @@ class viewer_2d():
             
             case = cases[i]
             plot.plot(ax = axes[i], norm = norm, cmap = cmap, separatrix = True)
-            axes[i].set_title(f"{case['code']}: {case['name']}")
+            axes[i].set_title(f"{case['name']}")
             
             # SET LIMITS------------------------------------
             if xlim != (None, None):
@@ -149,6 +149,7 @@ class viewer_2d():
                 axes[-1].get_position().height])
         
             cbar = plt.colorbar(mappable = sm, cax=cax, label = param) # Similar to fig.colorbar(im, cax = cax)
+            cax.grid(which = "both", visible = False)
             
         for ax in axes:
             ax.grid(False)
@@ -519,7 +520,7 @@ class SOLPSplotOLD():
         b2fgmtry = self.g
         colour = "white"
 
-        iy = int(b2fgmtry['ny'] / 2)
+        iy = int(b2fgmtry['ny'] / 2) + 1
 
         if len(b2fgmtry['rightcut']) == 2:
             ix_mid = int((b2fgmtry['rightcut'][1] + b2fgmtry['leftcut'][1]) / 2 - 1)
