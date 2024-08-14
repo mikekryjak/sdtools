@@ -1278,7 +1278,7 @@ def plot2d(
         plt.savefig(save_path)
     
     
-def plot_cvode_performance(cs):
+def plot_cvode_performance(cs, logscale = True):
     """
     Compare CVODE performance of multiple cases
     """
@@ -1290,17 +1290,19 @@ def plot_cvode_performance(cs):
     for param in ["ms_per_24hrs", "nonlin_fails", "lin_per_nonlin", "precon_per_function", "cvode_last_step"]:
         scale = "log"
         fig, ax = plt.subplots(figsize=(5,4), dpi = 150)
-        logscale = True
+
         for name in cs:
             ds = cs[name].ds
             if param in ds:
-                ax.plot(ds["t"] - ds["t"][0], ds[param], label = name)
+                ax.plot((ds["t"] - ds["t"][0])[1:], ds[param][1:], label = name)
             else:
                 print(f"{param} not found in {name}")
         ax.legend()
         ax.set_title(param)
         # ax.set_ylabel("ms plasma time / 24hr wall time")
         ax.set_xlabel("Sim time [s]")    
+        if logscale is True:
+            ax.set_yscale("symlog")
 
 def plot_cvode_performance_single(ds):
     """
