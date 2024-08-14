@@ -89,8 +89,8 @@ class HermesDatasetAccessor(BoutDatasetAccessor):
         return {"nn_floor" : nn_floor, "pn_floor" : pn_floor, "nn_floor_si" : nn_floor_si, "pn_floor_si" : pn_floor_si}    
 
 
-    def get_front_positions(self):
-        self.data = find_front_position(self.data)
+    def get_front_positions(self, **kwargs):
+        self.data = find_front_position(self.data, **kwargs)
 
 def _select_region(ds, name):
     """
