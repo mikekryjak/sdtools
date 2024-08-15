@@ -6,9 +6,25 @@ from .utils import constants
 
 class Balance1D():
     
-    def __init__(self, ds, ignore_errors = False, normalised = False, verbose = True):
-        print("***Warning, species choice currently hardcoded\n")
-        print("***Warning, you must have guard cells loaded in\n")
+    def __init__(self, ds, ignore_errors = False, normalised = False, verbose = True, use_sheath_diagnostic = False):
+        """
+        Prepare a 1D particle and heat balance.
+        
+        Inputs
+        ------
+        ds : xarray.Dataset
+            Dataset with ALL GUARD CELLS loaded in and no guard replacement
+        ignore_errors : bool
+            If True, ignore lack of sheath heat flux diagnostic
+        normalised : bool
+            If True, reproduce normalised quantities in Hermes-3 (incl. normalised mass, charge, etc).
+            The dataset you provide MUST be also normalised.
+        use_sheath_diagnostic : bool
+            If True, use the sheath diagnostic variable for heat fluxes, otherwise use calculated value
+        verbose : bool
+            If True, print warnings and diagnostics
+            
+        """
         
         self.normalised = normalised
         self.ds = ds
@@ -16,8 +32,10 @@ class Balance1D():
         self.terms_extracted = False
         self.tallies_extracted = False
         self.sheath_diagnostics = True
+        self.use_sheath_diagnostic = use_sheath_diagnostic
         self.verbose = verbose
         self.get_properties()  # Get settings etc
+        self.reconstruct_sheath_fluxes()  # Now have .sheath dict with properties
         
         # Check for sheath diagnostic variables
         sheath_flux_candidates = [var for var in ds.data_vars if re.search("S.*\+_sheath", var)]
@@ -66,6 +84,7 @@ class Balance1D():
                 if param.startswith("P"):
                     newname = "E" + param[1:]
                     hbal[newname] = hbal[param] * 3/2    # Convert from pressure to energy
+                    del hbal[param]
                     
                 if param == "Rar":
                     hbal[param] = -1 * abs(hbal[param])   # Correct inconsistency in sign convention
@@ -73,6 +92,12 @@ class Balance1D():
                 if self.verbose:
                     print(f"Warning! {param} not found, results may be incorrect")
                 hbal[param] = np.zeros_like(integral(dom["Ne"]))
+                
+        if self.use_sheath_diagnostic is False or self.sheath_diagnostics is False:
+            print("|||WARNING: Overwriting sheath diagnostics with calculated values")
+            hbal["Ee_sheath"] = self.sheath["hfe"]
+            hbal["Ed+_sheath"] = self.sheath["hfi"]
+            pbal["Sd+_sheath"] = self.sheath["pfi"]
         
         self.pbal = pbal
         self.hbal = hbal
@@ -93,20 +118,25 @@ class Balance1D():
         pbal = self.pbal
         pbalsum = {}
         pbalsum["sources_sum"] = pbal["Sd+_src"] + pbal["Sd_src"] + pbal["Sd+_feedback"]
-        pbalsum["recycle_frac"] = abs(pbal["Sd_target_recycle"] / pbal["Sd+_sheath"])
-        pbalsum["net_iz"] = pbal["Sd+_iz"] + pbal["Sd+_rec"]
-        pbalsum["sources_and_net_iz"] = pbalsum["sources_sum"] + pbalsum["net_iz"]
+        
+        # pbalsum["net_iz"] = pbal["Sd+_iz"] + pbal["Sd+_rec"]
         pbalsum["sheath_sum"] = pbal["Sd+_sheath"] + pbal["Sd_target_recycle"]
+        pbalsum["recycle_frac"] = abs(pbal["Sd_target_recycle"] / pbal["Sd+_sheath"])
         
         pbalerror = {}
-        pbalerror["imbalance"] = pbalsum["sources_and_net_iz"] + pbalsum["sheath_sum"]
+        pbalerror["imbalance"] = pbalsum["sources_sum"] + pbalsum["sheath_sum"]
         
         ## Heat balance
         hbal = self.hbal
         hbalsum = {}
-        hbalsum["sources_sum"] = hbal["Ed+_src"] + hbal["Ee_src"] + hbal["Ed_src"] 
+        
+        hbalsum["sources_sum"] = 0
+        for param in hbal:
+            if param.endswith("src"):
+                hbalsum["sources_sum"] += hbal[param]
+    
         hbalsum["R_hydr_sum"] = hbal["Rd+_ex"] + hbal["Rd+_rec"]
-        hbalsum["R_imp_sum"] = hbal["Rar"] if "Rar" in ds else np.zeros_like(hbal["Pd+_src"])
+        hbalsum["R_imp_sum"] = hbal["Rar"] if "Rar" in ds else np.zeros_like(hbal["Ed+_src"])
         hbalsum["R_sum"] = hbalsum["R_hydr_sum"] + hbalsum["R_imp_sum"]
         hbalsum["R_and_sources_sum"] = hbalsum["sources_sum"] + hbalsum["R_sum"]
         hbalsum["sheath_sum"] = hbal["Ed+_sheath"] + hbal["Ee_sheath"]
@@ -178,9 +208,6 @@ class Balance1D():
         Calculate sheath fluxes from the fields without need for diagnostic variable
         """
         
-        if self.verbose:
-            print("Reconstructing sheath fluxes")
-        
         ds = self.ds
         qe = self.qe
         Zi = self.Zi
@@ -189,40 +216,37 @@ class Balance1D():
         Ge = self.Ge
         sheath_ion_polytropic = self.sheath_ion_polytropic
         phi_wall = self.phi_wall
+        
+        ones_template = np.ones_like(ds["Ne"].isel(pos=-3))
 
-        dasheath = self.get_target_value(ds["da"])
-        dv = ds.isel(pos=-3)["dv"].values
+        dasheath = np.array(ones_template * self.get_target_value(ds["da"]).values)
+        dv = ones_template * ds.isel(pos=-3)["dv"].values
 
-        visheath = self.get_target_value(ds["Vd+"])
-        vesheath = self.get_target_value(ds["Ve"])
+        visheath = self.get_target_value(ds["Vd+"]).values
+        vesheath = self.get_target_value(ds["Ve"]).values
 
-        nesheath = self.get_target_value(ds["Ne"])
-        nisheath = self.get_target_value(ds["Nd+"])
+        nesheath = self.get_target_value(ds["Ne"]).values
+        nisheath = self.get_target_value(ds["Nd+"]).values
 
-        tesheath = self.get_target_value(ds["Te"])
-        tisheath = self.get_target_value(ds["Td+"])
+        tesheath = self.get_target_value(ds["Te"]).values
+        tisheath = self.get_target_value(ds["Td+"]).values
 
         cssheath = np.sqrt((sheath_ion_polytropic * tisheath*qe + Zi * tesheath*qe) / Mi)   # [m/s] Bohm criterion sound speed
 
         ion_sum = Zi * nisheath * cssheath   # Sheath current
-        phisheath = tesheath * np.log(np.sqrt(tesheath / (Me * 2*np.pi)) * (1 - Ge) * nesheath / ion_sum)   # [V] sheath potential, (note Neumann BC)
+        phisheath = tesheath * np.log(np.sqrt(tesheath / (Me * 2*np.pi)) * (1 - Ge) * nesheath / ion_sum)  # [V] sheath potential, (note Neumann BC)
         vesheath = np.sqrt(tesheath / (2*np.pi * Me)) * (1 - Ge) * np.exp(-(phisheath - phi_wall)/tesheath)
 
         pfi_sheath = -1 * visheath * nisheath * dasheath   # [s^-1] ion particle flux into domain 
         pfe_sheath = -1 * vesheath * nesheath * dasheath   # [s^-1] electron particle flux into domain 
 
-        # hfi_sheath = pfi_sheath * (self.gamma_i * tisheath*qe + 0.5*Mi*cssheath**2) * 1e-6   # [MW] electron heat flux into domain
-        # hfe_sheath = pfe_sheath * (self.gamma_e * tesheath*qe + 0.5*Me*vesheath**2) * 1e-6   # [MW] electron heat flux into domain
-        
         hfi_sheath = pfi_sheath * self.gamma_i * tisheath*qe * 1e-6   # [MW] electron heat flux into domain
         hfe_sheath = pfe_sheath * self.gamma_e * tesheath*qe * 1e-6   # [MW] electron heat flux into domain
         
-        self.pbal["Sd+_sheath"] = pfi_sheath
-        self.hbal["Ee_sheath"] = hfe_sheath 
-        self.hbal["Ed+_sheath"] = hfi_sheath
-        
         self.sheath = dict(
             da = dasheath,
+            ion_sum = ion_sum, 
+            phi = phisheath,
             vi = visheath, 
             ve = vesheath, 
             ne = nesheath, 
@@ -230,8 +254,28 @@ class Balance1D():
             te = tesheath, 
             ti = tisheath, 
             cs = cssheath, 
-            ion_sum = ion_sum, 
-            phi = phisheath)
+            pfi = pfi_sheath,
+            hfe = hfe_sheath,
+            hfi = hfi_sheath,
+            )
+        
+    def print_sheath_conditions(self):
+        s = self.sheath
+        
+        # Return final index if have multiple time slices
+        for param in s.keys():
+            if self.time is True:
+                s[param] = s[param][-1]
+
+        print(f'dasheath = {s["da"]:.6}')
+        print(f'nesheath = {s["ne"]:.6}')
+        print(f'nisheath = {s["ni"]:.6}')
+        print(f'tesheath = {s["te"]:.6}')
+        print(f'tisheath = {s["ti"]:.6}')
+        print(f'cssheath = {s["cs"]:.6}')
+        print(f'vesheath = {s["ve"]:.6}')
+        print(f'visheath = {s["vi"]:.6}')
+        
         
     def plot_heat_balance(self):
         fig, ax = plt.subplots()
@@ -241,22 +285,35 @@ class Balance1D():
 
         for key in self.hbal:
             
+            # Find last value if time series
             if self.time:
                 val = self.hbal[key][-1]
             else:
                 val = self.hbal[key]
             
+            # Sort into sources and sinks
             if val > 0:
                 pos[key] = self.hbal[key]
             elif val < 0:
                 neg[key] = self.hbal[key]
             else:
                 print(f"{key} is zero, dropping")
-
+                
+                
+        if "t" not in self.ds.dims:
+            raise Exception("Heat balance plot only available for time series data")
+        
+        sum_pos = np.sum(list(pos.values()), axis = 0)
+        sum_neg = np.sum(list(neg.values()), axis = 0)
+        largest_flux = np.max([sum_neg[-1], sum_pos[-1]])
+        
         t = self.ds.t
         ax.stackplot(t, list(pos.values()), labels = pos.keys(), baseline = "zero", alpha = 0.7)
         ax.stackplot(t, list(neg.values()), labels = neg.keys(), baseline = "zero", alpha = 0.7)
         ax.hlines(0, t[0], t[-1], color = "k", linestyle = "--")
+        
+        ax.hlines(largest_flux, t[0], t[-1], color = "k", linestyle = ":")
+        ax.hlines(largest_flux*-1, t[0], t[-1], color = "k", linestyle = ":")
 
         ax.legend(loc = "upper left", bbox_to_anchor = (1,1))
         ax.set_ylabel("[MW]")
@@ -393,7 +450,6 @@ class Balance1D():
         
         ### Print output for particle balance
         print("\nParticle flows [s^-1]")
-        print("Check recycle fraction against expectations")
         print("----------------------")
         for param in pbal:
             data = pbal[param][-1] if self.time else pbal[param]
@@ -410,7 +466,7 @@ class Balance1D():
         print("Diagnostic output")
         print("----------------------")
         error = pbalerror["imbalance"][-1] if self.time else pbalerror["imbalance"]
-        print(f"Imbalance: Src + IZ+REC + Sheath: {error:.3e}")
+        print(f"Imbalance: sources + net sheath flux: {error:.3e} [s^-1]")
 
         ### Print output for heat balance
         print("\n\nHeat flows [MW]")
