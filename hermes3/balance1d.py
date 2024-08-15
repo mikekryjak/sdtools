@@ -316,8 +316,44 @@ class Balance1D():
         ax.hlines(largest_flux*-1, t[0], t[-1], color = "k", linestyle = ":")
 
         ax.legend(loc = "upper left", bbox_to_anchor = (1,1))
+        ax.set_title("Domain heat balance history")
         ax.set_ylabel("[MW]")
         ax.set_xlabel("Time [s]")
+        
+    def plot_flux_balance(self, use_diagnostics = True):
+
+        ds = self.ds.isel(pos=slice(2,-2))
+        if "t" in ds.dims: ds = ds.isel(t=-1)
+
+        src_i = ((ds["Pd+_src"]) * ds["dv"]).cumsum("pos") * 1e-6 * 3/2
+        src_e = ((ds["Pe_src"]) * ds["dv"]).cumsum("pos") * 1e-6 * 3/2
+        src_tot = src_i + src_e
+
+        if use_diagnostics is True:
+            if "div_cond_par_e" in ds.data_vars:
+                hfi_cond = (ds["div_cond_par_d+"] * ds["dv"]).cumsum("pos") * -1e-6 
+                hfe_cond = (ds["div_cond_par_e"] * ds["dv"]).cumsum("pos") * -1e-6 
+            else:
+                raise Exception("Conduction divergence diagnostics not found")
+        
+        else:
+            hfe_cond = ds["kappa_par_e"] * np.gradient(ds["Te"], ds["pos"]) * ds["da"] * -1e-6 #* 1e-2
+            hfi_cond = ds["kappa_par_d+"] * np.gradient(ds["Td+"], ds["pos"]) * ds["da"] * -1e-6 #* 1e-2
+        
+        hfi_conv = ds["Vd+"] * ds["Pd+"] * 5/2  * 1e-6
+        hf_tot = hfe_cond + hfi_cond + hfi_conv
+
+        fig, ax = plt.subplots()
+        style_src = dict(lw = 1, ls = "--")
+        ax.plot(ds["pos"], hfe_cond, c = "indigo", label = "electron conduction")
+        ax.plot(ds["pos"], hfi_cond, c = "tomato", label = "ion conduction")
+        ax.plot(ds["pos"], hfi_conv, c = "teal", label = "ion convection")
+        ax.plot(ds["pos"], hf_tot, c = "grey", label = "Total flux", alpha = 0.3, lw = 4)
+        ax.plot(ds["pos"], src_tot, label = "Total source", c = "grey", alpha = 0.3, lw = 4, ls = ":")
+        ax.legend(loc = "upper center", bbox_to_anchor=(0.5,-0.15), ncols = 2)
+        ax.set_xlabel("Lpar [m]")
+        ax.set_ylabel("[MW]")
+        ax.set_title(f"Heat flux balance")
         
     def print_balances2(self):
         """
@@ -432,11 +468,6 @@ class Balance1D():
         print(f"  |- Recombination:     {-R_rec * 1e-6} MW")
         print("")
 
-
-
-
-        
-        
         
     def print_balances(self):
         pbal = self.pbal
