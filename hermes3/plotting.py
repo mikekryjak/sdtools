@@ -796,6 +796,10 @@ def lineplot(
         
             
         for i, param in enumerate(params):
+            
+            ymins = []
+            ymaxes = []
+            
             for j, name in enumerate(cases.keys()):
                 
                 
@@ -832,6 +836,19 @@ def lineplot(
                     
                 axes[i].plot(xplot, data, label = name, c = colors[j], marker = marker, ms = ms, lw = lw, ls = ls)
                 
+                # If custom xlims, calculate appropriate ylim ranges and store them
+                if xlims != (None, None):
+                    if xlims[-1] > xplot.max()*1.1:
+                        print("Waring: xlim maximum exceeds data maximum")
+                    axes[i].set_xlim(xlims)
+                    idxmin = np.argmin(abs(xplot - xlims[0]))
+                    idxmax = np.argmin(abs(xplot - xlims[1]))
+                    
+                    limited_data = data[idxmin:idxmax]
+                    datarange = abs(limited_data.max() - limited_data.min())
+                    ymaxes.append(limited_data.max() + datarange * 0.1)
+                    ymins.append(limited_data.min() - datarange * 0.1)
+                
              
             if ylims != (None, None):
                 axes[i].set_ylim(ylims)
@@ -844,29 +861,14 @@ def lineplot(
             else:
                 axes[i].set_yscale("linear")
                 
-            # If custom xlims, autoscale ylims
-            if xlims != (None, None):
-                if xlims[-1] > xplot.max()*1.1:
-                    print("Waring: xlim maximum exceeds data maximum")
-                axes[i].set_xlim(xlims)
-                idxmin = np.argmin(abs(xplot - xlims[0]))
-                idxmax = np.argmin(abs(xplot - xlims[1]))
-                
-                limited_data = data[idxmin:idxmax]
-                datarange = abs(limited_data.max() - limited_data.min())
-                datamax = limited_data.max() + datarange * 0.2
-                datamin = limited_data.min() - datarange * 0.2
-                axes[i].set_ylim(datamin, datamax)
-                
-                # print(param, datamin, datamax)
-                # print(datamin < limited_data.min())
-            
-            
             axes[i].grid(which="both", alpha = 1)
             axes[i].grid(which="minor", visible = True)
             axes[i].set_xlabel(xlabel, fontsize=9)
             axes[i].set_title(f"{param}", fontsize = "x-large")
             fig.suptitle(f"{region} profiles")
+            
+            if xlims != (None, None):
+                axes[i].set_ylims = (min(ymins), max(ymaxes))
             
             
         legend_items = []
