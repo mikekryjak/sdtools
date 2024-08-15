@@ -342,12 +342,20 @@ class Balance1D():
         
         hfi_conv = ds["Vd+"] * ds["Pd+"] * 5/2  * 1e-6
         hf_tot = hfe_cond + hfi_cond + hfi_conv
+        
+        rad = []
+        for param in ds:
+            if param.startswith("R"):
+                rad.append(ds[param] * ds["dv"])
+                
+        rad = np.cumsum(ds["Rd+_ex"] * ds["dv"]) * 1e-6
 
         fig, ax = plt.subplots()
         style_src = dict(lw = 1, ls = "--")
         ax.plot(ds["pos"], hfe_cond, c = "indigo", label = "electron conduction")
         ax.plot(ds["pos"], hfi_cond, c = "tomato", label = "ion conduction")
         ax.plot(ds["pos"], hfi_conv, c = "teal", label = "ion convection")
+        ax.plot(ds["pos"], rad, c = "gold", label = "Total radiation")
         ax.plot(ds["pos"], hf_tot, c = "grey", label = "Total flux", alpha = 0.3, lw = 4)
         ax.plot(ds["pos"], src_tot, label = "Total source", c = "grey", alpha = 0.3, lw = 4, ls = ":")
         ax.legend(loc = "upper center", bbox_to_anchor=(0.5,-0.15), ncols = 2)
