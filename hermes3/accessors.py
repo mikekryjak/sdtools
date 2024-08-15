@@ -121,8 +121,8 @@ def _guard_replace_1d(da):
         return da
 
 
-    def get_front_positions(self, **kwargs):
-        self.data = find_front_position(self.data, **kwargs)
+def get_front_positions(self, **kwargs):
+    self.data = find_front_position(self.data, **kwargs)
 
 def _select_region(ds, name):
     """
