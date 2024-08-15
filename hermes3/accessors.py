@@ -36,7 +36,8 @@ class HermesDataArrayAccessor(BoutDataArrayAccessor):
                 ds[{"x": yguards[0], "theta": yguards[1]}] = np.nan
             
         return ds
-
+    def guard_replace_1d(self):
+        return _guard_replace_1d(self.data)
     def plot_omp(self):
         plot_omp([self.data], legend = False, title = False)
         
@@ -89,6 +90,34 @@ class HermesDatasetAccessor(BoutDatasetAccessor):
         pn_floor_si = pn_floor * Pnorm
             
         return {"nn_floor" : nn_floor, "pn_floor" : pn_floor, "nn_floor_si" : nn_floor_si, "pn_floor_si" : pn_floor_si}    
+    
+    
+def _guard_replace_1d(da):
+        """
+        Replace the inner guard cells with the values of their respective
+        cell edges, i.e. the values at the model inlet and at the target.
+        This is done by interpolating the value between the two neighbouring
+        cell centres.
+
+        Cell order at target:
+        ... | last | guard | second guard (unused)
+                   ^target      
+            |  -3  |  -2   |      -1
+          
+        Returns
+        ----------
+        - Guard replaced dataarray
+
+        """
+
+
+        # da[{"pos" : -2}] = (da[{"pos" : -2}] + da[{"pos" : -3}])/2
+        # da[{"pos" : 1}] = (da[{"pos" : 1}] + da[{"pos" : 2}])/2
+        
+        da[-2] = (da[-2] + da[-3])/2
+        da[1] = (da[1] + da[2])/2
+
+        return da
 
 def _select_region(ds, name):
     """
