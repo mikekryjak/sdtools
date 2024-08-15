@@ -1300,7 +1300,7 @@ class Case:
             "long_name" : "Toroidal length",
             "source" : "xHermes"})
         
-        ds["dpol"] = (["x", "theta"], ds["dz"].data * 1/np.sqrt(ds["g_22"].data))   # Poloidal length
+        ds["dpol"] = (["x", "theta"], ds["dy"].data * ds["hthe"].data)   # Poloidal length
         ds["dpol"].attrs.update({
             "conversion" : 1,
             "units" : "m",

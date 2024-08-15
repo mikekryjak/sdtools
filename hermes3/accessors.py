@@ -1,6 +1,7 @@
 from xarray import register_dataset_accessor, register_dataarray_accessor
 from xbout import BoutDatasetAccessor, BoutDataArrayAccessor
 from hermes3.plotting import *
+from hermes3.front_tracking import *
 import numpy as np
 
 
@@ -118,6 +119,10 @@ def _guard_replace_1d(da):
         da[1] = (da[1] + da[2])/2
 
         return da
+
+
+    def get_front_positions(self, **kwargs):
+        self.data = find_front_position(self.data, **kwargs)
 
 def _select_region(ds, name):
     """

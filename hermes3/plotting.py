@@ -533,8 +533,7 @@ def plot_monitors(self, to_plot, what = ["mean", "max", "min"], ignore = []):
     ax.set_title(f"{to_plot}: {self.name}")
     
     
-def diagnose_cvode(self, lims = (0,0), scale = "log"):
-    ds = self.ds
+def diagnose_cvode(ds, lims = (0,0), scale = "log"):
 
     fig, axes = plt.subplots(2,2, figsize = (8,6))
 
@@ -614,16 +613,16 @@ def plot_performance(cs, logscale = True):
         m = ds.metadata
         # data = ds.hermesm.select_region("outer_midplane_a")["Ne"].isel(x=10)
         wtime = ds["wtime"]
-        t = ds["t"].values
-        stime = np.diff(t, prepend = t[0])
+        t = ds["t"].values * 1000   # ms
+        stime = np.diff(t, prepend = t[0])  
         ms_per_24hrs = (stime) / (wtime/(60*60*24))  # ms simulated per 24 hours
         ax.plot(t - t[0], ms_per_24hrs, label = name)
         
     ax.legend()
     ax.set_title("ms simulation time per 24hrs compute time")
     ax.set_ylabel("ms / 24hr")
-    ax.set_xlabel("Sim time [s]")
-    if logscale: ax.set_yscale("log")
+    ax.set_xlabel("Sim time [ms]")
+    ax.set_yscale("log")
 
     
 def plot_xy_grid(ds, ax):
@@ -841,7 +840,7 @@ def lineplot(
             ylimrange = abs(axes[i].get_ylim()[1] / axes[i].get_ylim()[0])      
             if logscale is True and ylimrange > log_threshold:
                 axes[i].set_yscale("symlog")
-                # axes[i].yaxis.set_major_locator(mpl.ticker.LogLocator(numticks=10))
+                axes[i].yaxis.set_major_locator(mpl.ticker.LogLocator(numticks=10))
             else:
                 axes[i].set_yscale("linear")
                 
@@ -863,7 +862,8 @@ def lineplot(
                 # print(datamin < limited_data.min())
             
             
-            axes[i].grid(which="both", alpha = 0.2)
+            axes[i].grid(which="both", alpha = 1)
+            axes[i].grid(which="minor", visible = True)
             axes[i].set_xlabel(xlabel, fontsize=9)
             axes[i].set_title(f"{param}", fontsize = "x-large")
             fig.suptitle(f"{region} profiles")
@@ -1256,6 +1256,10 @@ def plot2d(
     title = "",
     tight_layout = True,
     cmap = "Spectral_r",
+    dpi = 150,
+    scale = 1,
+    grid = True,
+    margins = (None, None),
     save_path = "",
     w_pad = -2,
     **kwargs):
@@ -1267,7 +1271,7 @@ def plot2d(
     """
 
     numplots = len(toplot)
-    fig, axes = plt.subplots(1, numplots, dpi = 150, figsize = (11/3*numplots,4))
+    fig, axes = plt.subplots(1, numplots, dpi = dpi/scale, figsize = (11/3*numplots*scale,4*scale))
     if len(toplot) == 1: axes = [axes]
 
     default_kwargs = {
@@ -1297,6 +1301,8 @@ def plot2d(
 
         if ylim != (None, None): ax.set_ylim(ylim)
         if xlim != (None, None): ax.set_xlim(xlim)
+        ax.grid(which="both", visible = grid)
+        if margins != (None, None): ax.margins(x=margins[0], y = margins[1])
 
     fig.suptitle(title)
     if tight_layout is True: fig.tight_layout(w_pad = w_pad)
