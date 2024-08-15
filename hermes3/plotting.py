@@ -733,11 +733,13 @@ def lineplot(
     dpi = 120,
     clean_guards = True,
     logscale = True,
+    log_threshold = 20,  # Ratio of max to min required for logscale
     save_name = "",
+    guard_replace = True,
     ):
     
     """
-    Provide a dictionary where key is name and value is a single time slice of a dataset
+    Versatile lineplot for 1D profiles in 2D models at OMP, IMP or target, as well as 1D models
     """
     
     marker = "o"
@@ -785,16 +787,18 @@ def lineplot(
                 elif region == "field_line":
                     region_ds[name] = region_ds[name].isel(theta = slice(None,-2))
                 elif region == "1d":
+                    if guard_replace is True:
+                        raise Exception("Cannot guard replace and clean guards at the same time")
                     region_ds[name] = region_ds[name].isel(pos=slice(2,-2))
-                    print("Warning: not including target cell")
+                    print("Warning: 1D plot omitting target values")
                 else:
                     raise Exception(f"{region} guard cleaning not implemented")
                 
-            
         
             
         for i, param in enumerate(params):
             for j, name in enumerate(cases.keys()):
+                
                 
                 
                 if region == "1d":
@@ -806,13 +810,24 @@ def lineplot(
                     sep_R = region_ds[name].coords["R"][region_ds[name].metadata["ixseps1"]- region_ds[name].metadata["MXG"]]
                     xplot = region_ds[name].coords["R"] - sep_R
                     
+                xplot = xplot.values  # Extract numpy array
+                    
                 if param in region_ds[name].data_vars:
-                    data = region_ds[name][param]
+                    data = region_ds[name][param].values   # Extract numpy array
                 else: 
                     data = np.zeros_like(region_ds[name]["Ne"])
-                    print(f"Warning: {param} not found!")
+                    print(f"Warning: {param} not found in {name}!")
+                    
                 
-
+                    
+                if guard_replace is True:
+                    if region == "1d":
+                        xplot = guard_replace_1d(xplot)[1:-1]
+                        data = guard_replace_1d(data)[1:-1]
+                    else:
+                        raise Exception("Guard replacement only implemented for 1D")
+    
+                # Recover colors from cycler if unset
                 if colors == None:
                     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
                     
@@ -821,26 +836,38 @@ def lineplot(
              
             if ylims != (None, None):
                 axes[i].set_ylim(ylims)
-            if xlims != (None, None):
-                axes[i].set_xlim(xlims)
                 
-            datarange = abs(axes[i].get_ylim()[1] / axes[i].get_ylim()[0])
-
-            
-            if logscale is True and datarange > 10:
+            # Make yscale log if data range is over threshold
+            ylimrange = abs(axes[i].get_ylim()[1] / axes[i].get_ylim()[0])      
+            if logscale is True and ylimrange > log_threshold:
                 axes[i].set_yscale("symlog")
                 # axes[i].yaxis.set_major_locator(mpl.ticker.LogLocator(numticks=10))
             else:
                 axes[i].set_yscale("linear")
                 
-            axes[i].autoscale()
+            # If custom xlims, autoscale ylims
+            if xlims != (None, None):
+                if xlims[-1] > xplot.max()*1.1:
+                    print("Waring: xlim maximum exceeds data maximum")
+                axes[i].set_xlim(xlims)
+                idxmin = np.argmin(abs(xplot - xlims[0]))
+                idxmax = np.argmin(abs(xplot - xlims[1]))
+                
+                limited_data = data[idxmin:idxmax]
+                datarange = abs(limited_data.max() - limited_data.min())
+                datamax = limited_data.max() + datarange * 0.2
+                datamin = limited_data.min() - datarange * 0.2
+                axes[i].set_ylim(datamin, datamax)
+                
+                # print(param, datamin, datamax)
+                # print(datamin < limited_data.min())
+            
             
             axes[i].grid(which="both", alpha = 0.2)
             axes[i].set_xlabel(xlabel, fontsize=9)
+            axes[i].set_title(f"{param}", fontsize = "x-large")
+            fig.suptitle(f"{region} profiles")
             
-            axes[i].set_title(f"{region}: {param}")
-                
-
             
         legend_items = []
         for j, name in enumerate(cases.keys()):
