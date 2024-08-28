@@ -105,7 +105,7 @@ def make_cmap(cmap, N):
     """
     return plt.cm.get_cmap(cmap)(np.linspace(0, 1, N))
 
-def display_dataframe(df, format = "{:.2e}"):
+def display_dataframe(df, format = "{:.2e}", greyout = True):
 
     def styler(s):
             if abs(s) < 0.01 or pd.isna(s):
@@ -115,8 +115,10 @@ def display_dataframe(df, format = "{:.2e}"):
 
             return c
             
-    ts = df.style.format("{:.2e}")
-    ts = ts.applymap(styler)
+    ts = df.style.format(format)
+    
+    if greyout is True:
+        ts = ts.applymap(styler)
     display(ts)
     
 def guard_replace_1d(da):
