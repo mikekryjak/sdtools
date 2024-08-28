@@ -105,7 +105,7 @@ def make_cmap(cmap, N):
     """
     return plt.cm.get_cmap(cmap)(np.linspace(0, 1, N))
 
-def display_dataframe(df, format = "{:.2e}"):
+def display_dataframe(df, format = "{:.2e}", greyout = True):
 
     def styler(s):
             if abs(s) < 0.01 or pd.isna(s):
@@ -115,9 +115,38 @@ def display_dataframe(df, format = "{:.2e}"):
 
             return c
             
-    ts = df.style.format("{:.2e}")
-    ts = ts.applymap(styler)
+    ts = df.style.format(format)
+    
+    if greyout is True:
+        ts = ts.applymap(styler)
     display(ts)
+    
+def guard_replace_1d(da):
+    """
+    Replace the inner guard cells with the values of their respective
+    cell edges, i.e. the values at the model inlet and at the target.
+    This is done by interpolating the value between the two neighbouring
+    cell centres.
+
+    Cell order at target:
+    ... | last | guard | second guard (unused)
+                ^target      
+        |  -3  |  -2   |      -1
+        
+    Returns
+    ----------
+    - Numpy array with guard replacement
+
+    """
+
+
+    # da[{"pos" : -2}] = (da[{"pos" : -2}] + da[{"pos" : -3}])/2
+    # da[{"pos" : 1}] = (da[{"pos" : 1}] + da[{"pos" : 2}])/2
+    
+    da[-2] = (da[-2] + da[-3])/2
+    da[1] = (da[1] + da[2])/2
+
+    return da
     
 
 
