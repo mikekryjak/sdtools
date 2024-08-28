@@ -6,7 +6,15 @@ from .utils import constants
 
 class Balance1D():
     
-    def __init__(self, ds, ignore_errors = False, normalised = False, verbose = True, use_sheath_diagnostic = False):
+    def __init__(
+        self, 
+        ds, 
+        ignore_errors = False, 
+        normalised = False, 
+        verbose = True, 
+        use_sheath_diagnostic = False,
+        override_vi = False
+        ):
         """
         Prepare a 1D particle and heat balance.
         
@@ -21,6 +29,8 @@ class Balance1D():
             The dataset you provide MUST be also normalised.
         use_sheath_diagnostic : bool
             If True, use the sheath diagnostic variable for heat fluxes, otherwise use calculated value
+        override_vi : bool
+            If true, override Vi with Cs. Useful if runnin Hermes-3 with no_flow = True
         verbose : bool
             If True, print warnings and diagnostics
             
@@ -33,6 +43,7 @@ class Balance1D():
         self.tallies_extracted = False
         self.sheath_diagnostics = True
         self.use_sheath_diagnostic = use_sheath_diagnostic
+        self.override_vi = override_vi
         self.verbose = verbose
         self.get_properties()  # Get settings etc
         self.reconstruct_sheath_fluxes()  # Now have .sheath dict with properties
@@ -47,6 +58,7 @@ class Balance1D():
             self.time = True
         else:
             self.time = False
+            
         
         
     def get_terms(self):
@@ -94,7 +106,7 @@ class Balance1D():
                 hbal[param] = np.zeros_like(integral(dom["Ne"]))
                 
         if self.use_sheath_diagnostic is False or self.sheath_diagnostics is False:
-            print("|||WARNING: Overwriting sheath diagnostics with calculated values")
+            if self.verbose: print("|||WARNING: Overwriting sheath diagnostics with calculated values")
             hbal["Ee_sheath"] = self.sheath["hfe"]
             hbal["Ed+_sheath"] = self.sheath["hfi"]
             pbal["Sd+_sheath"] = self.sheath["pfi"]
@@ -103,7 +115,7 @@ class Balance1D():
         self.hbal = hbal
         
         if self.sheath_diagnostics is False:
-            print("Sheath diagnostics not available, attempting to reconstruct...")
+            if self.verbose: print("Sheath diagnostics not available, attempting to reconstruct...")
             self.reconstruct_sheath_fluxes()
             
         self.terms_extracted = True
@@ -203,9 +215,13 @@ class Balance1D():
             self.phi_wall = 0
             
             
-    def reconstruct_sheath_fluxes(self):
+    def reconstruct_sheath_fluxes(self, override_vi = False):
         """
         Calculate sheath fluxes from the fields without need for diagnostic variable
+        
+        Inputs
+        ------
+        
         """
         
         ds = self.ds
@@ -236,6 +252,9 @@ class Balance1D():
         ion_sum = Zi * nisheath * cssheath   # Sheath current
         phisheath = tesheath * np.log(np.sqrt(tesheath / (Me * 2*np.pi)) * (1 - Ge) * nesheath / ion_sum)  # [V] sheath potential, (note Neumann BC)
         vesheath = np.sqrt(tesheath / (2*np.pi * Me)) * (1 - Ge) * np.exp(-(phisheath - phi_wall)/tesheath)
+        
+        if self.override_vi == True:
+            visheath = cssheath
 
         pfi_sheath = -1 * visheath * nisheath * dasheath   # [s^-1] ion particle flux into domain 
         pfe_sheath = -1 * vesheath * nesheath * dasheath   # [s^-1] electron particle flux into domain 
@@ -255,6 +274,7 @@ class Balance1D():
             ti = tisheath, 
             cs = cssheath, 
             pfi = pfi_sheath,
+            pfe = pfe_sheath,
             hfe = hfe_sheath,
             hfi = hfi_sheath,
             )
@@ -297,7 +317,7 @@ class Balance1D():
             elif val < 0:
                 neg[key] = self.hbal[key]
             else:
-                print(f"{key} is zero, dropping")
+                if self.verbose: print(f"{key} is zero, dropping")
                 
                 
         if "t" not in self.ds.dims:
@@ -320,7 +340,10 @@ class Balance1D():
         ax.set_ylabel("[MW]")
         ax.set_xlabel("Time [s]")
         
-    def plot_flux_balance(self, use_diagnostics = True):
+    def plot_flux_balance(self, 
+                          use_diagnostics = True,
+                          xlims = (None, None),
+                          flux_style = {}):
 
         ds = self.ds.isel(pos=slice(2,-2))
         if "t" in ds.dims: ds = ds.isel(t=-1)
@@ -340,28 +363,48 @@ class Balance1D():
             hfe_cond = ds["kappa_par_e"] * np.gradient(ds["Te"], ds["pos"]) * ds["da"] * -1e-6 #* 1e-2
             hfi_cond = ds["kappa_par_d+"] * np.gradient(ds["Td+"], ds["pos"]) * ds["da"] * -1e-6 #* 1e-2
         
-        hfi_conv = ds["Vd+"] * ds["Pd+"] * 5/2  * 1e-6
-        hf_tot = hfe_cond + hfi_cond + hfi_conv
+        hfe_p_adv = 5/2 * ds["Ve"] * ds["Ne"] * ds["Te"]*self.qe * 1e-6
+        hfe_k_adv = (0.5 * ds["Nd+"] * self.Me * ds["Ve"]**2) * ds["Ve"] * 1e-6
+        
+        hfi_p_adv = 5/2 * ds["Vd+"] * ds["Nd+"] * ds["Td+"]*self.qe * 1e-6
+        hfi_k_adv = (0.5 * ds["Nd+"] * self.Mi * ds["Vd+"]**2) * ds["Vd+"] * 1e-6
+        
+        hfi_conv = ds["Vd+"] * (ds["Pd+"] + ds["Pe"]) * ds["da"] * 5/2  * 1e-6
+        hf_tot = hfe_cond + hfi_cond + hfi_conv + hfe_p_adv + hfe_k_adv + hfi_p_adv + hfi_k_adv
         
         rad = []
         for param in ds:
             if param.startswith("R"):
                 rad.append(ds[param] * ds["dv"])
                 
-        rad = np.cumsum(ds["Rd+_ex"] * ds["dv"]) * 1e-6
+        if len(rad) > 0:
+            rad = np.sum(rad, axis = 0) * 1e-6  # All channel summed
+            rad = np.cumsum(rad * ds["dv"])     # Cumulative integral
+        else:
+            rad = np.zeros_like(ds["Vd+"])
 
         fig, ax = plt.subplots()
         style_src = dict(lw = 1, ls = "--")
-        ax.plot(ds["pos"], hfe_cond, c = "indigo", label = "electron conduction")
-        ax.plot(ds["pos"], hfi_cond, c = "tomato", label = "ion conduction")
-        ax.plot(ds["pos"], hfi_conv, c = "teal", label = "ion convection")
-        ax.plot(ds["pos"], rad, c = "gold", label = "Total radiation")
+        ax.plot(ds["pos"], hfe_cond, c = "indigo", label = "electron conduction", **flux_style)
+        ax.plot(ds["pos"], hfi_cond, c = "tomato", label = "ion conduction", **flux_style)
+        ax.plot(ds["pos"], hfi_p_adv, c = "deeppink", label = "ion internal energy adv.", **flux_style)
+        ax.plot(ds["pos"], hfe_p_adv, c = "skyblue", label = "electron internal energy adv.", **flux_style)
+        
+        ax.plot(ds["pos"], hfi_k_adv, c = "deeppink", label = "ion kinetic energy adv.", ls = "--", **flux_style)
+        ax.plot(ds["pos"], hfe_k_adv, c = "skyblue", label = "electron kinetic energy adv.", ls = "--", **flux_style)
+        
+        ax.plot(ds["pos"], rad, c = "gold", label = "Total radiation", **flux_style)
         ax.plot(ds["pos"], hf_tot, c = "grey", label = "Total flux", alpha = 0.3, lw = 4)
         ax.plot(ds["pos"], src_tot, label = "Total source", c = "grey", alpha = 0.3, lw = 4, ls = ":")
         ax.legend(loc = "upper center", bbox_to_anchor=(0.5,-0.15), ncols = 2)
         ax.set_xlabel("Lpar [m]")
         ax.set_ylabel("[MW]")
         ax.set_title(f"Heat flux balance")
+        
+        if xlims != (None, None):
+            ax.set_xlim(xlims)
+            
+        # ax.set_yscale("log")
         
     def print_balances2(self):
         """
