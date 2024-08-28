@@ -192,6 +192,53 @@ class Mesh():
         Use it as: selected_array = array[slice] where slice = (x selection, y selection) = output from this method.
         """
         
+        def upper_seam(i):
+            """
+            Creates a slice for the upper mesh seam
+            
+            Inputs
+            ------
+            i: int
+                Extent of selected region on each side of the seam in cell number. 
+                Total number of cells selected will be 2i.
+            """
+            
+            MXG = self.MXG
+            j1_2g = self.j1_2g
+            j2_1g = self.j2_1g
+            
+            
+            return (slice(0+MXG,1+MXG), 
+                    np.r_[
+                            slice(j1_2g + 1, j1_2g + (i+1)) , 
+                            slice(j2_1g + 1 - (i), j2_1g + 1)
+                            ])
+            
+            
+        def lower_seam(i):
+            """
+            Creates a slice for the lower mesh seam
+            
+            Inputs
+            ------
+            i: int
+                Extent of selected region on each side of the seam in cell number. 
+                Total number of cells selected will be 2i.
+            """
+            
+            MXG = self.MXG
+            j1_1g = self.j1_1g
+            j2_2g = self.j2_2g
+            
+            
+            return (slice(0+MXG,1+MXG), 
+                    np.r_[
+                            slice(j2_2g + 1 - i, j2_2g + 1) , 
+                            slice(j1_1g + 1, j1_1g + 1 + i)
+                            ])
+            
+            
+        
         def custom_core_ring(i):
             """
             Creates custom SOL ring slice within the core.
@@ -235,6 +282,8 @@ class Mesh():
         
         slices["custom_core_ring"] = custom_core_ring
         slices["symmetric_puff"] = symmetric_puff
+        slices["upper_seam"] = upper_seam
+        slices["lower_seam"] = lower_seam
 
         slices["all"] = (slice(None,None), slice(None,None))
         slices["all_noguards"] = (slice(self.MXG,-self.MXG), np.r_[slice(self.MYG,self.ny_inner-self.MYG*2), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
@@ -305,11 +354,11 @@ class Mesh():
         yslice = slice[1]
 
         # Region boundaries
-        ny = mesh["ny"]     # Total ny cells (incl guard cells)
-        nx = mesh["nx"]     # Total nx cells (excl guard cells)
-        Rxy = mesh["Rxy"]    # R coordinate array
-        Zxy = mesh["Zxy"]    # Z coordinate array
-        MYG = mesh["y_boundary_guards"]
+        ny = self.ny      # Total ny cells (incl guard cells)
+        nx = self.nx    # Total nx cells (excl guard cells)
+        Rxy = self.Rxy    # R coordinate array
+        Zxy = self.Zxy    # Z coordinate array
+        MYG = self.MYG
 
         # Array of radial (x) indices and of poloidal (y) indices in the style of Rxy, Zxy
         x_idx = np.array([np.array(range(nx))] * int(ny + MYG * 4)).transpose()
