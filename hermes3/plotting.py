@@ -402,6 +402,7 @@ def plot_ddt(case,
              smoothing = 1, 
              dpi = 120, 
              volume_weighted = True, 
+             normalised = True,
              ylims = (None,None), 
              xlims = (None,None)):
     """
@@ -416,10 +417,8 @@ def plot_ddt(case,
     else:
         # No guard cells at all
         ds = case.ds.isel(pos=slice(2,-2))
-    
 
-        
-    
+    m = ds.metadata
     
     # Find parameters (species dependent)
     list_params = []
@@ -449,6 +448,10 @@ def plot_ddt(case,
         else:
             res[param] = np.sqrt(np.mean(res[param]**2, axis = 1))    # Root mean square
         res[param] = np.convolve(res[param], np.ones(smoothing), "same")    # Moving average with window = smoothing
+        
+        if normalised:
+            res[param] /= ds[param].attrs["conversion"]
+            # res[param] = res[param] / res[param][0]
 
     fig, ax = plt.subplots(figsize = (5,4), dpi = dpi)
     fig.subplots_adjust(right=0.8)

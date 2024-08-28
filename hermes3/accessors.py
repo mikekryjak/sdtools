@@ -393,6 +393,9 @@ def _select_region(ds, name):
     )
 
     slices["outer_midplane_a"] = (slice(None, None), int((j2_2g - j1_2g) / 2) + j1_2g)
+    
+    slices["outer_midplane_a_sep"] = (ixseps1, int((j2_2g - j1_2g) / 2) + j1_2g)
+    
     slices["outer_midplane_b"] = (
         slice(None, None),
         int((j2_2g - j1_2g) / 2) + j1_2g + 1,
@@ -507,16 +510,16 @@ def _get_cvode_metrics(ds):
 
     m = ds.metadata
     # data = ds.hermesm.select_region("outer_midplane_a")["Ne"].isel(x=10)
-    wtime = ds["wtime"]
-    t = ds["t"]
+    wtime = ds["wtime"].values
+    t = ds["t"].values
     stime = np.diff(t, prepend = t[0])
-    ds["ms_per_24hrs"] = (stime * 1000) / (wtime/(60*60*24))  # ms simulated per 24 hours
+    ds["ms_per_24hrs"] = ("t", (stime * 1000) / (wtime/(60*60*24)))  # ms simulated per 24 hours
     ds["ms_per_24hrs"].attrs["units"] = "ms plasma time / 24hr wall time"
     
     if "cvode_nonlin_fails" in ds:
-        ds["nonlin_fails"] = get_noncum_cvode(ds["cvode_nonlin_fails"])
-        ds["lin_per_nonlin"] = get_noncum_cvode(ds["cvode_nliters"]) / get_noncum_cvode(ds["cvode_nniters"])
-        ds["precon_per_function"] = get_noncum_cvode(ds["cvode_npevals"]) / get_noncum_cvode(ds["cvode_nfevals"])
+        ds["nonlin_fails"] = ("t", get_noncum_cvode(ds["cvode_nonlin_fails"]))
+        ds["lin_per_nonlin"] = ("t", get_noncum_cvode(ds["cvode_nliters"]) / get_noncum_cvode(ds["cvode_nniters"]))
+        ds["precon_per_function"] = ("t", get_noncum_cvode(ds["cvode_npevals"]) / get_noncum_cvode(ds["cvode_nfevals"]))
         ds["nonlin_fails"].attrs["units"] = "nonlinear fails per step"
         ds["lin_per_nonlin"].attrs["units"] = "linear its / nonlinear it"
         ds["precon_per_function"].attrs["units"] = "precon evals / function evals"
