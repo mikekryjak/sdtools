@@ -734,9 +734,9 @@ def lineplot(
     logscale = True,
     log_threshold = 20,  # Ratio of max to min required for logscale
     save_name = "",
-    guard_replace = True,
+    guard_replace = False,
+    auto_y_pad = 0.1,   # Padding on Y lims when automatically calculated
     ):
-    
     """
     Versatile lineplot for 1D profiles in 2D models at OMP, IMP or target, as well as 1D models
     """
@@ -758,6 +758,9 @@ def lineplot(
         fig, axes = plt.subplots(1,len(params), dpi = dpi, figsize = (4.6*len(params)*mult,5*mult), sharex = True)
         fig.subplots_adjust(hspace = 0, wspace = 0.3, bottom = 0.25, left = 0.1, right = 0.9)
         ls = "-"
+        
+        if type(axes) != np.ndarray:
+            axes = [axes]
         
         region_ds = dict()
         for name in cases.keys():
@@ -825,8 +828,8 @@ def lineplot(
                     
                 if guard_replace is True:
                     if region == "1d":
-                        xplot = guard_replace_1d(xplot)[1:-1]
-                        data = guard_replace_1d(data)[1:-1]
+                        xplot = guard_replace_1d(xplot)[1:-1].copy()
+                        data = guard_replace_1d(data)[1:-1].copy()
                     else:
                         raise Exception("Guard replacement only implemented for 1D")
     
@@ -836,22 +839,20 @@ def lineplot(
                     
                 axes[i].plot(xplot, data, label = name, c = colors[j], marker = marker, ms = ms, lw = lw, ls = ls)
                 
+                
                 # If custom xlims, calculate appropriate ylim ranges and store them
                 if xlims != (None, None):
                     if xlims[-1] > xplot.max()*1.1:
                         print("Waring: xlim maximum exceeds data maximum")
                     axes[i].set_xlim(xlims)
                     idxmin = np.argmin(abs(xplot - xlims[0]))
-                    idxmax = np.argmin(abs(xplot - xlims[1]))
+                    idxmax = np.argmin(abs(xplot - xlims[1]))+1
                     
                     limited_data = data[idxmin:idxmax]
                     datarange = abs(limited_data.max() - limited_data.min())
-                    ymaxes.append(limited_data.max() + datarange * 0.1)
-                    ymins.append(limited_data.min() - datarange * 0.1)
+                    ymaxes.append(limited_data.max() + datarange * auto_y_pad)
+                    ymins.append(limited_data.min() - datarange * auto_y_pad)
                 
-             
-            if ylims != (None, None):
-                axes[i].set_ylim(ylims)
                 
             # Make yscale log if data range is over threshold
             ylimrange = abs(axes[i].get_ylim()[1] / axes[i].get_ylim()[0])      
@@ -868,8 +869,9 @@ def lineplot(
             fig.suptitle(f"{region} profiles")
             
             if xlims != (None, None):
-                axes[i].set_ylims = (min(ymins), max(ymaxes))
-            
+                new_ylim = (min(ymins), max(ymaxes))
+                axes[i].set_ylim(new_ylim[0],new_ylim[1])
+        
             
         legend_items = []
         for j, name in enumerate(cases.keys()):
@@ -1313,21 +1315,21 @@ def plot2d(
         plt.savefig(save_path)
     
     
-def plot_cvode_performance(cs, logscale = True):
+def plot_cvode_performance(dict_ds, logscale = True):
     """
     Compare CVODE performance of multiple cases
     """
     
-    for name in cs:
-        if "ms_per_24hrs" not in cs[name].ds:
-            cs[name].ds.hermesm.get_cvode_metrics()
+    for name in dict_ds:
+        if "ms_per_24hrs" not in dict_ds[name]:
+            dict_ds[name].hermesm.get_cvode_metrics()
         
     for param in ["ms_per_24hrs", "nonlin_fails", "lin_per_nonlin", "precon_per_function", "cvode_last_step"]:
         scale = "log"
         fig, ax = plt.subplots(figsize=(5,4), dpi = 150)
 
-        for name in cs:
-            ds = cs[name].ds
+        for name in dict_ds:
+            ds = dict_ds[name]
             if param in ds:
                 ax.plot((ds["t"] - ds["t"][0])[1:], ds[param][1:], label = name)
             else:
