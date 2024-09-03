@@ -735,10 +735,11 @@ def lineplot(
     dpi = 120,
     clean_guards = True,
     logscale = True,
-    log_threshold = 20,  # Ratio of max to min required for logscale
+    log_threshold = 10,  # Ratio of max to min required for logscale
     save_name = "",
     guard_replace = False,
-    auto_y_pad = 0.1,   # Padding on Y lims when automatically calculated
+    auto_y_pad = 0.1,   # Padding on Y lims when automatically calculated (difference)
+    auto_y_pad_log = 0.5,  # Same as above but logscale (factor)
     ):
     """
     Versatile lineplot for 1D profiles in 2D models at OMP, IMP or target, as well as 1D models
@@ -803,8 +804,8 @@ def lineplot(
             
         for i, param in enumerate(params):
             
-            ymins = []
-            ymaxes = []
+            datamins = []
+            datamaxes = []
             
             for j, name in enumerate(cases.keys()):
                 
@@ -852,17 +853,29 @@ def lineplot(
                     idxmax = np.argmin(abs(xplot - xlims[1]))+1
                     
                     limited_data = data[idxmin:idxmax]
-                    datarange = abs(limited_data.max() - limited_data.min())
-                    ymaxes.append(limited_data.max() + datarange * auto_y_pad)
-                    ymins.append(limited_data.min() - datarange * auto_y_pad)
+                else:
+                    limited_data = data
+                    
+                datamaxes.append(limited_data.max())
+                datamins.append(limited_data.min())
                 
+        
+            datamin = np.min(datamins)
+            datamax = np.max(datamaxes)
+            datarange = abs(datamax - datamin)
+            
                 
             # Make yscale log if data range is over threshold
-            ylimrange = abs(axes[i].get_ylim()[1] / axes[i].get_ylim()[0])      
-            if logscale is True and ylimrange > log_threshold:
+            # print(param, new_ylim[0], new_ylim[1])
+            
+            if logscale is True and datamax/datamin > log_threshold:
                 axes[i].set_yscale("symlog")
                 axes[i].yaxis.set_major_locator(mpl.ticker.LogLocator(numticks=10))
+                ymax = datamax / auto_y_pad_log
+                ymin = datamin * auto_y_pad_log
             else:
+                ymax = datamax + datarange * auto_y_pad
+                ymin = datamin - datarange * auto_y_pad
                 axes[i].set_yscale("linear")
                 
             axes[i].grid(which="both", alpha = 1)
@@ -871,11 +884,13 @@ def lineplot(
             axes[i].set_title(f"{param}", fontsize = "x-large")
             fig.suptitle(f"{region} profiles")
             
-            if xlims != (None, None):
-                new_ylim = (min(ymins), max(ymaxes))
-                axes[i].set_ylim(new_ylim[0],new_ylim[1])
-        
+            # print(f"{param}, datamin = {datamin:.3f}, datamax = {datamax:.3f}, datarange = {datarange:.3f}")            
+            # print(f"       ymin: {ymin:.3f}, ymax: {ymax:.3f}")
             
+            # if ymin < 0 and logscale is True:
+            #     print(f"Warning: {param} lower ylim below 0")
+            axes[i].set_ylim(ymin, ymax)
+
         legend_items = []
         for j, name in enumerate(cases.keys()):
             legend_items.append(mpl.lines.Line2D([0], [0], color=colors[j], lw=2, ls = ls))
@@ -1330,19 +1345,23 @@ def plot_cvode_performance(dict_ds, logscale = True):
     for param in ["ms_per_24hrs", "nonlin_fails", "lin_per_nonlin", "precon_per_function", "cvode_last_step"]:
         scale = "log"
         fig, ax = plt.subplots(figsize=(5,4), dpi = 150)
+        
+        style = dict(lw = 1)
 
         for name in dict_ds:
             ds = dict_ds[name]
             if param in ds:
-                ax.plot((ds["t"] - ds["t"][0])[1:], ds[param][1:], label = name)
+                ax.plot((ds["t"] - ds["t"][0])[1:], ds[param][1:], label = name, **style)
             else:
                 print(f"{param} not found in {name}")
-        ax.legend()
+        ax.legend(loc = "upper center", bbox_to_anchor=(0.5, -0.15), ncols = 2)
         ax.set_title(param)
         # ax.set_ylabel("ms plasma time / 24hr wall time")
         ax.set_xlabel("Sim time [s]")    
         if logscale is True:
             ax.set_yscale("symlog")
+            
+        ax.set_xscale("log")
 
 def plot_cvode_performance_single(ds):
     """
