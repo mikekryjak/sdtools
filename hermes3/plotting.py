@@ -820,20 +820,20 @@ def lineplot(
                     sep_R = region_ds[name].coords["R"][region_ds[name].metadata["ixseps1"]- region_ds[name].metadata["MXG"]]
                     xplot = region_ds[name].coords["R"] - sep_R
                     
-                xplot = xplot.values  # Extract numpy array
+                xplot = xplot.values.copy()  # Extract numpy array
                     
                 if param in region_ds[name].data_vars:
-                    data = region_ds[name][param].values   # Extract numpy array
+                    data = region_ds[name][param].values.copy()   # Extract numpy array
                 else: 
                     data = np.zeros_like(region_ds[name]["Ne"])
                     print(f"Warning: {param} not found in {name}!")
                     
                 
-                    
                 if guard_replace is True:
+
                     if region == "1d":
-                        xplot = guard_replace_1d(xplot)[1:-1].copy()
-                        data = guard_replace_1d(data)[1:-1].copy()
+                        xplot = guard_replace_1d(xplot)[1:-1]
+                        data = guard_replace_1d(data)[1:-1]
                     else:
                         raise Exception("Guard replacement only implemented for 1D")
     
