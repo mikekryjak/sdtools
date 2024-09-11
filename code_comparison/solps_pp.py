@@ -58,6 +58,13 @@ class SOLPScase():
           All of the balance file results are with guard cells and this function plots them by default.
           Their position/mask can be found in resignore available in b2fgmtry. 
         - Guard cells are always really tiny!!!
+        
+        Guide on radiation from DM
+        b2stel_she_bal in balance.nc gives you the radiation from each ionisation state. 
+        You can get the species indeces from the string matrix "species" 
+        (for Ryoko's case I think it's 4:21 for the neon ions but do check)
+        numbers are in W, so divide by "vol" to get W/m3
+        
         """
         
         raw_balance = nc.Dataset(os.path.join(path, "balance.nc"))
@@ -87,6 +94,7 @@ class SOLPScase():
         self.g["cry"] = bal["cry"]
         self.g["nx"] = self.g["crx"].shape[0]
         self.g["ny"] = self.g["crx"].shape[1]
+        self.g["vol"] = self.bal["vol"]
         
         self.g["Btot"] = bal["bb"][:,:,3]
         self.g["Bpol"] = bal["bb"][:,:,0]
@@ -139,6 +147,55 @@ class SOLPScase():
         # dist = dist - dist[self.g["sep"] - 1]
         # self.g["radial_dist"] = dist
         
+        self.derive_data()
+        
+    def get_species(self):
+        """
+        Extract species indices from the balance file species matrix
+        """
+        
+        bal = self.bal
+        df_species = pd.DataFrame()
+
+        nchars = bal["species"].shape[0]
+        nspecies = bal["species"].shape[1]
+
+        for ispecies in range(nspecies):
+            
+            species = ""
+            for ichar in range(nchars):
+                string = str(bal["species"][ichar, ispecies])
+                string = string.replace("b", "").replace("'","")
+                species += string
+                
+            df_species.loc[ispecies, "name"] = species
+            
+        self.species = df_species
+        
+        
+    def _get_total_radiation(self, species_name):
+        """
+        Get sum of radiation for all species containing the string "species_name"
+        and put it in the balance file. Units are W/m3
+        """
+        try:
+            species = self.species
+        except:
+            print("Species not found, generating")
+            self.get_species()
+        bal = self.bal
+        
+        species_indices = list(species[species["name"].str.contains(species_name)].index)
+        if len(species_indices) < 1:
+            raise ValueError(f"No species found matching {species_name}")
+
+        rad = []
+        for i in species_indices:
+            rad.append(bal["b2stel_she_bal"][:,:,i])
+
+        rad = np.sum(rad, axis = 0)
+        self.bal[f"R{species_name}"] = rad / bal["vol"] 
+        print(f"Variable R{species_name} added")
     
     def derive_data(self):
         """
@@ -156,6 +213,7 @@ class SOLPScase():
         else:
             ignore_idx = 2
         
+
         bal["Td+"] = bal["ti"] / constants("q_e")
         bal["Te"] = bal["te"] / constants("q_e")
         bal["Ne"] = bal["ne"]
@@ -234,6 +292,8 @@ class SOLPScase():
              vmin = None,
              vmax = None,
              logscale = False,
+             linthresh = None,
+             absolute = False,
              alpha = 1,
              separatrix = True,
              separatrix_kwargs = {},
@@ -248,13 +308,15 @@ class SOLPScase():
             data = np.zeros_like(self.bal["te"])
         elif len(data)==0:
             data = self.bal[param]
+        if absolute:
+            data = np.abs(data)
         
         if vmin == None:
             vmin = data.min()
         if vmax == None:
             vmax = data.max()
         if norm == None:
-            norm = create_norm(logscale, norm, vmin, vmax)
+            norm = create_norm(logscale, norm, vmin, vmax, linthresh = linthresh)
         if ax == None:
             fig, ax = plt.subplots(dpi = 150)
         else:
@@ -380,7 +442,7 @@ class SOLPScase():
     
     def get_1d_poloidal_data(
         self,
-        param,
+        params,
         region = "outer_lower",
         sepadd = 0
         
@@ -395,21 +457,50 @@ class SOLPScase():
         
         """
         
+        if type(params) == str:
+            params = [params]
+        
         yind = self.g["sep"] + sepadd   # Ring index
         omp = self.g["omp"]
-        hx = self.bal["hx"]
         
         if region == "outer_lower":
-            selector = (yind, slice(omp, None))
+            selector = (slice(omp, None), yind)
         else:
             raise Exception("Unrecognised region")
         
+        hx = self.bal["hx"][selector]
+        Btot = self.g["Btot"][selector]
+        Bpol = self.g["Bpol"][selector]
+        R = self.g["R"][selector]
+        
+        data = {}
+        
+        for param in params:
+            if param in self.bal:
+                data[param] = self.bal[param]
+            elif param in self.g:
+                data[param] = self.g[param]
+            else:
+                raise ValueError(f"Parameter {param} not found")
         
         df = pd.DataFrame()
-        df["dist"] = np.cumsum(hx[selector])  # Poloidal distance
-        # df["R"] = self.g["R"][selector[::-1]]
-        # df["Z"] = self.g["Z"][selector[::-1]]
-        df[param] = self.bal[param][selector]
+        
+        ## Poloidal connection length
+        df["spol"] = np.cumsum(hx)  # Poloidal distance
+        dspol = np.diff(df["spol"])
+        dspar = dspol * abs(Btot[1:] / Bpol[1:])
+        dspar = np.insert(dspar, 0, 0)
+        
+        ## Parallel connection length
+        df["spar"] = np.cumsum(dspar)
+        
+        ## X-point
+        idxmin = np.argmin(abs(R - R.min()))
+        df["Xpoint"] = 0
+        df.loc[idxmin, "Xpoint"] = 1
+        
+        for param in params:
+            df[param] = data[param][selector]
         
         return df
     
@@ -489,7 +580,7 @@ class SOLPScase():
         if ylims != (None, None):
             ax.set_ylim(ylims)
         
-def create_norm(logscale, norm, vmin, vmax):
+def create_norm(logscale, norm, vmin, vmax, linthresh = None):
     if logscale:
         if norm is not None:
             raise ValueError(
@@ -504,9 +595,13 @@ def create_norm(logscale, norm, vmin, vmax):
                 linear_scale = logscale
             else:
                 linear_scale = 1.0e-5
-            linear_threshold = min(abs(vmin), abs(vmax)) * linear_scale
-            if linear_threshold == 0:
-                linear_threshold = 1e-4 * vmax   # prevents crash on "Linthresh must be positive"
+            
+            if linthresh is None:
+                linear_threshold = min(abs(vmin), abs(vmax)) * linear_scale
+                if linear_threshold == 0:
+                    linear_threshold = 1e-4 * vmax   # prevents crash on "Linthresh must be positive"
+            else:
+                linear_threshold = linthresh
             norm = mpl.colors.SymLogNorm(linear_threshold, vmin=vmin, vmax=vmax)
     elif norm is None:
         norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
