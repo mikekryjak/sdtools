@@ -28,12 +28,22 @@ output<<std::string("\n\n****************************************************\n"
 output << std::string("Collisions: ") << species1.name() << species2.name();
 output<<std::string("\n****************************************************\n\n");
 
-output<<std::string("\n------------------------\n");
-output << std::string("Definitely doing this");
-output<<std::string("\n------------------------\n");
+output<<"\n------------------------\n";
+output << "Definitely doing this";
+output<<"\n------------------------\n";
+
+
   output << std::string("\n******************************************\n");
   output << s1->first << s2->first << std::string(": ") << collision_rates[s1->first][s2->first];
   output << std::string("\n******************************************");
+  
+  
+output<<"\n------------------------\n";
+output << "sheath_boundary_simple";
+output << "upper_y, after limitFree";
+output<<"\n------------------------\n";
+output << Ne[ip];
+output<<"\n------------------------\n";
 
 
 for(int ix=0; ix < mesh->LocalNx ; ix++){
