@@ -832,8 +832,8 @@ def lineplot(
                 if guard_replace is True:
 
                     if region == "1d":
-                        xplot = guard_replace_1d(xplot)[1:-1]
-                        data = guard_replace_1d(data)[1:-1]
+                        xplot = guard_replace_1d(xplot)
+                        data = guard_replace_1d(data)
                     else:
                         raise Exception("Guard replacement only implemented for 1D")
     
