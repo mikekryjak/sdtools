@@ -4,7 +4,7 @@ import scipy as sp
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from ThermalFrontFormulation import *
+# from ThermalFrontFormulation import *
 
 class DLSoutput():
     """
@@ -23,7 +23,7 @@ def plot_profile_histories(p, s, list_idx, title = "",
                            use_prad = True   # Use radiation in W rather than W/m2 for front width?
                            ):  
           
-    fig, axes = plt.subplots(1,4,figsize = (15*len(list_idx)/4,4))
+    fig, axes = plt.subplots(1,4,figsize = (15*len(list_idx)/1,4))
     
     axstore = {}
 
@@ -725,7 +725,7 @@ def plot_profiles(base, stages, profiles, poloidal = True,  ylims = (None,None),
 
 def plot_results(
     stores, 
-    mode,
+    mode,    # Inner or outer
     colors = None,
     ax = None, 
     dot_unstable = True,
@@ -734,7 +734,7 @@ def plot_results(
     spines = True
     
     if ax == None:
-        fig, ax = plt.subplots(figsize = (6.5,6.5), dpi = 250)
+        fig, ax = plt.subplots(figsize = (6.5,6.5), dpi = 150)
         
     if len(stores) == 25:
         stores = {1 : stores}
@@ -1236,3 +1236,90 @@ class plotProfiles():
 #     if spines is True:
 #         for spine in ["top", "left", "right", "bottom"]:
 #             ax.spines[spine].set_visible(True)
+
+
+def compare_SOLPS_DLS(slc, out):
+
+    df = slc.get_1d_poloidal_data(["hx", "hz", "R", "Te", "RAr", "ne", "fhe_cond", "fhe_32", "fhi_cond", "fhi_32", "fhe_thermj"], sepadd = 1)
+    
+    for param in df:
+        if param.startswith("fh"):
+            df[param] /= (df["hx"] * (2*np.pi*df["R"]))
+    
+    for param in ["fhe_32", "fhi_32"]:
+        df[param] *= 5/3
+    
+        
+    df["fhe_total"] = df["fhe_cond"] + df["fhe_32"] + df["fhe_thermj"]
+    df["fhi_total"] = df["fhi_cond"] + df["fhi_32"]
+    df["fh_total"] = df["fhe_total"] + df["fhi_total"]
+
+    dfx = df[df["Xpoint"] == 1]
+
+    front_satisfied = (abs(df["RAr"]) < 0.001*abs(df["RAr"]).max()).abs()
+    front_satisfied = front_satisfied[::-1]
+    front_idx = 0
+    for i in front_satisfied.index[::-1]:
+        if front_satisfied[i] == False:
+            front_idx = i-1
+            
+    dffront = df.loc[front_idx]
+
+    ## DLS
+    dlsR = out["Rprofiles"][0]
+    dlsSpar = out["Sprofiles"][0][::-1]
+    # dlsSpar = dlsSpar[-1] - dlsSpar 
+    dlsTe = out["Tprofiles"][0]
+    dlsqpar = out["Qprofiles"][0]
+    dlsNe = out["cvar"][0] * dlsTe[-1] / dlsTe   ## Assuming cvar is ne
+
+    nfigs = 5
+    fsize = 4
+    fig, axes =plt.subplots(1,nfigs, figsize = (nfigs*fsize, fsize))
+
+    ax = axes[0]
+    ax.plot(dlsSpar, dlsR, label = "DLS")
+    ax.plot(df["Spar"], df["RAr"], label = "SOLPS")
+
+
+    ax.set_title("Total Argon $Q_{rad}$ [W/m3]")
+    ax.set_yscale("log")
+
+    ax = axes[1]
+    ax.set_title("Cumulative Argon $Q_{rad}$ [W/m3]")
+
+    cumR = dlsR.cumsum() / dlsR.cumsum().max()
+    ax.plot(dlsSpar, cumR, label = "DLS")
+
+    cumR = abs(df["RAr"][::-1]).cumsum() / abs(df["RAr"][::-1]).cumsum().max()
+    ax.plot(df["Spar"][::-1], cumR, label = "SOLPS")
+    
+    ax = axes[2]
+    ax.set_title("$q_{\parallel}$")
+    ax.plot(dlsSpar, dlsqpar, label = "DLS")
+    ax.plot(df["Spar"], df["fhe_cond"], label = "SOLPS electron cond")
+    ax.plot(df["Spar"], df["fh_total"], label = "SOLPS total")
+    ax.set_yscale("log")
+
+    ax = axes[3]
+    ax.set_title("Te")
+    ax.plot(dlsSpar, dlsTe, label = "DLS")
+    ax.plot(df["Spar"], df["Te"], label = "SOLPS")
+
+    ax = axes[4]
+    ax.set_title("Ne")
+    ax.plot(dlsSpar, dlsNe, label = "DLS")
+    ax.plot(df["Spar"], df["ne"], label = "SOLPS")
+    ax.set_yscale("log")
+
+
+    for ax in axes:
+        ax.set_xlabel("Lpar [m]")
+        ylims = ax.get_ylim()
+        ax.vlines(dfx["Spar"], *ylims, color = "darkslategrey", ls = "-", alpha = 0.5, lw = 1, label = "X-point")
+        ax.vlines(dffront["Spar"], *ylims, color = "deeppink", ls = "-", alpha = 0.3, lw = 1, label = "Front")
+        ax.set_ylim(ylims)
+        ax.legend(fontsize = "x-small")
+
+    # fig.tight_layout()
+    
