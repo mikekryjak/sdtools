@@ -2,6 +2,7 @@ import regex as re
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
+import sys
 from .utils import constants
 
 class Balance1D():
@@ -405,6 +406,121 @@ class Balance1D():
             ax.set_xlim(xlims)
             
         # ax.set_yscale("log")
+        
+    def plot_flux_balance2(self, xlims = (None, None), title = ""):
+        """
+        This comes from Ben
+        """
+        ds = self.ds
+        if "t" in ds.dims: ds = ds.isel(t=-1)
+        
+
+        if len(sys.argv) != 2:
+            print("Usage: {} path".format(sys.argv[0]))
+            sys.exit(1)
+
+        path = sys.argv[1]
+
+        # These diagnostics describe parallel flows of energy
+        flows = [
+            ("KineticFlow_d+_ylow", "ion kinetic"),
+            ("KineticFlow_e_ylow", "electron kinetic"),
+            ("KineticFlow_d_ylow", "neutral kinetic"),
+            ("ConductionFlow_d+_ylow", "ion conduction"),
+            ("ConductionFlow_e_ylow", "electron conduction"),
+            ("ConductionFlow_d_ylow", "neutral conduction"),
+            ("EnergyFlow_d+_ylow", "ion total"),
+            ("EnergyFlow_e_ylow", "electron total"),
+            ("EnergyFlow_d_ylow", "neutral total"),
+        ]
+        
+        # flows = [
+        #     ("efd+_kin_ylow", "ion kinetic"),
+        #     ("efe_kin_ylow", "electron kinetic"),
+        #     ("efd_kin_ylow", "neutral kinetic"),
+        #     ("efd+_cond_ylow", "ion conduction"),
+        #     ("efe_cond_ylow", "electron conduction"),
+        #     ("efd_cond_ylow", "neutral conduction"),
+        #     ("efd+_tot_ylow", "ion total"),
+        #     ("efe_tot_ylow", "electron total"),
+        #     ("efd_tot_ylow", "neutral total"),
+        # ]
+
+
+        # Sources of energy. To be summed along field line
+        sources = [
+            ("Pd+_src", "Ion external source", 3./2),
+            ("Pe_src", "Electron external source", 3./2),
+            ("Rd+_ex", "Excitation radiation", 1.0),
+            ("Rd+_rec", "Recombination losses", 1.0),
+            #("Edd+_cx", "CX d -> d+", -1.0),
+            #("Ed+_iz", "IZ d -> d+", 1.0),
+            #("SPd+", "SPd+", 3./2),
+            #("SPe", "SPe", 3./2),
+        ]
+
+
+        dV = ds["dv"].values[2:-2]
+            
+        def remove_guards(var1D):
+            return var1D[2:-1]
+
+        flow_data = {}
+        total_flow = 0
+        for name, label in flows:
+            if name in ds:
+                value = ds[name].values
+            else:
+                print(f"Flow {name} not found")
+                continue
+            # Convert to MW
+            this_flow = remove_guards(value * 1e-6)
+            flow_data[name] = (this_flow,
+                            label)
+            # if name.startswith("ef"):
+            if name.startswith("E"):
+                # Energyflow
+                total_flow += this_flow
+
+        flow_data["total"] = (total_flow,
+                            "Total flow")
+
+        source_data = {}
+        total_source = 0.0
+        for name, label, factor in sources:
+            if name in ds:
+                value = ds[name].values
+            else:
+                print(f"Source {name} not found")
+                continue
+                
+            value *= factor * 1e-6
+
+            value[2:-2] *= dV
+            value = value[1:-2]
+            value[0] = 0.0 # No influx from lower boundary
+            this_source = np.cumsum(value)
+            source_data[name] = (this_source,
+                                label)
+            total_source += this_source
+        source_data["total"] = (total_source,
+                                "Total source")
+
+        fig, ax = plt.subplots()
+        for _, value in flow_data.items():
+            ax.plot(ds["pos"].values[2:-1], value[0], label = value[1])
+
+        for _, value in source_data.items():
+            ax.plot(ds["pos"].values[2:-1], value[0], label = value[1], linestyle='--')
+            
+        ax.legend(loc = "upper left", bbox_to_anchor = (1,1))
+        ax.set_ylabel('MW')
+        
+        if xlims != (None, None):
+            ax.set_xlim(xlims)
+        ax.set_xlabel("Pos [m]")
+        ax.set_title(title)
+
         
     def print_balances2(self):
         """
