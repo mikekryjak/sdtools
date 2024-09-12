@@ -595,6 +595,7 @@ def lineplot_compare(
         scale = 1.3
         fig, axes = plt.subplots(1,len(params), dpi = dpi*scale, figsize = (4.7*len(params)/scale,5/scale), sharex = True)
         fig.subplots_adjust(hspace = 0, wspace = 0.35, bottom = 0.25, left = 0.1, right = 0.9)
+        fig.suptitle(region, x = 0.1, y = 1.0, fontsize = "xx-large", ha = "left")
         
         linestyles = {"Hermes-3" : "-", "SOLEDGE2D" : ":", "SOLPS" : "--"}
         styles = {
