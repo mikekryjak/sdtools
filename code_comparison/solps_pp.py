@@ -51,7 +51,7 @@ class SOLPScase():
         Note that everything in the balance file is in the Y, X convention unlike the
         X, Y convention in the results. This is not intended and it reads as X, Y in MATLAB.
         You MUST transpose everything so that it's Y,X (large then small number) so it's consistent with geometry
-        which is the opposite
+        which is the opposite. This should already be done in this script.
         
         NOTES ON GUARD CELLS IN SOLPS
         - Total cell count is nx+2, ny+2. Guard cells are there for upper targets but somehow don't get counted (?!). 
@@ -64,6 +64,18 @@ class SOLPScase():
         You can get the species indeces from the string matrix "species" 
         (for Ryoko's case I think it's 4:21 for the neon ions but do check)
         numbers are in W, so divide by "vol" to get W/m3
+        
+        Balance file variables
+        
+        HEAT FLUXES
+        ------------
+        The third dimension is the direction, 0 = poloidal, 1 = radial
+        fhi_32 is the convective ion heat flux (52 is only if you use total energy)
+        fhi_cond is conductive
+        fhe_thermj is the parallel current electron heat flux
+        Rest are to do with drifts or currents
+        
+        fht = total heat flux = fhe_cond + 5/3*fhe_32 + fhi_cond + 5/3*fhi_32 + fhe_thermj
         
         """
         
@@ -168,15 +180,18 @@ class SOLPScase():
                 string = string.replace("b", "").replace("'","")
                 species += string
                 
-            df_species.loc[ispecies, "name"] = species
+            df_species.loc[ispecies, "name"] = species.strip()
             
         self.species = df_species
         
         
-    def _get_total_radiation(self, species_name):
+    def get_impurity_stats(self, species_name, all_states = False):
         """
         Get sum of radiation for all species containing the string "species_name"
         and put it in the balance file. Units are W/m3
+        
+        all_states: save densities for neutral state and all charged states
+        
         """
         try:
             species = self.species
@@ -185,17 +200,35 @@ class SOLPScase():
             self.get_species()
         bal = self.bal
         
-        species_indices = list(species[species["name"].str.contains(species_name)].index)
+        dfimp = species[species["name"].str.contains(f"{species_name}\+")]
+        species_indices = list(dfimp.index)
+        
         if len(species_indices) < 1:
             raise ValueError(f"No species found matching {species_name}")
 
         rad = []
+        nimp = []
         for i in species_indices:
             rad.append(bal["b2stel_she_bal"][:,:,i])
+            nimp.append(bal["na"][:,:,i])
 
         rad = np.sum(rad, axis = 0)
-        self.bal[f"R{species_name}"] = rad / bal["vol"] 
-        print(f"Variable R{species_name} added")
+        nimp = np.sum(nimp, axis = 0)
+        
+        self.bal[f"R{species_name}"] = abs(rad / bal["vol"] )
+        self.bal[f"n{species_name}"] = nimp
+        self.bal[f"f{species_name}"] = nimp / self.bal["ne"]
+        
+        if all_states:
+            print("Saving all states")
+            dfimp = species[species["name"].str.contains(f"{species_name}")]
+            for i in dfimp.index:
+                species = dfimp.loc[i, "name"]
+                self.bal[f"n{species}"] = bal["na"][:,:,i]
+            
+        
+        print(f"Added total radiation, density and fraction for {species_name}")
+        
     
     def derive_data(self):
         """
@@ -230,6 +263,10 @@ class SOLPScase():
 
         bal["Pn"] = bal["Pa"] + bal["Pm"]
         bal["Tn"] = bal["Pn"] / bal["Nn"] / constants("q_e")
+        
+        # bal["fhe_total"] = bal["fhe_cond"] + 
+        # fht = total heat flux = fhe_cond + 5/3*fhe_32 + fhi_cond + 5/3*fhi_32 + fhe_thermj
+        
         
         self.bal = bal
 
@@ -454,7 +491,7 @@ class SOLPScase():
         R and Z are provided for checking field line location only.
         only outer_lower region is provided at the moment.
         sepadd is the ring index number with sepadd = 0 being the separatrix
-        
+        TODO: Try using "conn" which is the connection length. There is a difference to the DLS due to interpolation
         """
         
         if type(params) == str:
@@ -464,7 +501,7 @@ class SOLPScase():
         omp = self.g["omp"]
         
         if region == "outer_lower":
-            selector = (slice(omp, None), yind)
+            selector = (slice(omp+1, None), yind)
         else:
             raise Exception("Unrecognised region")
         
@@ -476,23 +513,30 @@ class SOLPScase():
         data = {}
         
         for param in params:
+            
+            # Look in bal or geometry
             if param in self.bal:
                 data[param] = self.bal[param]
             elif param in self.g:
                 data[param] = self.g[param]
             else:
                 raise ValueError(f"Parameter {param} not found")
+            
+            if param.startswith("fh"):
+                data[param] = data[param][:,:,0]   # Select poloidal
+            
+            # Catch special variables with more dimensions
+            if len(data[param].shape) > 2:
+                raise ValueError(f"Paramerer {param} has more than 2 dimensions")
         
         df = pd.DataFrame()
         
         ## Poloidal connection length
-        df["spol"] = np.cumsum(hx)  # Poloidal distance
-        dspol = np.diff(df["spol"])
-        dspar = dspol * abs(Btot[1:] / Bpol[1:])
-        dspar = np.insert(dspar, 0, 0)
+        df["Spol"] = np.cumsum(hx)  # Poloidal distance
+        dspar = hx * abs(Btot / Bpol)
         
         ## Parallel connection length
-        df["spar"] = np.cumsum(dspar)
+        df["Spar"] = np.cumsum(dspar)
         
         ## X-point
         idxmin = np.argmin(abs(R - R.min()))
@@ -531,13 +575,17 @@ class SOLPScase():
 
         import scipy
 
-        inner_ids = scipy.signal.find_peaks(inner_R, threshold = 0.001)
+        inner_ids = scipy.signal.find_peaks(inner_R, threshold = 0.0005)
         outer_ids = scipy.signal.find_peaks(outer_R*-1, threshold = 0.001)
 
+            
+                
+        issue = False
+        
         if (len(inner_ids[0]) != 2) or (len(outer_ids[0]) != 2):
-            raise Exception("Issue in peak finder")
-
-        if plot is True:
+            issue = True
+            
+        if issue or plot:
             fig, axes = plt.subplots(1,2, figsize = (8,4))
             ax = axes[0]
             ax.plot(inner_x, inner_R)
@@ -547,6 +595,9 @@ class SOLPScase():
             ax.plot(outer_x, outer_R)
             for i in outer_ids[0]:
                 ax.scatter(outer_x[i], outer_R[i])
+                
+        if issue:
+            raise Exception("Issue in peak finder, try reducing threshold")
 
         xpoints = [
             inner_ids[0][0], 
