@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os, sys
 import pandas as pd
+import xarray
 
 
 class HiddenPrints:
@@ -143,8 +144,20 @@ def guard_replace_1d(da):
     # da[{"pos" : -2}] = (da[{"pos" : -2}] + da[{"pos" : -3}])/2
     # da[{"pos" : 1}] = (da[{"pos" : 1}] + da[{"pos" : 2}])/2
     
-    da[-2] = (da[-2] + da[-3])/2
-    da[1] = (da[1] + da[2])/2
+    da = da.copy()
+    
+    if type(da) == xarray.core.dataarray.DataArray:
+    
+    
+        da[{"pos" : -2}] = (da[{"pos" : -2}] + da[{"pos" : -3}])/2
+        da[{"pos" : 1}] = (da[{"pos" : 1}] + da[{"pos" : 2}])/2
+        
+        da = da.isel(pos = slice(1, -1))
+        
+    else:
+        da[-2] = (da[-2] + da[-3])/2
+        da[1] = (da[1] + da[2])/2
+        da = da[1:-1]
 
     return da
     
