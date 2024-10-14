@@ -276,6 +276,9 @@ def get_front_widths(p, s, Rcutoff = 0.7, dynamicGrid = True, use_prad = True):
         df.loc[i, "cvar"] = s["cvar_trim"][i]
         df.loc[i, "crel"] = s["crel_trim"][i]
         
+        df.loc[i, "cvar"] = s["cvar_trim"][i]
+        df.loc[i, "crel"] = s["crel_trim"][i]
+        
         df.loc[i, "Btot"] = np.interp(df.loc[i, "Spar"], S, Btot)
         
         df.loc[i, "Btot_eff"] = Beff
@@ -1238,88 +1241,233 @@ class plotProfiles():
 #             ax.spines[spine].set_visible(True)
 
 
-def compare_SOLPS_DLS(slc, out):
+class compare_SOLPS_DLS():
+    def __init__(self, slc, out, region = "outer_lower", sepadd = 1):
 
-    df = slc.get_1d_poloidal_data(["hx", "hz", "R", "Te", "RAr", "ne", "fhe_cond", "fhe_32", "fhi_cond", "fhi_32", "fhe_thermj"], sepadd = 1)
-    
-    for param in df:
-        if param.startswith("fh"):
-            df[param] /= (df["hx"] * (2*np.pi*df["R"]))
-    
-    for param in ["fhe_32", "fhi_32"]:
-        df[param] *= 5/3
-    
+        # Read SOLPS
+        self.solps = slc.get_1d_poloidal_data(["Btot", "hx", "vol", "R", "Te", "RAr", "ne", "fhex_cond", "fhx_total"], 
+                                  sepadd = sepadd, region = region, target_first = True)
         
-    df["fhe_total"] = df["fhe_cond"] + df["fhe_32"] + df["fhe_thermj"]
-    df["fhi_total"] = df["fhi_cond"] + df["fhi_32"]
-    df["fh_total"] = df["fhe_total"] + df["fhi_total"]
+        # Read DLS
+        dls = pd.DataFrame()
+        dls["Qrad"] = out["Rprofiles"][0]
+        dls["Spar"] = out["Sprofiles"][0]
+        dls["Spol"] = out["Spolprofiles"][0]
+        dls["Te"] = out["Tprofiles"][0]
+        dls["qpar"] = out["Qprofiles"][0]
+        dls["Btot"] = out["Btotprofiles"][0]
+        dls["Ne"] = out["cvar"][0] * dls["Te"].iloc[-1] / dls["Te"]   ## Assuming cvar is ne
+        Xpoint = out["Xpoints"][0]
+        dls.loc[Xpoint, "Xpoint"] = 1
 
-    dfx = df[df["Xpoint"] == 1]
-
-    front_satisfied = (abs(df["RAr"]) < 0.001*abs(df["RAr"]).max()).abs()
-    front_satisfied = front_satisfied[::-1]
-    front_idx = 0
-    for i in front_satisfied.index[::-1]:
-        if front_satisfied[i] == False:
-            front_idx = i-1
-            
-    dffront = df.loc[front_idx]
-
-    ## DLS
-    dlsR = out["Rprofiles"][0]
-    dlsSpar = out["Sprofiles"][0][::-1]
-    # dlsSpar = dlsSpar[-1] - dlsSpar 
-    dlsTe = out["Tprofiles"][0]
-    dlsqpar = out["Qprofiles"][0]
-    dlsNe = out["cvar"][0] * dlsTe[-1] / dlsTe   ## Assuming cvar is ne
-
-    nfigs = 5
-    fsize = 4
-    fig, axes =plt.subplots(1,nfigs, figsize = (nfigs*fsize, fsize))
-
-    ax = axes[0]
-    ax.plot(dlsSpar, dlsR, label = "DLS")
-    ax.plot(df["Spar"], df["RAr"], label = "SOLPS")
+        # qradial is the uniform upstream heat source
+        dls["qradial"] = 1.0
+        # dls["qradial"].iloc[Xpoint:] = out["state"].qradial
+        dls.loc[Xpoint:, "qradial"] = out["state"].qradial
+        
+        self.dls = dls
+        
+        self.solps = self.calculate_solps(self.solps)
+        self.dls = self.calculate_dls(self.dls)
+        
+        
+    def calculate_solps(self, solps):
+        
+        for param in solps:
+            if param.startswith("fh"):
+                solps[param] /= solps["apar"]  # Parallel cross-sectional area
 
 
-    ax.set_title("Total Argon $Q_{rad}$ [W/m3]")
-    ax.set_yscale("log")
+        # Calculate radiation (see DLS comments)
+        solps["Prad_per_area_cum"] = sp.integrate.cumulative_trapezoid(y = solps["RAr"], x = solps["Spar"], initial = 0)   # Radiation integral over volume
+        solps["Prad_per_area_cum_norm"] = solps["Prad_per_area_cum"] / solps["Prad_per_area_cum"].max()
 
-    ax = axes[1]
-    ax.set_title("Cumulative Argon $Q_{rad}$ [W/m3]")
+        solps["Prad_cum"] = sp.integrate.cumulative_trapezoid(y = solps["RAr"] / solps["Btot"], x = solps["Spar"], initial = 0)   # Radiation integral over volume
+        solps["Prad_cum_norm"] = solps["Prad_cum"] / solps["Prad_cum"].max()
+                
+        return solps
 
-    cumR = dlsR.cumsum() / dlsR.cumsum().max()
-    ax.plot(dlsSpar, cumR, label = "DLS")
-
-    cumR = abs(df["RAr"][::-1]).cumsum() / abs(df["RAr"][::-1]).cumsum().max()
-    ax.plot(df["Spar"][::-1], cumR, label = "SOLPS")
+    def calculate_dls(self, dls):
+        
+        
+        # Radiative power loss without flux expansion effect.
+        # Units are W, bit integrated assuming unity cross-sectional area, so really W/m2
+        # Done by reconstructing the RHS of the qpar equation
+        dls["Prad_per_area"] = np.gradient(dls["qpar"]/dls["Btot"], dls["Spar"]) + dls["qradial"]/dls["Btot"]
+        dls["Prad_per_area_cum"] = sp.integrate.cumulative_trapezoid(y = dls["Prad_per_area"], x = dls["Spar"], initial = 0)  # W/m2
+        dls["Prad_per_area_cum_norm"] = dls["Prad_per_area_cum"] / dls["Prad_per_area_cum"].max()
+        # Proper radiative power integral [W]
+        dls["Prad_cum"] = sp.integrate.cumulative_trapezoid(y = dls["Qrad"] / dls["Btot"], x = dls["Spar"], initial = 0)   # Radiation integral over volume
+        dls["Prad_cum_norm"] = dls["Prad_cum"] / dls["Prad_cum"].max()
+        
+        return dls
     
-    ax = axes[2]
-    ax.set_title("$q_{\parallel}$")
-    ax.plot(dlsSpar, dlsqpar, label = "DLS")
-    ax.plot(df["Spar"], df["fhe_cond"], label = "SOLPS electron cond")
-    ax.plot(df["Spar"], df["fh_total"], label = "SOLPS total")
-    ax.set_yscale("log")
+    def plot(self, mode = "full"):
+        fsize = 4
+        
+        if mode == "full":
+            nfigs = 5
+            fig, axes =plt.subplots(1,nfigs, figsize = (nfigs*fsize, fsize))
 
-    ax = axes[3]
-    ax.set_title("Te")
-    ax.plot(dlsSpar, dlsTe, label = "DLS")
-    ax.plot(df["Spar"], df["Te"], label = "SOLPS")
+            self.plot_radiation_source(axes[0], logscale = True)
+            self.plot_radiation_integral(axes[1])
+            self.plot_qpar(axes[2])
+            self.plot_Te(axes[3])
+            self.plot_Ne(axes[4])
+            
+        if mode == "extended":
+            nfigs = 4
+            fig, axes =plt.subplots(1,nfigs, figsize = (nfigs*fsize, fsize))
 
-    ax = axes[4]
-    ax.set_title("Ne")
-    ax.plot(dlsSpar, dlsNe, label = "DLS")
-    ax.plot(df["Spar"], df["ne"], label = "SOLPS")
-    ax.set_yscale("log")
+            self.plot_radiation_source(axes[0], logscale = True)
+            self.plot_radiation_integral(axes[1])
+            self.plot_qpar(axes[2])
+            self.plot_Te(axes[3])
+    
+
+    def plot_Xpoint(self, ax):
+        # solps = self.solps
+        dls = self.dls
+        
+        ylim = ax.get_ylim()
+        ax.vlines(dls[dls["Xpoint"]==1]["Spar"], *ylim, colors = "k", alpha = 0.3, lw = 3, label = "X-point")
+        ax.set_ylim(*ylim)
+        
+    def apply_plot_settings(self, ax):
+        ax.legend(fontsize = "small")
+        ax.set_xlabel("$s_{\parallel}$ [m]")
+        
+    def plot_qpar(self, ax):
+        
+        solps = self.solps
+        dls = self.dls
+        
+        ax.set_title("Parallel heat flux")
+        ax.plot(dls["Spar"], dls["qpar"], label = "DLS")
+        ax.plot(solps["Spar"], abs(solps["fhex_cond"]), label = "SOLPS electron cond")
+        ax.plot(solps["Spar"], abs(solps["fhx_total"]), label = "SOLPS total")
+        
+        ax.set_ylabel("$q_{\parallel}$ $[Wm^{-2}]$")
+        self.plot_Xpoint(ax)
+        self.apply_plot_settings(ax)
+        
+    def plot_Te(self, ax):
+        
+        solps = self.solps
+        dls = self.dls
+        
+        ax.set_title("Temperature")
+        ax.plot(dls["Spar"], dls["Te"], label = "DLS")
+        ax.plot(solps["Spar"], solps["Te"], label = "SOLPS")
+        ax.set_ylabel("$T_e$ $[eV]$")
+        self.plot_Xpoint(ax)
+        self.apply_plot_settings(ax)
+
+    def plot_Ne(self, ax):
+        solps = self.solps
+        dls = self.dls
+        
+        ax.set_title("Density")
+        ax.plot(dls["Spar"], dls["Ne"], label = "DLS")
+        ax.plot(solps["Spar"], solps["ne"], label = "SOLPS")
+
+        ax.set_ylabel("$N_e$ $[m^{-3}]$")
+        ax.set_yscale("log")
+        self.plot_Xpoint(ax)
+        self.apply_plot_settings(ax)
+        
+    def plot_radiation_source(self, ax, logscale = True):
+        
+        solps = self.solps
+        dls = self.dls
+        
+        ax.plot(dls["Spar"], dls["Qrad"], label = "DLS")
+        ax.plot(solps["Spar"], solps["RAr"], label = "SOLPS")
+        ax.set_title("Radiation source")
+        ax.set_ylabel("[W/m3]")
+
+        if logscale:
+            ax.set_yscale("log")
+            
+        self.plot_Xpoint(ax)
+        self.apply_plot_settings(ax)
+            
+    def plot_radiation_integral(self, ax, per_area = False, logscale = False):
+        
+        solps = self.solps
+        dls = self.dls
+        
+        if per_area:
+            ax.plot(dls["Spar"], dls["Prad_per_area_cum_norm"], label = "DLS")
+            ax.plot(solps["Spar"], solps["Prad_per_area_cum_norm"], label = "SOLPS")
+            ax.set_title("Cumulative radiation\nintegral (per area)")
+            ax.set_ylabel("[W/m2]")
+        else:
+            ax.plot(dls["Spar"], dls["Prad_cum_norm"], label = "DLS")
+            ax.plot(solps["Spar"], solps["Prad_cum_norm"], label = "SOLPS")
+            ax.set_title("Cumulative radiation integral")
+            ax.set_ylabel("[W]")
+        
+        if logscale:
+            ax.set_yscale("log")
+            
+        self.plot_Xpoint(ax)
+        self.apply_plot_settings(ax)
+        
+        
+        
+# def compare_SOLPS_DLS(slc, out, region = "outer_lower", sepadd = 1):
+
+    
+    
+
+#     nfigs = 5
+#     fsize = 4
+#     fig, axes =plt.subplots(1,nfigs, figsize = (nfigs*fsize, fsize))
+
+#     ax = axes[0]
+#     ax.plot(dls["Spar"], dls["Qrad"], label = "DLS")
+#     ax.plot(solps["Spar"], solps["RAr"], label = "SOLPS")
+    
+#     ax.set_title("Total Argon $Q_{rad}$ [W/m3]")
+#     # ax.set_yscale("log")
+
+#     ### Cumulative radiation plot
+#     ax = axes[1]
+#     ax.set_title("Cumulative Argon $Q_{rad}$ [W/m3]")
+#     ax.plot(dls["Spar"], dls["Pradcum"], label = "DLS")
+
+        
+#     cumR = df["RAr"][::-1].cumsum()[::-1]
+#     cumR /= cumR[0]
+#     ax.plot(solps["Spar"], Pradcum, label = "SOLPS")
+    
+#     ax = axes[2]
+#     ax.set_title("$q_{\parallel}$")
+#     ax.plot(dlsSpar, dlsqpar, label = "DLS")
+#     ax.plot(solps["Spar"], abs(solps["fhex_cond"]), label = "SOLPS electron cond")
+#     ax.plot(solps["Spar"], abs(solps["fhx_total"]), label = "SOLPS total")
+#     # ax.set_yscale("log")
+
+#     ax = axes[3]
+#     ax.set_title("Te")
+#     ax.plot(dlsSpar, dlsTe, label = "DLS")
+#     ax.plot(solps["Spar"], solps["Te"], label = "SOLPS")
+
+#     ax = axes[4]
+#     ax.set_title("Ne")
+#     ax.plot(dlsSpar, dlsNe, label = "DLS")
+#     ax.plot(solps["Spar"], solps["ne"], label = "SOLPS")
+#     ax.set_yscale("log")
 
 
-    for ax in axes:
-        ax.set_xlabel("Lpar [m]")
-        ylims = ax.get_ylim()
-        ax.vlines(dfx["Spar"], *ylims, color = "darkslategrey", ls = "-", alpha = 0.5, lw = 1, label = "X-point")
-        ax.vlines(dffront["Spar"], *ylims, color = "deeppink", ls = "-", alpha = 0.3, lw = 1, label = "Front")
-        ax.set_ylim(ylims)
-        ax.legend(fontsize = "x-small")
+#     for ax in axes:
+#         ax.set_xlabel("Lpar [m]")
+#         ylims = ax.get_ylim()
+#         ax.vlines(dfx["Spar"], *ylims, color = "darkslategrey", ls = "-", alpha = 0.5, lw = 1, label = "X-point")
+#         # ax.vlines(dffront["Spar"], *ylims, color = "deeppink", ls = "-", alpha = 0.3, lw = 1, label = "Front")
+#         ax.set_ylim(ylims)
+#         ax.legend(fontsize = "x-small")
 
-    # fig.tight_layout()
+#     # fig.tight_layout()
     
