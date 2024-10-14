@@ -69,6 +69,8 @@ class SOLPScase():
         
         HEAT FLUXES
         ------------
+        ALL ARE IN W
+        
         The third dimension is the direction, 0 = poloidal, 1 = radial
         fhi_32 is the convective ion heat flux (52 is only if you use total energy)
         fhi_cond is conductive
@@ -264,10 +266,23 @@ class SOLPScase():
         bal["Pn"] = bal["Pa"] + bal["Pm"]
         bal["Tn"] = bal["Pn"] / bal["Nn"] / constants("q_e")
         
-        # bal["fhe_total"] = bal["fhe_cond"] + 
-        # fht = total heat flux = fhe_cond + 5/3*fhe_32 + fhi_cond + 5/3*fhi_32 + fhe_thermj
+        # Derive total fluxes (excl. drifts)
+        bal["fhe_total"] = bal["fhe_cond"] + 5/3*bal["fhe_32"] + bal["fhe_thermj"]
+        bal["fhi_total"] = bal["fhi_cond"] + 5/3*bal["fhi_32"]
         
-        
+        # Split fluxes into X and Y components
+        existing_params = list(bal.keys())
+        for param in existing_params:
+            if "fhe" in param:
+                bal[param.replace("fhe", "fhex")] = bal[param][:,:,0]
+                bal[param.replace("fhe", "fhey")] = bal[param][:,:,1]
+            elif "fhi" in param:
+                bal[param.replace("fhi", "fhix")] = bal[param][:,:,0]
+                bal[param.replace("fhi", "fhiy")] = bal[param][:,:,1]
+                
+        bal["fhx_total"] = bal["fhex_total"] + bal["fhix_total"]
+        bal["fhy_total"] = bal["fhey_total"] + bal["fhiy_total"]
+                
         self.bal = bal
 
 
@@ -462,18 +477,37 @@ class SOLPScase():
         if type(params) == str:
             params = [params]
         
-        if any([region in name for name in ["omp", "imp"]]):
+        if any([region in name for name in ["omp", "imp", "outer_lower_target"]]):
             p = self.s[region] 
         else:
             raise Exception(f"Unrecognised region: {region}")
+        
+        selector = (p[0], slice(None))
     
         df = pd.DataFrame()
-        df["dist"] = self.g["R"][p[0], p[1]] - self.g["R"][p[0], self.g["sep"]] 
-        df["R"] = self.g["R"][p[0], p[1]]
-        df["Z"] = self.g["Z"][p[0], p[1]]
+        # df["dist"] = self.g["R"][p[0], p[1]] - self.g["R"][p[0], self.g["sep"]] 
+        df["dist"] = np.cumsum(self.g["hy"][selector])  # Radial distance
+        
+        # Interpolate between cells to get separatrix distance
+        sepind = self.g["sep"]
+        sep_corr = (df["dist"][sepind] - df["dist"][sepind-1]) / 2
+        dist_sep = df["dist"][sepind]
+        df["dist"] -= dist_sep - sep_corr
+        
+        df["R"] = self.g["R"][selector]
+        df["Z"] = self.g["Z"][selector]
+        
+        hx = self.bal["hx"][selector]
+        Btot = self.g["Btot"][selector]
+        Bpol = self.g["Bpol"][selector]
+        R = self.g["R"][selector]
+        vol = self.g["vol"][selector]
+        
+        dSpar = hx * abs(Btot / Bpol)
+        df["apar"] = vol / dSpar
 
         for param in params:
-            df[param] = self.bal[param][p[0], :]
+            df[param] = self.bal[param][selector[0], :]
         
         return df
     
@@ -481,7 +515,8 @@ class SOLPScase():
         self,
         params,
         region = "outer_lower",
-        sepadd = 0
+        sepadd = 0,
+        target_first = False,
         
     ):
         """
@@ -492,6 +527,8 @@ class SOLPScase():
         only outer_lower region is provided at the moment.
         sepadd is the ring index number with sepadd = 0 being the separatrix
         TODO: Try using "conn" which is the connection length. There is a difference to the DLS due to interpolation
+        NOTE: Be very careful when flipping the direction of the field line (target_first) as there are some hysteresis
+        effects. Do all operations on Spar before reversing.
         """
         
         if type(params) == str:
@@ -499,9 +536,12 @@ class SOLPScase():
         
         yind = self.g["sep"] + sepadd   # Ring index
         omp = self.g["omp"]
+        imp = self.g["imp"]
         
         if region == "outer_lower":
-            selector = (slice(omp+1, None), yind)
+            selector = (slice(omp, -1), yind)
+        elif region == "inner_lower":
+            selector = (slice(1, imp+1), yind)
         else:
             raise Exception("Unrecognised region")
         
@@ -509,6 +549,8 @@ class SOLPScase():
         Btot = self.g["Btot"][selector]
         Bpol = self.g["Bpol"][selector]
         R = self.g["R"][selector]
+        Z = self.g["Z"][selector]
+        vol = self.g["vol"][selector]
         
         data = {}
         
@@ -522,31 +564,64 @@ class SOLPScase():
             else:
                 raise ValueError(f"Parameter {param} not found")
             
-            if param.startswith("fh"):
+            if param.startswith("fh") and "x" not in param and "y" not in param:
                 data[param] = data[param][:,:,0]   # Select poloidal
             
             # Catch special variables with more dimensions
             if len(data[param].shape) > 2:
                 raise ValueError(f"Paramerer {param} has more than 2 dimensions")
+            
+            
         
         df = pd.DataFrame()
+        df["R"] = R
+        df["Z"] = Z
         
         ## Poloidal connection length
         df["Spol"] = np.cumsum(hx)  # Poloidal distance
-        dspar = hx * abs(Btot / Bpol)
         
-        ## Parallel connection length
-        df["Spar"] = np.cumsum(dspar)
-        
-        ## X-point
-        idxmin = np.argmin(abs(R - R.min()))
-        df["Xpoint"] = 0
-        df.loc[idxmin, "Xpoint"] = 1
+        # df["Spol"] -= df["Spol"].iloc[0]   # Now 0 is cell centre before midplane
         
         for param in params:
             df[param] = data[param][selector]
         
+        ## Parallel connection length
+        dSpar = hx * abs(Btot / abs(Bpol))
+        df["Spar"] = np.cumsum(dSpar)
+        df["apar"] = vol / dSpar
+
+        ## X-point
+        if "inner" in region:
+            idxmin = np.argmin(abs(R - R.max()))
+        elif "outer" in region:
+            idxmin = np.argmin(abs(R - R.min()))
+        else:
+            raise ValueError("Region not recognised")
+
+        df["Xpoint"] = 0
+        df.loc[idxmin, "Xpoint"] = 1
+
+        if "inner" in region:
+            df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
+            df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
+            df = df.iloc[::-1].reset_index(drop = True)
+
+
+        # Interpolate onto Z = 0
+        for param in df.columns.drop("Z"):
+            interp = scipy.interpolate.interp1d(df["Z"], df[param], kind = "linear")
+            df.loc[0, param] = interp(0)
+        df.loc[0,"Z"] = 0  
+
+        df["Spol"] -= df["Spol"].iloc[0]   # Now 0 is at Z = 0
+
+        if target_first:
+            df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
+            df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
+            df = df.iloc[::-1]
+        
         return df
+        # return df[::-1]
     
     def find_param(self, name):
         """
@@ -575,23 +650,37 @@ class SOLPScase():
 
         import scipy
 
-        inner_ids = scipy.signal.find_peaks(inner_R, threshold = 0.0005)
+        inner_ids = scipy.signal.find_peaks(inner_R, threshold = 0.0007)
         outer_ids = scipy.signal.find_peaks(outer_R*-1, threshold = 0.001)
 
             
                 
         issue = False
         
-        if (len(inner_ids[0]) != 2) or (len(outer_ids[0]) != 2):
+        if (len(inner_ids[0]) > 2):
+            print("Too many X-points found in inner SOL")
+            issue = True
+        elif (len(inner_ids[0]) < 2):
+            print("Too few X-points found in inner SOL")
+            issue = True
+            
+        if (len(outer_ids[0]) > 2):
+            print("Too many X-points found in outer SOL")
+            issue = True
+            
+        elif (len(outer_ids[0]) < 2):
+            print("Too few X-points found in outer SOL")
             issue = True
             
         if issue or plot:
             fig, axes = plt.subplots(1,2, figsize = (8,4))
             ax = axes[0]
+            ax.set_title("Inner SOL")
             ax.plot(inner_x, inner_R)
             for i in inner_ids[0]:
                 ax.scatter(inner_x[i], inner_R[i])
             ax = axes[1]
+            ax.set_title("Outer SOL")
             ax.plot(outer_x, outer_R)
             for i in outer_ids[0]:
                 ax.scatter(outer_x[i], outer_R[i])
@@ -760,3 +849,38 @@ def read_display_tallies(path):
         dfout.index = dfout.pop("param")
 
     return {"reg":dfreg, "xreg":dfxreg, "yreg":dfyreg }
+
+
+
+def returnll(R, Z):
+    # return the poloidal distances from the target for a given configuration
+    # C.Cowley 2021
+    PrevR = R[0]
+    ll = []
+    currentl = 0
+    PrevZ = Z[0]
+    for i in range(len(R)):
+        dl = np.sqrt((PrevR - R[i]) ** 2 + (PrevZ - Z[i]) ** 2)
+        currentl += dl
+        ll.append(currentl)
+        PrevR = R[i]
+        PrevZ = Z[i]
+    return ll
+
+
+def returnS(R, Z, B, Bpol):
+    # return the real total distances from the target for a given configuration
+    # C.Cowley 2021
+    PrevR = R[0]
+    s = []
+    currents = 0
+    PrevZ = Z[0]
+    for i in range(len(R)):
+        dl = np.sqrt((PrevR - R[i]) ** 2 + (PrevZ - Z[i]) ** 2)
+        ds = dl * np.abs(B[i]) / np.abs(Bpol[i])
+        currents += ds
+        s.append(currents)
+        PrevR = R[i]
+        PrevZ = Z[i]
+    return s
+
