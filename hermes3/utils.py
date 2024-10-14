@@ -134,21 +134,19 @@ def guard_replace_1d(da):
                 ^target      
         |  -3  |  -2   |      -1
         
+    Parameters
+    ----------
+    - da: Numpy array or Xarray DataArray with guard cells
+        
     Returns
     ----------
     - Numpy array with guard replacement
 
     """
 
-
-    # da[{"pos" : -2}] = (da[{"pos" : -2}] + da[{"pos" : -3}])/2
-    # da[{"pos" : 1}] = (da[{"pos" : 1}] + da[{"pos" : 2}])/2
-    
     da = da.copy()
     
     if type(da) == xarray.core.dataarray.DataArray:
-    
-    
         da[{"pos" : -2}] = (da[{"pos" : -2}] + da[{"pos" : -3}])/2
         da[{"pos" : 1}] = (da[{"pos" : 1}] + da[{"pos" : 2}])/2
         
