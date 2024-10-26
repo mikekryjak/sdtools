@@ -1237,20 +1237,22 @@ class Case:
         m["j2_1"] = m["jyseps2_1"]
         m["j2_2"] = m["jyseps2_2"]
         
+        # Jyseps accounting for guard cells
         m["j1_1g"] = m["j1_1"] + m["MYG"]
         m["j1_2g"] = m["j1_2"] + m["MYG"] * (num_targets - 1)
         m["j2_1g"] = m["j2_1"] + m["MYG"]
         m["j2_2g"] = m["j2_2"] + m["MYG"] * (num_targets - 1)
         
+        # Separatrix index accounting for guard cells
+        m["ixseps1g"] = m["ixseps1"] - m["MXG"]
+        m["ixseps2g"] = m["ixseps2"] - m["MXG"]
+        
+        # Poloidal midplane indices
         m["omp_a"] = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"]
         m["omp_b"] = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"] + 1
         m["imp_a"] = int((m["j2_1g"] - m["j1_1g"]) / 2) + m["j1_1g"] + 1
         m["imp_b"] = int((m["j2_1g"] - m["j1_1g"]) / 2) + m["j1_1g"]
         
-        
-           
-        # print(m["nxg"])
-        # print(m["nx"])
             
         # Array of radial (x) indices and of poloidal (y) indices for each cell
         ds["x_idx"] = (["x", "theta"], np.array([np.array(range(m["nxg"]))] * int(m["nyg"])).transpose())
@@ -1312,100 +1314,6 @@ class Case:
             "long_name" : "Poloidal length",
             "source" : "xHermes"})
 
-
-    # def extract_2d_tokamak_geometry(self):
-    #     """
-    #     Perpare geometry variables
-    #     """
-    #     data = self.ds
-    #     meta = self.ds.metadata
-
-    #     # self.Rxy = meta["Rxy"]    # R coordinate array
-    #     # self.Zxy = meta["Zxy"]    # Z coordinate array
-        
-        
-    #     if meta["keep_xboundaries"] == 1:
-    #         self.MXG = meta["MXG"]
-    #     else:
-    #         self.MXG = 0
-            
-    #     if meta["keep_yboundaries"] == 1:
-    #         self.MYG = meta["MYG"]
-    #     else:
-    #         self.MYG = 0
-            
-    #     self.ixseps1 = meta["ixseps1"]
-    #     self.ny_inner = meta["ny_inner"]
-    #     self.ny = meta["ny"]
-    #     self.nyg = self.ny + self.MYG * 4 # with guard cells
-    #     self.nx = meta["nx"]
-        
-    #     # Array of radial (x) indices and of poloidal (y) indices in the style of Rxy, Zxy
-    #     self.x_idx = np.array([np.array(range(self.nx))] * int(self.nyg)).transpose()
-    #     self.y_idx = np.array([np.array(range(self.nyg))] * int(self.nx))
-        
-    #     self.yflat = self.y_idx.flatten()
-    #     self.xflat = self.x_idx.flatten()
-    #     self.rflat = self.ds.coords["R"].values.flatten()
-    #     self.zflat = self.ds.coords["Z"].values.flatten()
-
-    #     self.j1_1 = meta["jyseps1_1"]
-    #     self.j1_2 = meta["jyseps1_2"]
-    #     self.j2_1 = meta["jyseps2_1"]
-    #     self.j2_2 = meta["jyseps2_2"]
-    #     self.ixseps2 = meta["ixseps2"]
-    #     self.ixseps1 = meta["ixseps1"]
-    #     self.Rxy = self.ds.coords["R"]
-    #     self.Zxy = self.ds.coords["Z"]
-
-    #     self.j1_1g = self.j1_1 + self.MYG
-    #     self.j1_2g = self.j1_2 + self.MYG * 3
-    #     self.j2_1g = self.j2_1 + self.MYG
-    #     self.j2_2g = self.j2_2 + self.MYG * 3
-        
-    #     # Cell areas in flux space
-    #     # dV = dx * dy * dz * J where dz is assumed to be 2pi in 2D
-    #     self.dx = data["dx"]
-    #     self.dy = data["dy"]
-    #     self.dydx = data["dy"] * data["dx"]    # Poloidal surface area
-    #     self.J = data["J"]
-    #     dz = 2*np.pi    # Axisymmetric
-    #     self.dv = self.dydx * dz * data["J"]    # Cell volume
-        
-    #     # Cell areas in real space
-    #     # TODO: Check these against dx/dy to ensure volume is the same
-    #     # dV = (hthe/Bpol) * (R*Bpol*dr) * dy*2pi = hthe * dy * dr * 2pi * R
-    #     self.dr = self.dx / (self.ds.R * self.ds.Bpxy)    # Length of cell in radial direction
-    #     self.hthe = self.J * self.ds["Bpxy"]    # poloidal arc length per radian
-    #     self.dl = self.dy * self.hthe    # poloidal arc length
-        
-    #     self.ds["dr"] = self.ds.dx / (self.ds.R * self.ds.Bpxy)
-    #     self.ds["dr"].attrs.update({
-    #         "conversion" : 1,
-    #         "units" : "m",
-    #         "standard_name" : "radial length",
-    #         "long_name" : "Length of cell in the radial direction"})
-        
-    #     self.ds["hthe"] = self.ds.J * self.ds["Bpxy"]    # h_theta
-    #     self.ds["hthe"].attrs.update({
-    #         "conversion" : 1,
-    #         "units" : "m/radian",
-    #         "standard_name" : "h_theta: poloidal arc length per radian",
-    #         "long_name" : "h_theta: poloidal arc length per radian"})
-        
-    #     self.ds["dl"] = self.ds.dy * self.ds["hthe"]    # poloidal arc length
-    #     self.ds["dl"].attrs.update({
-    #         "conversion" : 1,
-    #         "units" : "m",
-    #         "standard_name" : "poloidal arc length",
-    #         "long_name" : "Poloidal arc length"})
-        
-    #     self.ds["dv"] = self.dydx * dz * data["J"]    # Cell volume
-    #     self.ds["dv"].attrs.update({
-    #         "conversion" : 1,
-    #         "units" : "m3",
-    #         "standard_name" : "cell volume",
-    #         "long_name" : "Cell volume"})
         
     def collect_boundaries(self):
         self.boundaries = dict()
