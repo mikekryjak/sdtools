@@ -243,6 +243,8 @@ class SOLEDGEdata:
                 self.regions[region]["Pa"] = self.regions[region]["Na"] * self.regions[region]["Ta"] * constants("q_e")
             if "Tm" in self.regions[region].keys():
                 self.regions[region]["Pm"] = self.regions[region]["Nm"] * self.regions[region]["Tm"] * constants("q_e")
+            if "Vd+" in self.regions[region].keys():
+                self.regions[region]["NVd+"] = self.regions[region]["Vd+"] * self.regions[region]["Ne"] * constants("mass_p") * 2
             
 
 class SOLPSdata:
@@ -259,11 +261,13 @@ class SOLPSdata:
         spc.derive_data()
         data = spc.bal
         
+        print("NVd+" in data.keys())
+        
         
         regions = {}
 
         # index = np.cumsum(self.g["hx"][selector])
-        list_params = ["Td+", "Te", "Ne", "Pe", "Pd+", "Na", "Nn", "Nm", "Ta", "Tn", "Tm", "Pa", "Pm", "Pn"]
+        list_params = ["Td+", "Te", "Ne", "Pe", "Pd+", "Na", "Nn", "Nm", "Ta", "Tn", "Tm", "Pa", "Pm", "Pn", "NVd+"]
 
         ### ALL WITH NO GUARDS
 
@@ -447,7 +451,7 @@ class Hermesdata:
     def __init__(self):
         self.code = "Hermes-3"
         self.params =  [
-            "Td+", "Td", "Te", "Ne", "Pe", "Pd+", "Pd", "Nd",  "Pd*", "Nd*", "Td*",
+            "Td+", "Td", "Te", "Ne", "Pe", "Pd+", "Pd", "Nd",  "Pd*", "Nd*", "Td*", "NVd+",
             "Sd+_iz", "Rd+_ex", "Rd+_rec"]
         pass
     
@@ -599,7 +603,7 @@ def lineplot_compare(
         
         linestyles = {"Hermes-3" : "-", "SOLEDGE2D" : ":", "SOLPS" : "--"}
         styles = {
-            "Hermes-3" : {"ls" : "-", "lw" : 3},
+            "Hermes-3" : {"ls" : "-", "lw" : lw},
             "SOLEDGE2D" : {"ls" : "-", "lw" : 0, "marker" : "x", "ms" : 5, "markerfacecolor":"auto", "markeredgewidth":1, "zorder":100},
             "SOLPS" : {"ls" : "-", "lw" : 0, "marker" : "o", "ms" : 3, "markeredgewidth":0}
         }
@@ -706,7 +710,7 @@ def lineplot_compare(
                 axes[i].set_yscale(set_yscales[region][param])
             else:
                 if "T" in param or "N" in param and "outer_lower" not in region:
-                    axes[i].set_yscale("log")
+                    axes[i].set_yscale("symlog")
                     
             if mode == "linear":
                 axes[i].set_yscale("linear")
