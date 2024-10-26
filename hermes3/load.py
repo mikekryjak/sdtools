@@ -1242,9 +1242,13 @@ class Case:
         m["j2_1g"] = m["j2_1"] + m["MYG"]
         m["j2_2g"] = m["j2_2"] + m["MYG"] * (num_targets - 1)
         
+        m["omp_a"] = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"]
+        m["omp_b"] = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"] + 1
+        m["imp_a"] = int((m["j2_1g"] - m["j1_1g"]) / 2) + m["j1_1g"] + 1
+        m["imp_b"] = int((m["j2_1g"] - m["j1_1g"]) / 2) + m["j1_1g"]
         
         
-        
+           
         # print(m["nxg"])
         # print(m["nx"])
             
