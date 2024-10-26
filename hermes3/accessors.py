@@ -2,6 +2,7 @@ from xarray import register_dataset_accessor, register_dataarray_accessor
 from xbout import BoutDatasetAccessor, BoutDataArrayAccessor
 from hermes3.plotting import *
 from hermes3.front_tracking import *
+from hermes3.selectors import get_1d_radial_data
 import numpy as np
 
 
@@ -14,9 +15,9 @@ class HermesDataArrayAccessor(BoutDataArrayAccessor):
     def __init__(self, da):
         super().__init__(da)
 
-    def select_region(self, name):
+    def select_region(self, name, squeeze = True):
         selection = _select_region(self.data, name)
-        return self.data.isel(x=selection[0], theta=selection[1])
+        return self.data.isel(x=selection[0], theta=selection[1]).squeeze()
 
     def select_custom_core_ring(self, i):
         return _select_custom_core_ring(self.data, i)
@@ -59,8 +60,8 @@ class HermesDatasetAccessor(BoutDatasetAccessor):
     def select_custom_core_ring(self, i):
         return _select_custom_core_ring(self.data, i)
     
-    def select_custom_sol_ring(self, i, region):
-        return _select_custom_sol_ring(self.data, i, region)
+    def select_custom_sol_ring(self, region, **kwargs):
+        return _select_custom_sol_ring(self.data, region, **kwargs)
     
     def get_cvode_metrics(self):
         self.data = _get_cvode_metrics(self.data)
@@ -174,6 +175,7 @@ def _select_region(ds, name):
     j1_2g = j1_2 + MYG * 3
     j2_1g = j2_1 + MYG
     j2_2g = j2_2 + MYG * 3
+    
     
     if all([x in name for x in ["target", "guard"]]) and MYG == 0:
         raise Exception("Trying to select yguards on a dataset without any")
@@ -392,20 +394,39 @@ def _select_region(ds, name):
         ],
     )
 
-    slices["outer_midplane_a"] = (slice(None, None), int((j2_2g - j1_2g) / 2) + j1_2g)
-    
-    slices["outer_midplane_a_sep"] = (ixseps1, int((j2_2g - j1_2g) / 2) + j1_2g)
-    
-    slices["outer_midplane_b"] = (
+    slices["outer_midplane_a_guards"] = (
+        slice(None, None), int((j2_2g - j1_2g) / 2) + j1_2g
+    )
+    slices["outer_midplane_b_guards"] = (
         slice(None, None),
         int((j2_2g - j1_2g) / 2) + j1_2g + 1,
     )
-
-    slices["inner_midplane_a"] = (
+    slices["inner_midplane_a_guards"] = (
         slice(None, None),
         int((j2_1g - j1_1g) / 2) + j1_1g + 1,
     )
-    slices["inner_midplane_b"] = (slice(None, None), int((j2_1g - j1_1g) / 2) + j1_1g)
+    slices["inner_midplane_b_guards"] = (
+        slice(None, None), int((j2_1g - j1_1g) / 2) + j1_1g
+    )
+    
+    slices["outer_midplane_a"] = (
+        slice(MXG, -MXG), int((j2_2g - j1_2g) / 2) + j1_2g
+    )
+    slices["outer_midplane_b"] = (
+        slice(MXG, -MXG),
+        int((j2_2g - j1_2g) / 2) + j1_2g + 1,
+    )
+    slices["inner_midplane_a"] = (
+        slice(MXG, -MXG),
+        int((j2_1g - j1_1g) / 2) + j1_1g + 1,
+    )
+    slices["inner_midplane_b"] = (
+        slice(MXG, -MXG), int((j2_1g - j1_1g) / 2) + j1_1g
+    )
+    
+    slices["outer_midplane_a_sep"] = (
+        ixseps1, int((j2_2g - j1_2g) / 2) + j1_2g
+    )
 
     selection = slices[name]
 
@@ -434,25 +455,36 @@ def _select_custom_core_ring(ds, i):
     return ds.isel(x=selection[0], theta=selection[1])
 
 
-def _select_custom_sol_ring(ds, i, region):
+def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None):
     """
-    Creates custom SOL ring slice beyond the separatrix.
-    args[0] = i = index of SOL ring (0 is separatrix, 1 is first SOL ring)
-    args[1] = region = all, inner, inner_lower, inner_upper, outer, outer_lower, outer_upper
+    Creates custom SOL ring slice beyond the separatrix. 
+    Can use SOL ring index sepadd OR radial distance from the separatrix sepdist.
+    Sepadd is the number of cells beyond the first cell centre outside of separatrix.
+    Returns an Xarray dataset.
+    Parameters:
+        i : radial index
+        sepdist : radial distance from the separatrix
+        region : inner, inner_lower, inner_upper, outer, outer_lower, outer_upper
     """
     
     m = ds.metadata
     
-    # if i < self.ixseps1 - self.MXG*2 :
-    #     raise Exception("i is too small!")
-    if i > m["nx"] - m["MXG"]*2 :
-        raise Exception("i is too large!")
+    if sepadd == None and sepdist == None:
+        raise ValueError("Must use either index i or separatrix distance sepdist")
     
-    radial_index = i + m["ixseps1"] - m["MXG"] + 1
+    elif sepadd != None and sepdist != None:
+        raise ValueError("Must use either index i or separatrix distance sepdist, not both")
+    
+    elif sepdist != None:
+        df = get_1d_radial_data(ds, [], "outer_midplane")
+        sepind = df[df["sep"] == 1].index[0]
+        sepadd = df.loc[(df["Srad"] - sepdist).abs().idxmin()].name - sepind
+        
+    radial_index = sepadd + m["ixseps1"]
+
     
     if m["topology"] == "connected-double-null":
          
-        
         ny_inner = m["ny_inner"]
         MYG = m["MYG"]
         nyg = m["nyg"]
@@ -464,9 +496,9 @@ def _select_custom_sol_ring(ds, i, region):
 
         if region == "inner":
             selection = (radial_index, slice(0+MYG, ny_inner + MYG))
-        if region == "inner_lower":
+        elif region == "inner_lower":
             selection = (radial_index, slice(0+MYG, imp_a +1))
-        if region == "inner_upper":
+        elif region == "inner_upper":
             selection = (radial_index, slice(imp_b, ny_inner + MYG))
         elif region == "outer":
             selection = (radial_index, slice(ny_inner + MYG*3, nyg - MYG))
@@ -484,6 +516,9 @@ def _select_custom_sol_ring(ds, i, region):
             
         else:
             raise Exception(f"Region {region} not implemented")
+        
+    else:
+        raise Exception(f"Topology {m['topology']} not implemented")
     
     return ds.isel(x = selection[0], theta = selection[1])
 
