@@ -439,10 +439,6 @@ def _select_custom_sol_ring(ds, i, region):
     Creates custom SOL ring slice beyond the separatrix.
     args[0] = i = index of SOL ring (0 is separatrix, 1 is first SOL ring)
     args[1] = region = all, inner, inner_lower, inner_upper, outer, outer_lower, outer_upper
-    
-    NOTE: INDEX HERE IS THE ACTUAL INDEX AS OPPOSED TO THE CUSTOM CORE RING
-    
-    TODO: CHECK THE OFFSETS ON X AXIS, THEY ARE POTENTIALLY WRONG
     """
     
     m = ds.metadata
@@ -452,32 +448,32 @@ def _select_custom_sol_ring(ds, i, region):
     if i > m["nx"] - m["MXG"]*2 :
         raise Exception("i is too large!")
     
+    radial_index = i + m["ixseps1"] - m["MXG"] + 1
+    
     if m["topology"] == "connected-double-null":
-        
-        outer_midplane_a = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"]
-        outer_midplane_b = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"] + 1     
-        # inner_midplane_a = int((m.j2_1g - m.j1_1g) / 2) + m.j1_1g 
-        # inner_midplane_b = int((m.j2_1g - m.j1_1g) / 2) + m.j1_1g + 1               
+         
         
         ny_inner = m["ny_inner"]
         MYG = m["MYG"]
         nyg = m["nyg"]
+        omp_a = m["omp_a"]
+        omp_b = m["omp_b"]
+        imp_a = m["imp_a"]
+        imp_b = m["imp_b"]
         
-        # if region == "all":
-        #     selection = (slice(i+1,i+2), np.r_[slice(0+.MYG, .j2_2g + 1), slice(.j1_1g + 1, self.nyg - self.MYG)])
-        
+
         if region == "inner":
-            selection = (slice(i+1,i+2), slice(0+MYG, ny_inner + MYG))
-        # if region == "inner_lower":
-        #     selection = (slice(i+1,i+2), slice(0+.MYG, inner_midplane_a +1))
-        # if region == "inner_upper":
-        #     selection = (slice(i+1,i+2), slice(inner_midplane_b, .ny_inner + .MYG))
+            selection = (radial_index, slice(0+MYG, ny_inner + MYG))
+        if region == "inner_lower":
+            selection = (radial_index, slice(0+MYG, imp_a +1))
+        if region == "inner_upper":
+            selection = (radial_index, slice(imp_b, ny_inner + MYG))
         elif region == "outer":
-            selection = (slice(i+1,i+2), slice(ny_inner + MYG*3, nyg - MYG))
+            selection = (radial_index, slice(ny_inner + MYG*3, nyg - MYG))
         elif region == "outer_lower":
-            selection = (slice(i+1,i+2), slice(outer_midplane_b, m["nyg"] - m["MYG"]))
+            selection = (radial_index, slice(omp_b-1, nyg - MYG))
         elif region == "outer_upper":
-            selection = (slice(i+1,i+2), slice(ny_inner + MYG*3, outer_midplane_a+1))
+            selection = (radial_index, slice(ny_inner + MYG*3, omp_b+1))
         else:
             raise Exception(f"Region {region} not implemented")
             
