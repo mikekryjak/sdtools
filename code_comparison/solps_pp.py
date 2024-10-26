@@ -160,7 +160,7 @@ class SOLPScase():
         # dist = np.cumsum(self.g["hy"][self.s["omp"]])   # hy is radial length
         # dist = dist - dist[self.g["sep"] - 1]
         # self.g["radial_dist"] = dist
-        
+        self.get_species()
         self.derive_data()
         
     def get_species(self):
@@ -239,6 +239,7 @@ class SOLPScase():
         """
         
         bal = self.bal
+        g = self.g
         
         ## EIRENE derived variables have extra values in the arrays
         ## Either 5 or 2 extra zeros at the end in poloidal depending on topology
@@ -248,23 +249,25 @@ class SOLPScase():
         else:
             ignore_idx = 2
         
+        qe = constants("q_e")
+        Mi = constants("mass_p") * 2
 
-        bal["Td+"] = bal["ti"] / constants("q_e")
-        bal["Te"] = bal["te"] / constants("q_e")
+        bal["Td+"] = bal["ti"] / qe
+        bal["Te"] = bal["te"] / qe
         bal["Ne"] = bal["ne"]
-        bal["Pe"] = bal["ne"] * bal["te"] * constants("q_e")
-        bal["Pd+"] = bal["ne"] * bal["ti"] * constants("q_e")
+        bal["Pe"] = bal["ne"] * bal["te"] * qe
+        bal["Pd+"] = bal["ne"] * bal["ti"] * qe
 
         bal["Na"] = bal["dab2"][:-ignore_idx, :]  
         bal["Nm"] = bal["dmb2"][:-ignore_idx, :] 
         bal["Nn"] = bal["Na"] + bal["Nm"] * 2
-        bal["Ta"] = bal["tab2"][:-ignore_idx, :] / constants("q_e")
-        bal["Tm"] = bal["tmb2"][:-ignore_idx, :] / constants("q_e")
-        bal["Pa"] = bal["Na"] * bal["Ta"] * constants("q_e")
-        bal["Pm"] = bal["Nm"] * bal["Tm"] * constants("q_e")
+        bal["Ta"] = bal["tab2"][:-ignore_idx, :] / qe
+        bal["Tm"] = bal["tmb2"][:-ignore_idx, :] / qe
+        bal["Pa"] = bal["Na"] * bal["Ta"] * qe
+        bal["Pm"] = bal["Nm"] * bal["Tm"] * qe
 
         bal["Pn"] = bal["Pa"] + bal["Pm"]
-        bal["Tn"] = bal["Pn"] / bal["Nn"] / constants("q_e")
+        bal["Tn"] = bal["Pn"] / bal["Nn"] / qe
         
         # Derive total fluxes (excl. drifts)
         bal["fhe_total"] = bal["fhe_cond"] + 5/3*bal["fhe_32"] + bal["fhe_thermj"]
@@ -272,18 +275,41 @@ class SOLPScase():
         
         # Split fluxes into X and Y components
         existing_params = list(bal.keys())
+        list_species = self.species["name"].values
+        
+        # NOTE: check that this works if you have multiple ions.
+        # It's possible that all the arrays have 4 dimensions then
         for param in existing_params:
-            if "fhe" in param:
-                bal[param.replace("fhe", "fhex")] = bal[param][:,:,0]
-                bal[param.replace("fhe", "fhey")] = bal[param][:,:,1]
-            elif "fhi" in param:
-                bal[param.replace("fhi", "fhix")] = bal[param][:,:,0]
-                bal[param.replace("fhi", "fhiy")] = bal[param][:,:,1]
-                
+            for prefix in ["fhe", "fhi", "fmo", "fna"]:
+                if prefix in param and not any([name in param for name in ["x", "y"]]):
+                    
+                    # Direction split only
+                    if len(bal[param].shape) == 3:
+                        bal[param.replace(prefix, f"{prefix}x")] = bal[param][:,:,0]
+                        bal[param.replace(prefix, f"{prefix}y")] = bal[param][:,:,1]
+                    
+                    # Species split
+                    elif len(bal[param].shape) == 4:
+                        for i, species in enumerate(list_species):
+                            bal[param.replace(prefix, f"{prefix}x_{species}")] = bal[param][:,:,0,i]
+                            bal[param.replace(prefix, f"{prefix}y_{species}")] = bal[param][:,:,1,i]
+                        
+                    
+        
+        bal["hpar"] = g["hx"] * abs(g["Btot"] / abs(g["Bpol"]))   # Parallel cell width [m]
+        bal["apar"] = bal["vol"] / bal["hpar"]            # Parallel cross-sectional area [m2]
+                    
         bal["fhx_total"] = bal["fhex_total"] + bal["fhix_total"]
         bal["fhy_total"] = bal["fhey_total"] + bal["fhiy_total"]
+        
+        # flux = bal["fnax_D+1_tot"] / (bal["vol"] / bal["
+        bal["NVd+"] = bal["fnax_D+1_tot"] * Mi * 2 / bal["apar"]  # Parallel momentum flux kg/m2/s
+        
+        bal["M"] = np.sqrt((bal["Te"]*qe + bal["Td+"]*qe)/Mi*2)  # Mach number
+        
                 
         self.bal = bal
+        self.params = list(self.bal.keys())
 
 
         
@@ -614,6 +640,7 @@ class SOLPScase():
         df.loc[0,"Z"] = 0  
 
         df["Spol"] -= df["Spol"].iloc[0]   # Now 0 is at Z = 0
+        df["Spar"] -= df["Spar"].iloc[0]   # Now 0 is at Z = 0
 
         if target_first:
             df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
