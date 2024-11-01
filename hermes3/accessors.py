@@ -209,13 +209,27 @@ def _select_region(ds, name):
         slice(ixseps1, -MYG),
         np.r_[slice(MYG, ny_inner + MYG), slice(ny_inner + MYG * 3, nyg - MYG)],
     )
-    slices["sol_outer_noguards"] = (
+    slices["outer_sol"] = (
         slice(ixseps1, -MYG),
         np.r_[slice(ny_inner + MYG * 3, nyg - MYG)],
+        
     )
-    slices["sol_outer_lower_noguards"] = (
+    slices["outer_sol_guards"] = (
+        slice(ixseps1, -1),
+        np.r_[slice(ny_inner + MYG * 3, nyg - MYG)]
+    )
+    slices["outer_sol_lower_noguards"] = (
         slice(ixseps1, -MYG),
         np.r_[slice(int((j2_2g - j1_2g) / 2) + j1_2g + 1, nyg - MYG)],
+    )
+    
+    slices["inner_sol"] = (
+        slice(ixseps1, -MYG),
+        np.r_[slice(MYG, ny_inner + MYG )],
+    )
+    slices["inner_sol_guards"] = (
+        slice(ixseps1, -MYG),
+        np.r_[slice(0, ny_inner + MYG *2)],
     )
     
     # slices["pfr"] = (
