@@ -273,11 +273,19 @@ def get_front_widths(p, s, Rcutoff = 0.7, dynamicGrid = True, use_prad = True):
         df.loc[i, "Spar_front_width"] = df.loc[i, "Spar_front_start"] - df.loc[i, "Spar_front_end"]
         df.loc[i, "Spar_5eV"] = s["Splot"][np.argmin(abs(T - 0.05))]
 
-        df.loc[i, "cvar"] = s["cvar_trim"][i]
-        df.loc[i, "crel"] = s["crel_trim"][i]
+        if "cvar_trim" in s:
+            suffix = "_trim"
+        else:
+            suffix = ""
+            
+        df.loc[i, "cvar"] = s[f"cvar{suffix}"][i]
         
-        df.loc[i, "cvar"] = s["cvar_trim"][i]
-        df.loc[i, "crel"] = s["crel_trim"][i]
+        
+        df.loc[i, "cvar"] = s[f"cvar{suffix}"][i]
+        
+        if type(s[f"crel{suffix}"]) == list:
+            df.loc[i, "crel"] = s[f"crel{suffix}"][i]
+            df.loc[i, "crel"] = s[f"crel{suffix}"][i]
         
         df.loc[i, "Btot"] = np.interp(df.loc[i, "Spar"], S, Btot)
         
@@ -297,7 +305,8 @@ def get_detachment_scalings(profiles, stores, kappa0 = 2500):
 
     df = pd.DataFrame()
     df["thresholds"] = np.array([stores[x]["threshold"] for x in profiles])
-    df["windows"] = np.array([stores[x]["window_ratio"] for x in profiles]) 
+    if "window_ratio" in list(stores.values())[0].keys():
+        df["windows"] = np.array([stores[x]["window_ratio"] for x in profiles]) 
     df["L"] = np.array([profiles[x].get_connection_length() for x in profiles])
     df["BxBt"] = np.array([profiles[x].get_total_flux_expansion() for x in profiles])
     df["Bf"] = np.array([profiles[x]["Btot"][0] for x in profiles])
@@ -375,13 +384,13 @@ def get_detachment_scalings(profiles, stores, kappa0 = 2500):
         # df.loc[i, "C0"] = 7**(-2/7) * (2*kappa0)**(-3/14) * (sp.integrate.trapezoid(y = Lz*T**0.5 * Btot**(-2), x = T))**(-0.5)
     
         ## Classic DLS thresholds
-        df.loc[i, "DLS_thresholds"] = CfInt(
-                                            spar = profile["S"], 
-                                            B_field = profile["Btot"], 
-                                            sx = profile["S"][profile["Xpoint"]], 
-                                            L = profile["S"][-1],
-                                            sh = store["Splot"][0]
-                                        )
+        # df.loc[i, "DLS_thresholds"] = CfInt(
+        #                                     spar = profile["S"], 
+        #                                     B_field = profile["Btot"], 
+        #                                     sx = profile["S"][profile["Xpoint"]], 
+        #                                     L = profile["S"][-1],
+        #                                     sh = store["Splot"][0]
+        #                                 )
         
         ## Linear upstream integral
         # Accounts for the fact that qpar is comes in to the domain gradually upstream
@@ -1245,7 +1254,9 @@ class compare_SOLPS_DLS():
     def __init__(self, slc, out, region = "outer_lower", sepadd = 1):
 
         # Read SOLPS
-        self.solps = slc.get_1d_poloidal_data(["Btot", "hx", "vol", "R", "Te", "RAr", "ne", "fhex_cond", "fhx_total"], 
+        self.solps = slc.get_1d_poloidal_data(["Btot", "hx", "vol", "R", 
+                                               "Te", "Td+", "RAr", "ne", "fhex_cond", "fhx_total",
+                                               ], 
                                   sepadd = sepadd, region = region, target_first = True)
         
         # Read DLS
@@ -1283,7 +1294,10 @@ class compare_SOLPS_DLS():
         solps["Prad_per_area_cum_norm"] = solps["Prad_per_area_cum"] / solps["Prad_per_area_cum"].max()
 
         solps["Prad_cum"] = sp.integrate.cumulative_trapezoid(y = solps["RAr"] / solps["Btot"], x = solps["Spar"], initial = 0)   # Radiation integral over volume
+        # NOTE: This is not correct, it should really be volume, but I'm doing  it like this to be the same as the DLS.
         solps["Prad_cum_norm"] = solps["Prad_cum"] / solps["Prad_cum"].max()
+        
+        solps["Pe"] = solps["Te"] * solps["ne"] * 1.60217662e-19
                 
         return solps
 
@@ -1300,31 +1314,40 @@ class compare_SOLPS_DLS():
         dls["Prad_cum"] = sp.integrate.cumulative_trapezoid(y = dls["Qrad"] / dls["Btot"], x = dls["Spar"], initial = 0)   # Radiation integral over volume
         dls["Prad_cum_norm"] = dls["Prad_cum"] / dls["Prad_cum"].max()
         
+        dls["Pe"] = dls["Te"] * dls["Ne"] * 1.60217662e-19
+        
         return dls
     
-    def plot(self, mode = "full"):
-        fsize = 4
+    def plot(self, list_plots, 
+             normalise_radiation = True, 
+             radiation_per_area = False,
+             legend_loc = "upper left"):
         
-        if mode == "full":
-            nfigs = 5
-            fig, axes =plt.subplots(1,nfigs, figsize = (nfigs*fsize, fsize))
-
-            self.plot_radiation_source(axes[0], logscale = True)
-            self.plot_radiation_integral(axes[1])
-            self.plot_qpar(axes[2])
-            self.plot_Te(axes[3])
-            self.plot_Ne(axes[4])
-            
-        if mode == "extended":
-            nfigs = 4
-            fig, axes =plt.subplots(1,nfigs, figsize = (nfigs*fsize, fsize))
-
-            self.plot_radiation_source(axes[0], logscale = True)
-            self.plot_radiation_integral(axes[1])
-            self.plot_qpar(axes[2])
-            self.plot_Te(axes[3])
-    
-
+        self.legend_loc = legend_loc
+        fsize = 4
+        nfigs = len(list_plots)
+        fig, axes =plt.subplots(1,nfigs, figsize = (nfigs*fsize, fsize))
+        
+        for i, plot in enumerate(list_plots):
+            if plot == "Ne":
+                self.plot_Ne(axes[i])
+            elif plot == "Te":
+                self.plot_Te(axes[i])
+            elif plot == "Pe":
+                self.plot_Pe(axes[i])
+            elif plot == "qpar":
+                self.plot_qpar(axes[i])
+            elif plot == "qpar_over_B":
+                self.plot_qpar_over_B(axes[i])
+            elif plot == "Qrad":
+                self.plot_radiation_source(axes[i], logscale = True)
+            elif plot == "Cumrad":
+                self.plot_radiation_integral(axes[i], normalise = normalise_radiation, per_area= radiation_per_area)
+            else:
+                print(f"Plot {plot} not found")
+        
+        fig.tight_layout()
+        
     def plot_Xpoint(self, ax):
         # solps = self.solps
         dls = self.dls
@@ -1334,7 +1357,7 @@ class compare_SOLPS_DLS():
         ax.set_ylim(*ylim)
         
     def apply_plot_settings(self, ax):
-        ax.legend(fontsize = "small")
+        ax.legend(fontsize = "x-small", loc = self.legend_loc)
         ax.set_xlabel("$s_{\parallel}$ [m]")
         
     def plot_qpar(self, ax):
@@ -1348,6 +1371,20 @@ class compare_SOLPS_DLS():
         ax.plot(solps["Spar"], abs(solps["fhx_total"]), label = "SOLPS total")
         
         ax.set_ylabel("$q_{\parallel}$ $[Wm^{-2}]$")
+        self.plot_Xpoint(ax)
+        self.apply_plot_settings(ax)
+        
+    def plot_qpar_over_B(self, ax):
+        
+        solps = self.solps
+        dls = self.dls
+        
+        ax.set_title("Parallel heat flux / $B_{tot}$")
+        ax.plot(dls["Spar"], dls["qpar"]/dls["Btot"], label = "DLS")
+        ax.plot(solps["Spar"], abs(solps["fhex_cond"])/solps["Btot"], label = "SOLPS electron cond")
+        ax.plot(solps["Spar"], abs(solps["fhx_total"])/solps["Btot"], label = "SOLPS total")
+        
+        ax.set_ylabel("$q_{\parallel}/B_{tot}$ $[Wm^{-2}T^{-1}]$")
         self.plot_Xpoint(ax)
         self.apply_plot_settings(ax)
         
@@ -1376,6 +1413,19 @@ class compare_SOLPS_DLS():
         self.plot_Xpoint(ax)
         self.apply_plot_settings(ax)
         
+    def plot_Pe(self, ax):
+        solps = self.solps
+        dls = self.dls
+        
+        ax.set_title("Electron pressure")
+        ax.plot(dls["Spar"], dls["Pe"], label = "DLS")
+        ax.plot(solps["Spar"], solps["Pe"], label = "SOLPS")
+
+        ax.set_ylabel("$P_e$ $[Pa]$")
+        # ax.set_yscale("log")
+        self.plot_Xpoint(ax)
+        self.apply_plot_settings(ax)
+        
     def plot_radiation_source(self, ax, logscale = True):
         
         solps = self.solps
@@ -1392,21 +1442,28 @@ class compare_SOLPS_DLS():
         self.plot_Xpoint(ax)
         self.apply_plot_settings(ax)
             
-    def plot_radiation_integral(self, ax, per_area = False, logscale = False):
-        
+    def plot_radiation_integral(self, ax, per_area = False, logscale = False, normalise = True):
+
         solps = self.solps
         dls = self.dls
         
+        if normalise:
+            suffix = "_norm"
+            label_suffix = "(normalised)"
+        else:
+            suffix = ""
+            label_suffix = ""
+        
         if per_area:
-            ax.plot(dls["Spar"], dls["Prad_per_area_cum_norm"], label = "DLS")
-            ax.plot(solps["Spar"], solps["Prad_per_area_cum_norm"], label = "SOLPS")
-            ax.set_title("Cumulative radiation\nintegral (per area)")
+            ax.plot(dls["Spar"], dls[f"Prad_per_area_cum{suffix}"], label = "DLS")
+            ax.plot(solps["Spar"], solps[f"Prad_per_area_cum{suffix}"], label = "SOLPS")
+            ax.set_title(f"Cumulative radiation\nintegral (per area) {label_suffix}")
             ax.set_ylabel("[W/m2]")
         else:
-            ax.plot(dls["Spar"], dls["Prad_cum_norm"], label = "DLS")
-            ax.plot(solps["Spar"], solps["Prad_cum_norm"], label = "SOLPS")
-            ax.set_title("Cumulative radiation integral")
-            ax.set_ylabel("[W]")
+            ax.plot(dls["Spar"], dls[f"Prad_cum{suffix}"], label = "DLS")
+            ax.plot(solps["Spar"], solps[f"Prad_cum{suffix}"], label = "SOLPS")
+            ax.set_title(f"Cumulative radiation integral {label_suffix}")
+            ax.set_ylabel(f"[W] {label_suffix}")
         
         if logscale:
             ax.set_yscale("log")
