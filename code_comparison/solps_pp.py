@@ -126,7 +126,7 @@ class SOLPScase():
         imp = self.g["imp"] = int((g["leftcut"][0] + g["leftcut"][1])/2)
         upper_break = self.g["upper_break"] = g["xcut"][2] + 1
         sep = self.g["sep"] = bal["jsep"][0] + 2
-        self.g["xpoints"] = self.find_xpoints()
+        # self.g["xpoints"] = self.find_xpoints()   # NOTE: Not robust
         
         
         ## Prepare selectors
@@ -255,16 +255,18 @@ class SOLPScase():
         bal["Td+"] = bal["ti"] / qe
         bal["Te"] = bal["te"] / qe
         bal["Ne"] = bal["ne"]
-        bal["Pe"] = bal["ne"] * bal["te"] * qe
-        bal["Pd+"] = bal["ne"] * bal["ti"] * qe
+        bal["Pe"] = bal["ne"] * bal["Te"] * qe
+        bal["Pd+"] = bal["ne"] * bal["Td+"] * qe
 
-        bal["Na"] = bal["dab2"][:-ignore_idx, :]  
-        bal["Nm"] = bal["dmb2"][:-ignore_idx, :] 
+        # First index in third dimension is always main ion neutral
+        bal["Na"] = bal["dab2"][:-ignore_idx, :, 0]
+        bal["Nm"] = bal["dmb2"][:-ignore_idx, :, 0]
         bal["Nn"] = bal["Na"] + bal["Nm"] * 2
-        bal["Ta"] = bal["tab2"][:-ignore_idx, :] / qe
-        bal["Tm"] = bal["tmb2"][:-ignore_idx, :] / qe
-        bal["Pa"] = bal["Na"] * bal["Ta"] * qe
-        bal["Pm"] = bal["Nm"] * bal["Tm"] * qe
+        bal["Ta"] = (bal["tab2"][:-ignore_idx, :, 0] / qe)
+        bal["Td"] = bal["Ta"]
+        bal["Tm"] = (bal["tmb2"][:-ignore_idx, :, 0] / qe)
+        bal["Pa"] = bal["Na"].squeeze() * bal["Ta"].squeeze() * qe
+        bal["Pm"] = bal["Nm"].squeeze() * bal["Tm"].squeeze() * qe
 
         bal["Pn"] = bal["Pa"] + bal["Pm"]
         bal["Tn"] = bal["Pn"] / bal["Nn"] / qe
@@ -304,8 +306,8 @@ class SOLPScase():
         
         # flux = bal["fnax_D+1_tot"] / (bal["vol"] / bal["
         bal["NVd+"] = bal["fnax_D+1_tot"] * Mi * 2 / bal["apar"]  # Parallel momentum flux kg/m2/s
-        
-        bal["M"] = np.sqrt((bal["Te"]*qe + bal["Td+"]*qe)/Mi*2)  # Mach number
+        bal["Vd+"] = bal["NVd+"] / bal["Ne"] / (Mi*2)   # NOTE: this will break for multiple ions
+        bal["M"] = bal["Vd+"] / np.sqrt((bal["Te"]*qe + bal["Td+"]*qe)/Mi*2)  # Mach number
         
                 
         self.bal = bal
@@ -328,7 +330,8 @@ class SOLPScase():
         ------
             selector tuple as (X,Y)
             
-        INCLUDES GUARD CELLS
+        NOTE: INCLUDES GUARD CELLS
+        NOTE: DOES NOT SUPPORT DISCONNECTED DOUBLE NULL
         """
         
         if i != None and sep_dist == None:
@@ -343,15 +346,19 @@ class SOLPScase():
         if i == None and sep_dist == None:
             raise ValueError("Provide either i or sep_dist")
         
+        ## Note: all of these start beyond the midplane so that you can interpolate to Z=0 later
         selections = {}
         selections["outer"] =       (slice(self.g["upper_break"],None), yid)
-        selections["outer_lower"] = (slice(self.g["omp"]+1,None), yid)
-        selections["outer_upper"] = (slice(self.g["upper_break"], self.g["omp"]+1), yid)
+        selections["outer_lower"] = (slice(self.g["omp"]+1-1,None), yid)
+        selections["outer_upper"] = (slice(self.g["upper_break"], self.g["omp"]+1+1), yid)
         selections["inner"] =       (slice(1, self.g["upper_break"]), yid)
-        selections["inner_lower"] = (slice(1, self.g["imp"]), yid)
-        selections["inner_upper"] = (slice(self.g["imp"], self.g["upper_break"]), yid)
+        selections["inner_lower"] = (slice(1, self.g["imp"]+1), yid)
+        selections["inner_upper"] = (slice(self.g["imp"]-1, self.g["upper_break"]), yid)
         
-        return selections[name]
+        if name in selections:
+            return selections[name]
+        else:
+            raise Exception(f"Region {name} not supported")
     
 
         
@@ -377,7 +384,11 @@ class SOLPScase():
              separatrix_kwargs = {},
              grid_only = False,
              cbar = True,
-             axis_labels = True):
+             axis_labels = True,
+             dpi = 150,
+             xlim = (None, None),
+             ylim = (None, None)
+    ):
         
         if custom_cmap != None:
             cmap = custom_cmap
@@ -396,7 +407,7 @@ class SOLPScase():
         if norm == None:
             norm = create_norm(logscale, norm, vmin, vmax, linthresh = linthresh)
         if ax == None:
-            fig, ax = plt.subplots(dpi = 150)
+            fig, ax = plt.subplots(dpi = dpi)
         else:
             fig = ax.get_figure()
         
@@ -479,6 +490,13 @@ class SOLPScase():
         if separatrix is True:
             self.plot_separatrix(ax = ax, **separatrix_kwargs)
             
+        if xlim != (None, None):
+            ax.set_xlim(xlim)
+        if ylim != (None, None):
+            ax.set_ylim(ylim)
+            
+    
+            
     def plot_separatrix(self, ax, **separatrix_kwargs):
         
         kwargs = {**{"c" : "white", "ls" : "-"}, **separatrix_kwargs}
@@ -495,7 +513,7 @@ class SOLPScase():
         verbose = False
     ):
         """
-        Returns OMP or IMP data from the balance file
+        Returns OMP, IMP or target data from the balance file
         Note that the balance file shape is a transpose of the geometry shape (e.g. crx)
         and contains guard cells.        
         """
@@ -503,22 +521,32 @@ class SOLPScase():
         if type(params) == str:
             params = [params]
         
-        if any([region in name for name in ["omp", "imp", "outer_lower_target"]]):
+        if any([region in name for name in ["omp", "imp", "outer_lower_target", "inner_lower_target"]]):
             p = self.s[region] 
         else:
             raise Exception(f"Unrecognised region: {region}")
         
         selector = (p[0], slice(None))
-    
         df = pd.DataFrame()
-        # df["dist"] = self.g["R"][p[0], p[1]] - self.g["R"][p[0], self.g["sep"]] 
-        df["dist"] = np.cumsum(self.g["hy"][selector])  # Radial distance
+        hy = self.g["hy"][selector] 
         
         # Interpolate between cells to get separatrix distance
+        
+        
+        df = pd.DataFrame()
+        
+        for i, _ in enumerate(hy):
+            if i == 0:
+                df.loc[i, "dist"] = hy[i] / 2
+            else:
+                df.loc[i, "dist"] = df.loc[i-1, "dist"] + hy[i-1] + hy[i]/2
+        
         sepind = self.g["sep"]
         sep_corr = (df["dist"][sepind] - df["dist"][sepind-1]) / 2
         dist_sep = df["dist"][sepind]
         df["dist"] -= dist_sep - sep_corr
+        df["sep"] = 0
+        df.loc[sepind, "sep"] = 1
         
         df["R"] = self.g["R"][selector]
         df["Z"] = self.g["Z"][selector]
@@ -541,7 +569,8 @@ class SOLPScase():
         self,
         params,
         region = "outer_lower",
-        sepadd = 0,
+        sepadd = None,
+        sepdist = None,
         target_first = False,
         
     ):
@@ -559,17 +588,34 @@ class SOLPScase():
         
         if type(params) == str:
             params = [params]
+            
+        if sepadd == None and sepdist == None:
+            raise ValueError("Must use either index i or separatrix distance sepdist")
+        
+        elif sepadd != None and sepdist != None:
+            raise ValueError("Must use either index i or separatrix distance sepdist, not both")
+        
+        elif sepdist != None:
+            radial_df = self.get_1d_radial_data([], region = "omp")
+            sepind = radial_df[radial_df["sep"] == 1].index[0]
+            sepadd = radial_df.loc[(radial_df["dist"] - sepdist).abs().idxmin()].name - sepind
+            
         
         yind = self.g["sep"] + sepadd   # Ring index
         omp = self.g["omp"]
         imp = self.g["imp"]
         
-        if region == "outer_lower":
-            selector = (slice(omp, -1), yind)
-        elif region == "inner_lower":
-            selector = (slice(1, imp+1), yind)
-        else:
-            raise Exception("Unrecognised region")
+        selector = self.make_custom_sol_ring(region, i = sepadd)
+        
+        ## REPLACED BY MAKE_CUSTOM_SOL_RING
+        # if region == "outer_lower":
+        #     selector = (slice(omp, -1), yind)
+        # elif region == "inner_lower":
+        #     selector = (slice(1, imp+1), yind)
+        # elif region == "outer_upper":
+        #     selector = (slice(1, imp+1), yind)
+        # else:
+        #     raise Exception("Unrecognised region")
         
         hx = self.bal["hx"][selector]
         Btot = self.g["Btot"][selector]
@@ -663,6 +709,8 @@ class SOLPScase():
         the IDs are for the cell immediately after the X-point
         in the direction of ascending X (poloidal) coordinate.
         They are arranged clockwise starting at inner lower
+        
+        NOT VERY ROBUST
         """
 
         x = range(self.g["nx"])
@@ -724,7 +772,7 @@ class SOLPScase():
 
         return xpoints
     
-    def plot_selection(self, sel, ylims = (None, None), xlims = (None, None)):
+    def plot_selection(self, sel, **kwargs):
         """
         Plots scatter of selected points according to the tuple sel
         which contains slices in (X, Y)
@@ -735,17 +783,26 @@ class SOLPScase():
         data = np.zeros_like(data)
 
         data[sel] = 1
+        
+        def_kwargs = dict(
+            separatrix_kwargs = dict(lw = 1, c = "darkorange"),
+            linewidth = 0.1)
+        
+        plot_kwargs = {**def_kwargs, **kwargs}
+        
+        if "dpi" in kwargs:
+            dpi = kwargs["dpi"]
+        else:
+            dpi = 150
+        fig, ax = plt.subplots(dpi = dpi)
 
-        self.plot_2d("", data = data, cmap = mpl.colors.ListedColormap(["lightgrey", "deeppink"]),
+        self.plot_2d("", ax = ax, data = data, cmap = mpl.colors.ListedColormap(["lightgrey", "deeppink"]),
              antialias = True, 
              cbar = False,
-             separatrix_kwargs = dict(lw = 0.5, c = "skyblue"))
+             **plot_kwargs)
         
-        if xlims != (None, None):
-            ax.set_xlim(xlims)
-            
-        if ylims != (None, None):
-            ax.set_ylim(ylims)
+        ax.scatter(self.g["R"][sel], self.g["Z"][sel], c = "deeppink", s = 3)
+        
         
 def create_norm(logscale, norm, vmin, vmax, linthresh = None):
     if logscale:
