@@ -128,6 +128,8 @@ class Load:
         if squeeze:
             ds = ds.squeeze(drop = False)
             
+        ds["M"] = ds["Vd+"] / np.sqrt(constants("q_e")*(ds["Td+"] + ds["Te"])/(constants("mass_p")*2))  # NOTE: will break for multiple ions
+            
         print("")
             
         return Case(ds, casepath, 
@@ -205,69 +207,74 @@ class Case:
                     self.ds[data_var] = self.ds[data_var] * self.norms[data_var]["conversion"]
                     self.normalised_vars.append(data_var)
                 self.ds[data_var].attrs.update(self.norms[data_var])
-
-    def derive_vars(self):
-        ds = self.ds
-        m = ds.metadata
-        q_e = constants("q_e")
+    
+    
+    ## DEPRECATED, NOW IN XHERMES
+    # def derive_vars(self):
+    #     ds = self.ds
+    #     m = ds.metadata
+    #     q_e = constants("q_e")
         
-        m["Pnorm"] = m["Nnorm"] * m["Tnorm"] * q_e
+    #     m["Pnorm"] = m["Nnorm"] * m["Tnorm"] * q_e
         
-        # From Hypnotoad trim_yboundaries() in compare_grid_files
-        if ds.metadata["jyseps2_1"] != ds.metadata["jyseps1_2"]:
-            ds.metadata["null_config"] = "cdn"
-        else:
-            ds.metadata["null_config"] = "sn"
+    #     # From Hypnotoad trim_yboundaries() in compare_grid_files
+    #     if ds.metadata["jyseps2_1"] != ds.metadata["jyseps1_2"]:
+    #         ds.metadata["null_config"] = "cdn"
+    #     else:
+    #         ds.metadata["null_config"] = "sn"
             
-        ds.metadata["species"] = [x.split("P")[1] for x in self.ds.data_vars if x.startswith("P") and len(x) < 4]
-        ds.metadata["charged_species"] = [x for x in ds.metadata["species"] if "e" in x or "+" in x]
-        ds.metadata["ion_species"] = [x for x in ds.metadata["species"] if "+" in x]
-        ds.metadata["neutral_species"] = list(set(ds.metadata["species"]).difference(set(ds.metadata["charged_species"])))
+    #     ds.metadata["species"] = [x.split("P")[1] for x in self.ds.data_vars if x.startswith("P") and len(x) < 4]
+    #     ds.metadata["charged_species"] = [x for x in ds.metadata["species"] if "e" in x or "+" in x]
+    #     ds.metadata["ion_species"] = [x for x in ds.metadata["species"] if "+" in x]
+    #     ds.metadata["neutral_species"] = list(set(ds.metadata["species"]).difference(set(ds.metadata["charged_species"])))
         
-        ds.metadata["recycle_pair"] = dict()
-        for ion in ds.metadata["ion_species"]:
-            if "recycle_as" in ds.options[ion].keys():
-                ds.metadata["recycle_pair"][ion] = ds.options[ion]["recycle_as"]
-            else:
-                print(f"No recycling partner found for {ion}")
+    #     ds.metadata["recycle_pair"] = dict()
+    #     for ion in ds.metadata["ion_species"]:
+    #         if "recycle_as" in ds.options[ion].keys():
+    #             ds.metadata["recycle_pair"][ion] = ds.options[ion]["recycle_as"]
+    #         else:
+    #             print(f"No recycling partner found for {ion}")
         
         
 
-        if "Ph+" in ds.data_vars:
-            ds["Th+"] = ds["Ph+"] / (ds["Nh+"] * q_e)
-            ds["Th+"].attrs.update(
-                {
-                "units": "eV",
-                "standard_name": "ion temperature (h+)",
-                "long_name": "Ion temperature (h+)",
-                })
+    #     if "Ph+" in ds.data_vars:
+    #         ds["Th+"] = ds["Ph+"] / (ds["Nh+"] * q_e)
+    #         ds["Th+"].attrs.update(
+    #             {
+    #             "units": "eV",
+    #             "standard_name": "ion temperature (h+)",
+    #             "long_name": "Ion temperature (h+)",
+    #             })
 
-        if "Ph" in ds.data_vars:
-            ds["Th"] = ds["Ph"] / (ds["Nh"] * q_e)
-            ds["Th"].attrs.update(
-                {
-                "units": "eV",
-                "standard_name": "neutra; temperature (h)",
-                "long_name": "Neutral temperature (h)",
-                })
+    #     if "Ph" in ds.data_vars:
+    #         ds["Th"] = ds["Ph"] / (ds["Nh"] * q_e)
+    #         ds["Th"].attrs.update(
+    #             {
+    #             "units": "eV",
+    #             "standard_name": "neutra; temperature (h)",
+    #             "long_name": "Neutral temperature (h)",
+    #             })
 
-        # if "Pd" in ds.data_vars:
-        #     ds["Td"] = ds["Pd"] / (ds["Nd"] * q_e)
-        #     ds["Td"].attrs.update(
-        #         {
-        #         "units": "eV",
-        #         "standard_name": "neutral temperature (d)",
-        #         "long_name": "Neutral temperature (d)",
-        #         })
+    #     # if "Pd" in ds.data_vars:
+    #     #     ds["Td"] = ds["Pd"] / (ds["Nd"] * q_e)
+    #     #     ds["Td"].attrs.update(
+    #     #         {
+    #     #         "units": "eV",
+    #     #         "standard_name": "neutral temperature (d)",
+    #     #         "long_name": "Neutral temperature (d)",
+    #     #         })
 
-        if "Pd+" in ds.data_vars and ds["Td+"] not in ds.data_vars:
-            ds["Td+"] = ds["Pd+"] / (ds["Nd+"] * q_e)
-            ds["Td+"].attrs.update(
-               {
-                "units": "eV",
-                "standard_name": "ion temperature (d+)",
-                "long_name": "Ion temperature (d+)",
-                })
+    #     if "Pd+" in ds.data_vars and ds["Td+"] not in ds.data_vars:
+    #         ds["Td+"] = ds["Pd+"] / (ds["Nd+"] * q_e)
+    #         ds["Td+"].attrs.update(
+    #            {
+    #             "units": "eV",
+    #             "standard_name": "ion temperature (d+)",
+    #             "long_name": "Ion temperature (d+)",
+    #             })
+            
+        # Mach number
+        
 
     def clean_guards(self):
         
