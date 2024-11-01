@@ -22,6 +22,7 @@ except:
 from soledge.wrapper_class import *
 
 from hermes3.utils import *
+from hermes3.selectors import get_1d_radial_data, get_1d_poloidal_data
 from code_comparison.solps_pp import SOLPScase
 
 def save_last10s_subset(solps_path, destination_path):
@@ -97,28 +98,40 @@ class SOLEDGEdata:
             self.case = SOLEDGEcase(path)
             
         ### Get poloidal data
-        df = self.case.get_1d_poloidal_data(params = self.case.params, d_from_sep=0.002)
-        df = df.rename(columns = {
-                            'Dense' : "Ne", 
-                            'Tempe':"Te", 
-                            'Densi':"Nd+", 
-                            'Tempi':"Td+",
-                            'velocityi':"Vd+",
-                            'Ppi':"Pd+",
-                            'Ppe':"Pe",
-                            'IRadi':"Rd+_ex",
-                            "Nni":"Na",
-                            "Nmi":"Nm",
-                            "Tni":"Ta",
-                            "Tmi":"Tm",
-                            "Pni":"Pa",
-                            "vyni":"Vyd",
-                            "DIST":"x"})
+        self.regions["outer_fieldline"] = self.case.get_1d_poloidal_data(params = self.case.params, d_from_sep=0.002)
+        self.regions["outer_fieldline_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, d_from_sep=0.002, parallel_length = True)
+
+        for region in ["outer_fieldline", "outer_fieldline_parallel"]:
+            df = self.regions[region]
+            
+            df = df.rename(columns = {
+                                'Dense' : "Ne", 
+                                'Tempe':"Te", 
+                                'Densi':"Nd+", 
+                                'Tempi':"Td+",
+                                'velocityi':"Vd+",
+                                'Ppi':"Pd+",
+                                'Ppe':"Pe",
+                                'IRadi':"Rd+_ex",
+                                "Nni":"Na",
+                                "Nmi":"Nm",
+                                "Tni":"Ta",
+                                "Tmi":"Tm",
+                                "Pni":"Pa",
+                                "vyni":"Vyd",
+                                "DIST":"x"})
+            
+            
+            cs = np.sqrt((df["Te"] + df["Td+"]) * constants("q_e") / (constants("mass_p")*2))
+            
+            df["M"] = df["Mi"]
+            df["Vd+"] = df["M"] * cs
+            df["NVd+"] = df["Vd+"] * df["Nd+"] * constants("mass_p") * 2
         
-        df.index = df["dist"]
-        df.index.name = "pos"
-        df = df.query("index > 0")
-        self.regions["outer_fieldline"] = df
+            df.index = df["dist"]
+            df.index.name = "pos"
+            df = df.query("index > 0")
+            self.regions[region] = df
     
     def read_csv(self, path, mode):
         
@@ -267,69 +280,54 @@ class SOLPSdata:
         regions = {}
 
         # index = np.cumsum(self.g["hx"][selector])
-        list_params = ["Td+", "Te", "Ne", "Pe", "Pd+", "Na", "Nn", "Nm", "Ta", "Tn", "Tm", "Pa", "Pm", "Pn", "NVd+"]
+        list_params = ["Td+", "Te", "Ne", "Pe", "Pd+", "Na", "Nn", "Nm", "Ta", "Tn", "Tm", "Pa", "Pm", "Pn", "NVd+", "Vd+", "M"]
 
         ### ALL WITH NO GUARDS
 
         # OMP
         
         for name in ["omp", "imp", "outer_lower_target", "inner_lower_target"]:
-            selector = spc.s[name]
-            dist = np.cumsum(spc.g["hy"][selector])   # hy is radial length
-            dist = dist - dist[spc.g["sep"] - 1]
-            df = pd.DataFrame(index = dist[1:-1])
-            for param in list_params:
-                df[param] = data[param][selector][1:-1] 
-                if any([x in param for x in ["Pe", "Pd+"]]):
-                    df[param] /= constants("q_e")
-                
+            ## OLD
+            # selector = spc.s[name]
+            # dist = np.cumsum(spc.g["hy"][selector])   # hy is radial length
+            # dist = dist - dist[spc.g["sep"] - 1]
+            # df = pd.DataFrame(index = dist[1:-1])
+            # for param in list_params:
+            #     df[param] = data[param][selector][1:-1] 
+            #     if any([x in param for x in ["Pe", "Pd+"]]):
+            #         df[param] /= constants("q_e")
+            
+            df = spc.get_1d_radial_data(list_params, region = name)
+            df.index = df.pop("dist")
+         
             translate = dict(omp="omp", imp="imp", outer_lower_target="outer_lower", inner_lower_target="inner_lower")
             
             regions[translate[name]] = df.copy()
 
-        # # IMP
-        # selector = spc.s["imp"]
-        # df = pd.DataFrame(index = spc.g["radial_dist"][1:-1])
-        # for param in list_params:
-        #     df[param] = data[param][selector][1:-1] 
-        # regions["imp"] = df.copy()
-
-        # # Outer lower target
-        # selector = spc.s["outer_lower_target"]
-        # df = pd.DataFrame(index = spc.g["radial_dist"][1:-1])
-        # for param in list_params:
-        #     df[param] = data[param][selector][1:-1] 
-        # regions["outer_lower"] = df.copy()
-
-        # # Inner lower target
-        # selector = spc.s["inner_lower_target"]
-        # df = pd.DataFrame(index = spc.g["radial_dist"][1:-1])
-        # for param in list_params:
-        #     df[param] = data[param][selector][1:-1] 
-        # regions["inner_lower"] = df.copy()
-
-        # outer_fieldline
-        
-        for name in ["outer_lower", "inner_lower"]:
-            selector = spc.make_custom_sol_ring("outer_lower", i = 0)
-            index = np.cumsum(spc.g["hx"][selector])[:-1]
-            df = pd.DataFrame(index = index)
-            for param in list_params:
-                df[param] = data[param][selector][:-1]
-                if any([x in param for x in ["Pe", "Pd+"]]):
-                    df[param] /= constants("q_e")
+        ## OLD
+        # for name in ["outer_lower", "inner_lower"]:
+        #     selector = spc.make_custom_sol_ring("outer_lower", i = 0)
+        #     index = np.cumsum(spc.g["hx"][selector])[:-1]
+        #     df = pd.DataFrame(index = index)
+        #     for param in list_params:
+        #         df[param] = data[param][selector][:-1]
+        #         if any([x in param for x in ["Pe", "Pd+"]]):
+        #             df[param] /= constants("q_e")
                 
-            translate = dict(outer_lower="outer_fieldline", inner_lower="inner_fieldline")
-            regions[translate[name]] = df.copy()
-
-        # # inner_fieldline
-        # selector = spc.make_custom_sol_ring("inner_lower", i = 0)
-        # index = np.cumsum(spc.g["hx"][selector])[:-1]
-        # df = pd.DataFrame(index = index)
-        # for param in list_params:
-        #     df[param] = data[param][selector][::-1][:-1]
-        # regions["inner_fieldline"] = df.copy()
-
+        #     translate = dict(outer_lower="outer_fieldline", inner_lower="inner_fieldline")
+        #     regions[translate[name]] = df.copy()
+            
+  
+        regions["outer_fieldline"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower", sepdist = 0.002)
+        regions["inner_fieldline"] = spc.get_1d_poloidal_data(list_params, region =  "inner_lower", sepdist = 0.002)
+        regions["outer_fieldline_parallel"] = regions["outer_fieldline"].copy()
+        regions["inner_fieldline_parallel"] = regions["inner_fieldline"].copy()
+        
+        for region in ["outer_fieldline", "inner_fieldline"]:
+            regions[region].index = regions[region]["Spol"]
+        for region in ["outer_fieldline_parallel", "inner_fieldline_parallel"]:
+            regions[region].index = regions[region]["Spar"]
+        
         self.regions = regions
         
         
@@ -451,7 +449,7 @@ class Hermesdata:
     def __init__(self):
         self.code = "Hermes-3"
         self.params =  [
-            "Td+", "Td", "Te", "Ne", "Pe", "Pd+", "Pd", "Nd",  "Pd*", "Nd*", "Td*", "NVd+",
+            "Td+", "Td", "Te", "Ne", "Pe", "Pd+", "Pd", "Nd", "NVd+", "Vd+", "M",
             "Sd+_iz", "Rd+_ex", "Rd+_rec"]
         pass
     
@@ -461,14 +459,30 @@ class Hermesdata:
 
         self.ds = ds
         self.regions = dict()
-        self.regions["omp"] = self.get_radial_data(ds.hermesm.select_region("outer_midplane_a").isel(x = slice(2,-2)))
-        self.regions["imp"] = self.get_radial_data(ds.hermesm.select_region("inner_midplane_a").isel(x = slice(2,-2)))
-        self.regions["outer_lower"] = self.get_radial_data(ds.hermesm.select_region("outer_lower_target"))
-        self.regions["outer_upper"] = self.get_radial_data(ds.hermesm.select_region("outer_upper_target"))
-        self.regions["inner_lower"] = self.get_radial_data(ds.hermesm.select_region("inner_lower_target"))
-        self.regions["outer_fieldline"] = self.get_poloidal_data()
         
-        # self.regions["imp"].index *= -1    # Ensure core is on the LHS
+        ## OLD
+        # self.regions["omp"] = self.get_radial_data(ds.hermesm.select_region("outer_midplane_a").isel(x = slice(2,-2)))
+        # self.regions["imp"] = self.get_radial_data(ds.hermesm.select_region("inner_midplane_a").isel(x = slice(2,-2)))
+        # self.regions["outer_lower"] = self.get_radial_data(ds.hermesm.select_region("outer_lower_target"))
+        # self.regions["outer_upper"] = self.get_radial_data(ds.hermesm.select_region("outer_upper_target"))
+        # self.regions["inner_lower"] = self.get_radial_data(ds.hermesm.select_region("inner_lower_target"))
+        # self.regions["outer_fieldline"] = self.get_poloidal_data()
+        
+        self.regions["omp"] = get_1d_radial_data(ds, self.params, region = "outer_midplane")
+        self.regions["imp"] = get_1d_radial_data(ds, self.params, region = "inner_midplane")
+        self.regions["outer_lower"] = get_1d_radial_data(ds, self.params, region = "outer_lower_target")
+        self.regions["inner_lower"] = get_1d_radial_data(ds, self.params, region = "inner_lower_target")
+        
+        self.regions["outer_fieldline"] = get_1d_poloidal_data(ds, self.params, region = "outer_lower", sepdist = 0.002)
+        self.regions["outer_fieldline"].index = self.regions["outer_fieldline"]["Spol"]
+        self.regions["outer_fieldline_parallel"] = self.regions["outer_fieldline"].copy()
+        self.regions["outer_fieldline_parallel"].index = self.regions["outer_fieldline"]["Spar"]
+        
+        # Make distance the index
+        for region in self.regions.keys():
+            if "fieldline" not in region:
+                self.regions[region].index = self.regions[region].pop("Srad")
+            
         
         # Parse column names to fit with the other codes
         for region in self.regions.keys():
@@ -480,6 +494,9 @@ class Hermesdata:
 
         
     def get_radial_data(self, dataset):
+        """
+        Deprecated
+        """
         self.dataset = dataset
 
         x = []
@@ -508,6 +525,9 @@ class Hermesdata:
         return df
     
     def get_poloidal_data(self):
+        """
+        Deprecated
+        """
         ds = self.ds
         m = ds.metadata
     
@@ -577,6 +597,7 @@ def lineplot_compare(
     "outer_lower" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "linear", "Nd": "log"},
     "outer_upper" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "linear", "Nd": "log"},
     "outer_fieldline" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "log", "Nd": "log"},
+    "outer_fieldline_parallel" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "log", "Nd": "log"},
     }
     set_yscales["inner_lower"] = set_yscales["outer_lower"]
     set_yscales["inner_upper"] = set_yscales["outer_upper"]
@@ -587,7 +608,8 @@ def lineplot_compare(
         "outer_lower" : (-0.018, 0.058),
         "outer_upper" : (-0.02, 0.05),
         "inner_lower" : (-0.04, 0.09),
-        "outer_fieldline" : (0, 2)
+        "outer_fieldline" : (0, 2),
+        "outer_fieldline_parallel" : (0, 5)
     }
     
     xlims = (None, None)
