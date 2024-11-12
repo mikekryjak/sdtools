@@ -21,15 +21,21 @@ def get_1d_radial_data(ds, params, region, average_midplanes = False):
     # Interpolate to Z = 0 for IMP or OMP
     if region == "omp" or region == "imp":
         m = ds.metadata
+        
+        xguards = m["MXG"]
+        xguards = 0 
+        
         if region == "omp":
-            reg = ds.isel(x = slice(m["MXG"], -m["MXG"]), theta = slice(m["omp_a"] - 2, m["omp_b"] + 2))
+            reg = ds.isel(x = slice(None, None), theta = slice(m["omp_a"] - 2, m["omp_b"] + 2))
         else:
-            reg = ds.isel(x = slice(m["MXG"], -m["MXG"]),theta = slice(m["imp_a"] - 2, m["imp_b"] + 2))
+            reg = ds.isel(x = slice(None, None),theta = slice(m["imp_a"] - 2, m["imp_b"] + 2))
         
-        
+        # For every parameter, collect the value interpolated at Z = 0 
         for i in reg.coords["x"].values:
             ring = reg.sel(x=i)
             Z = ring["Z"].values
+            
+            # Put parameters into dataframe
             for param in ["dr"] + params:
                 
                 if param in ring:
@@ -37,7 +43,7 @@ def get_1d_radial_data(ds, params, region, average_midplanes = False):
                     df.loc[i, param] = interp(0)
                 else:
                     print(f"Parameter {param} not found")
-                
+            
         df.reset_index(inplace = True, drop = True)
     
     # Take region directly
@@ -51,12 +57,11 @@ def get_1d_radial_data(ds, params, region, average_midplanes = False):
             else:
                 print(f"Parameter {param} not found")
 
-
     for i, _ in enumerate(df["dr"]):
         if i == 0:
             df.loc[i, "Srad"] = df.loc[i, "dr"] / 2
         else:
-            df.loc[i, "Srad"] = df.loc[i-1, "Srad"] + df.loc[i-1, "dr"] + df.loc[i, "dr"]/2
+            df.loc[i, "Srad"] = df.loc[i-1, "Srad"] + df.loc[i-1, "dr"]/2 + df.loc[i, "dr"]/2
         
     df["sep"] = 0
     
