@@ -1255,7 +1255,7 @@ class compare_SOLPS_DLS():
 
         # Read SOLPS
         self.solps = slc.get_1d_poloidal_data(["Btot", "hx", "vol", "R", 
-                                               "Te", "Td+", "RAr", "ne", "fhex_cond", "fhx_total",
+                                               "Te", "Td+", "RAr", "fAr", "ne", "fhex_cond", "fhx_total",
                                                ], 
                                   sepadd = sepadd, region = region, target_first = True)
         
@@ -1268,6 +1268,7 @@ class compare_SOLPS_DLS():
         dls["qpar"] = out["Qprofiles"][0]
         dls["Btot"] = out["Btotprofiles"][0]
         dls["Ne"] = out["cvar"][0] * dls["Te"].iloc[-1] / dls["Te"]   ## Assuming cvar is ne
+        dls["cz"] = out["state"].si.cz0
         Xpoint = out["Xpoints"][0]
         dls.loc[Xpoint, "Xpoint"] = 1
 
@@ -1321,6 +1322,7 @@ class compare_SOLPS_DLS():
     def plot(self, list_plots, 
              normalise_radiation = True, 
              radiation_per_area = False,
+             plot_cz = False,
              legend_loc = "upper left"):
         
         self.legend_loc = legend_loc
@@ -1342,7 +1344,9 @@ class compare_SOLPS_DLS():
             elif plot == "Qrad":
                 self.plot_radiation_source(axes[i], logscale = True)
             elif plot == "Cumrad":
-                self.plot_radiation_integral(axes[i], normalise = normalise_radiation, per_area= radiation_per_area)
+                self.plot_radiation_integral(axes[i], normalise = normalise_radiation, per_area= radiation_per_area, plot_cz = plot_cz)
+            elif plot == "cz":
+                self.plot_cz(axes[i])
             else:
                 print(f"Plot {plot} not found")
         
@@ -1353,7 +1357,7 @@ class compare_SOLPS_DLS():
         dls = self.dls
         
         ylim = ax.get_ylim()
-        ax.vlines(dls[dls["Xpoint"]==1]["Spar"], *ylim, colors = "k", alpha = 0.3, lw = 3, label = "X-point")
+        ax.vlines(dls[dls["Xpoint"]==1]["Spar"], *ylim, colors = "k", alpha = 0.3, lw = 1, ls = "--", label = "X-point")
         ax.set_ylim(*ylim)
         
     def apply_plot_settings(self, ax):
@@ -1417,12 +1421,29 @@ class compare_SOLPS_DLS():
         solps = self.solps
         dls = self.dls
         
-        ax.set_title("Electron pressure")
-        ax.plot(dls["Spar"], dls["Pe"], label = "DLS")
-        ax.plot(solps["Spar"], solps["Pe"], label = "SOLPS")
+        ax.set_title("Electron pressure (normalised)")
+        ax.plot(dls["Spar"], dls["Pe"] / dls["Pe"].iloc[-1], label = "DLS")
+        ax.plot(solps["Spar"], solps["Pe"] / solps["Pe"].iloc[-1], label = "SOLPS")
 
-        ax.set_ylabel("$P_e$ $[Pa]$")
+        ax.set_ylabel("$P_e$ (normalised)")
         # ax.set_yscale("log")
+        self.plot_Xpoint(ax)
+        self.apply_plot_settings(ax)
+        
+    def plot_cz(self, ax):
+        solps = self.solps
+        dls = self.dls
+        
+        ax.set_title("fAr * $n_e^2$ (normalised)")
+        
+        dls_var = dls["cz"]*dls["Ne"]**2
+        solps_var = solps["fAr"]*solps["ne"]**2
+        
+        ax.plot(dls["Spar"], dls_var/dls_var.iloc[-1], label = "DLS")
+        ax.plot(solps["Spar"], solps_var/solps_var.iloc[-1],  label = "SOLPS")
+
+        ax.set_ylabel("fAr * $n_e^2$ [m^-6")
+        ax.set_yscale("log")
         self.plot_Xpoint(ax)
         self.apply_plot_settings(ax)
         
@@ -1442,7 +1463,12 @@ class compare_SOLPS_DLS():
         self.plot_Xpoint(ax)
         self.apply_plot_settings(ax)
             
-    def plot_radiation_integral(self, ax, per_area = False, logscale = False, normalise = True):
+    def plot_radiation_integral(
+        self, ax, 
+        per_area = False, 
+        logscale = False, 
+        normalise = True,
+        plot_cz = True):
 
         solps = self.solps
         dls = self.dls
@@ -1464,6 +1490,15 @@ class compare_SOLPS_DLS():
             ax.plot(solps["Spar"], solps[f"Prad_cum{suffix}"], label = "SOLPS")
             ax.set_title(f"Cumulative radiation integral {label_suffix}")
             ax.set_ylabel(f"[W] {label_suffix}")
+        
+        if plot_cz:
+            ax2 = ax.twinx()
+            ax2.plot(solps["Spar"], solps["fAr"] * solps["ne"]**2, 
+                     c = "orange", ls = "--", alpha = 0.8, lw = 2, 
+                     label = "fAr*ne^2")
+            ax2.set_ylabel("Cz*ne**2")
+            ax2.set_yscale("log")
+            ax2.legend(fontsize = "x-small")
         
         if logscale:
             ax.set_yscale("log")
