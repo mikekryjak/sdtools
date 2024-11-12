@@ -79,6 +79,14 @@ class SOLPScase():
         
         fht = total heat flux = fhe_cond + 5/3*fhe_32 + fhi_cond + 5/3*fhi_32 + fhe_thermj
         
+        BALANCES
+        ----------
+        b2stel_she_bal: radiation losses due to atomic processes in W/m3. Third dimension is species index.
+        eirene_mc_emel_she_bal: Electron energy loss/gain due to interaction with molecules. 3rd dim is strata
+        eirene_mc_empl_shi_bal: Ion energy loss/gain due to interaction with molecules. 3rd dim is strata
+        
+        eirene_mc_papl_sna_bal: particle source due to ionisation in s^-1. 3rd dim species (second is EIRENE neutral), 4d dim strata
+        
         """
         
         raw_balance = nc.Dataset(os.path.join(path, "balance.nc"))
@@ -136,6 +144,18 @@ class SOLPScase():
         s["omp"] = (omp, slice(None,None))
         s["outer_lower_target"] = (-2, slice(None,None))
         s["inner_lower_target"] = (1, slice(None,None))
+        s["outer_upper_target"] = (upper_break+1, slice(None,None))
+        s["inner_upper_target"] = (upper_break-2, slice(None,None))
+        
+        poloidal_sel = {}
+        poloidal_sel["outer_upper_leg"] = slice(self.g["upper_break"]+1, self.g["rightcut"][1]+2)
+        poloidal_sel["inner_upper_leg"] = slice(self.g["leftcut"][1]-2, self.g["upper_break"]-1)
+        poloidal_sel["outer_lower_leg"] = slice(self.g["rightcut"][0]+2, -1)
+        poloidal_sel["inner_lower_leg"] = slice(1, self.g["leftcut"][0]+2)
+        poloidal_sel["omp"] = omp
+        poloidal_sel["imp"] = imp
+        self.poloidal_sel = poloidal_sel
+        
         
         
         # First SOL rings
@@ -220,6 +240,7 @@ class SOLPScase():
         self.bal[f"R{species_name}"] = abs(rad / bal["vol"] )
         self.bal[f"n{species_name}"] = nimp
         self.bal[f"f{species_name}"] = nimp / self.bal["ne"]
+        self.bal[f"f{species_name}tot"] = nimp / (self.bal["ne"] + self.bal["Na"] + (self.bal["Nm"]*2))
         
         if all_states:
             print("Saving all states")
@@ -321,6 +342,7 @@ class SOLPScase():
         ------
             name, str:
                 "outer", "outer_lower", "outer_upper", "inner", "inner_lower", "inner_upper"
+                "inner_upper_leg", "outer_upper_leg", "inner_lower_leg", "outer_lower_leg"
             i, int: 
                 SOL ring index (0 = first inside SOL) 
             sep_dist, int
@@ -330,7 +352,7 @@ class SOLPScase():
         ------
             selector tuple as (X,Y)
             
-        NOTE: INCLUDES GUARD CELLS
+        NOTE: INCLUDES GUARD CELLS apart from legs....
         NOTE: DOES NOT SUPPORT DISCONNECTED DOUBLE NULL
         """
         
@@ -351,14 +373,20 @@ class SOLPScase():
         selections["outer"] =       (slice(self.g["upper_break"],None), yid)
         selections["outer_lower"] = (slice(self.g["omp"]+1-1,None), yid)
         selections["outer_upper"] = (slice(self.g["upper_break"], self.g["omp"]+1+1), yid)
+        
+        for leg_name in ["inner_upper_leg", "outer_upper_leg", "inner_lower_leg", "outer_lower_leg"]:
+            selections[leg_name] = (self.poloidal_sel[leg_name], yid)
+        
+        
         selections["inner"] =       (slice(1, self.g["upper_break"]), yid)
         selections["inner_lower"] = (slice(1, self.g["imp"]+1), yid)
         selections["inner_upper"] = (slice(self.g["imp"]-1, self.g["upper_break"]), yid)
+
         
-        if name in selections:
+        if name in selections.keys():
             return selections[name]
         else:
-            raise Exception(f"Region {name} not supported")
+            raise Exception(f"Region {name} not supported. \n Try outer, outer_lower, outer_upper, inner, inner_lower, inner_upper")
     
 
         
@@ -521,12 +549,16 @@ class SOLPScase():
         if type(params) == str:
             params = [params]
         
-        if any([region in name for name in ["omp", "imp", "outer_lower_target", "inner_lower_target"]]):
+        # Poloidal selector
+        if any([region in name for name in [
+            "omp", "imp", 
+            "outer_lower_target", "inner_lower_target",
+            "outer_upper_target", "inner_upper_target"]]):
             p = self.s[region] 
         else:
             raise Exception(f"Unrecognised region: {region}")
         
-        selector = (p[0], slice(None))
+        selector = (p[0], slice(1,-1))  # Take out guards
         df = pd.DataFrame()
         hy = self.g["hy"][selector] 
         
@@ -539,7 +571,7 @@ class SOLPScase():
             if i == 0:
                 df.loc[i, "dist"] = hy[i] / 2
             else:
-                df.loc[i, "dist"] = df.loc[i-1, "dist"] + hy[i-1] + hy[i]/2
+                df.loc[i, "dist"] = df.loc[i-1, "dist"] + hy[i-1]/2 + hy[i]/2
         
         sepind = self.g["sep"]
         sep_corr = (df["dist"][sepind] - df["dist"][sepind-1]) / 2
@@ -561,7 +593,7 @@ class SOLPScase():
         df["apar"] = vol / dSpar
 
         for param in params:
-            df[param] = self.bal[param][selector[0], :]
+            df[param] = self.bal[param][selector]
         
         return df
     
@@ -662,18 +694,9 @@ class SOLPScase():
         df["Spar"] = np.cumsum(dSpar)
         df["apar"] = vol / dSpar
 
-        ## X-point
-        if "inner" in region:
-            idxmin = np.argmin(abs(R - R.max()))
-        elif "outer" in region:
-            idxmin = np.argmin(abs(R - R.min()))
-        else:
-            raise ValueError("Region not recognised")
+        
 
-        df["Xpoint"] = 0
-        df.loc[idxmin, "Xpoint"] = 1
-
-        if "inner" in region:
+        if any([name in region for name in ["outer_upper", "inner_lower"]]):
             df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
             df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
             df = df.iloc[::-1].reset_index(drop = True)
@@ -687,11 +710,24 @@ class SOLPScase():
 
         df["Spol"] -= df["Spol"].iloc[0]   # Now 0 is at Z = 0
         df["Spar"] -= df["Spar"].iloc[0]   # Now 0 is at Z = 0
+        
+        # X-point. Must be before target_first reversal (idk why)
+        if "inner" in region:
+            idxmin = np.argmin(abs(df["R"] - df["R"].max()))
+        elif "outer" in region:
+            idxmin = np.argmin(abs(df["R"] - df["R"].min()))
+        else:
+            raise ValueError("Region not recognised")
+
+        df["Xpoint"] = 0
+        df.loc[idxmin, "Xpoint"] = 1
 
         if target_first:
             df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
             df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
             df = df.iloc[::-1]
+        
+        
         
         return df
         # return df[::-1]
@@ -772,7 +808,7 @@ class SOLPScase():
 
         return xpoints
     
-    def plot_selection(self, sel, **kwargs):
+    def plot_selection(self, sel, ax = None, **kwargs):
         """
         Plots scatter of selected points according to the tuple sel
         which contains slices in (X, Y)
@@ -785,7 +821,7 @@ class SOLPScase():
         data[sel] = 1
         
         def_kwargs = dict(
-            separatrix_kwargs = dict(lw = 1, c = "darkorange"),
+            separatrix_kwargs = dict(lw = 0.5, ls = "--", c = "white"),
             linewidth = 0.1)
         
         plot_kwargs = {**def_kwargs, **kwargs}
@@ -794,14 +830,68 @@ class SOLPScase():
             dpi = kwargs["dpi"]
         else:
             dpi = 150
-        fig, ax = plt.subplots(dpi = dpi)
+            
+        if ax == None:
+            fig, ax = plt.subplots(dpi = dpi)
 
-        self.plot_2d("", ax = ax, data = data, cmap = mpl.colors.ListedColormap(["lightgrey", "deeppink"]),
+        self.plot_2d("", ax = ax, data = data, cmap = mpl.colors.ListedColormap(["lightgrey", "limegreen"]),
              antialias = True, 
              cbar = False,
              **plot_kwargs)
         
         ax.scatter(self.g["R"][sel], self.g["Z"][sel], c = "deeppink", s = 3)
+        
+    def extract_cooling_curve(self, species, region, sepadd, order = 10, plot = False):
+        """
+        Extract cooling curve from a single SOL ring
+        Inputs: species (e.g. Ar). Must calculate RAr and fAr first (get radiation stats)
+        region: string  like "outer_lower"
+        sepadd: no. sol rings beyond separatrix
+        order: order of polynomial fit
+        plot: debug plot
+        
+        Returns a function for the cooling curve which takes a float
+        and returns the curve in Wm3
+        """
+
+        solps = self.get_1d_poloidal_data(["Te", f"R{species}", f"f{species}", "ne"], sepadd = sepadd, region = region)
+        solps = solps.iloc[:-1]  # Ignore guard cell
+        solps[f"R{species}"] = abs(solps[f"R{species}"])
+
+        x = solps["Te"]
+        y = solps["RAr"]/(solps["ne"]**2 * solps[f"f{species}"])
+        logx = np.log10(x)
+        logy = np.log10(y)
+
+        coeffs = np.polyfit(logx, logy, order)
+        fit_logy = np.polyval(coeffs, logx)
+        upper_limit = solps["Te"].max()  # Upper validity limit
+        
+        if plot:
+            ms = 2
+            fig, axes = plt.subplots(1,2, figsize = (10,4))
+            axes[0].plot(logx, logy, c = "k", marker = "o", lw = 0, ms = ms, label = "SOLPS")
+            axes[1].plot(x, y, c = "k", marker = "o", lw = 0, ms = ms, label = "SOLPS")
+            axes[0].plot(logx, fit_logy, c = "darkorange")
+            axes[1].plot(x, 10**(fit_logy), c = "darkorange")
+        
+        def fit(T):
+        
+            if not any([type(T) != format for format in [np.float64, float]]):
+                raise ValueError("T must be a float")
+
+            logT = np.log10(T)
+            fit = lambda x: 10 ** np.polyval(coeffs, logT)
+
+            if T > upper_limit:
+                return 0
+            elif T < 2:
+                return 0
+            else:
+                return fit(logT)
+            
+        return fit
+
         
         
 def create_norm(logscale, norm, vmin, vmax, linthresh = None):
