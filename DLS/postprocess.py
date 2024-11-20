@@ -291,6 +291,8 @@ def get_front_widths(p, s, Rcutoff = 0.7, dynamicGrid = True, use_prad = True):
         
         df.loc[i, "Btot_eff"] = Beff
         df.loc[i, "Btot_eff_old"] = Beff_old
+        df.loc[i, "Bx"] = Btot[Xpoint]
+        df.loc[i, "BxBt_eff"] = df.loc[i, "Bx"] / df.loc[i, "Btot_eff"]
     
         
         df.loc[i, "Tu"] = s["Tprofiles"][i][-1]
@@ -312,7 +314,7 @@ def get_detachment_scalings(profiles, stores, kappa0 = 2500):
     df["Bf"] = np.array([profiles[x]["Btot"][0] for x in profiles])
     df["frac_gradB"] = np.array([profiles[x].get_average_frac_gradB() for x in profiles])
     df["avgB_ratio"] = np.array([profiles[x].get_average_B_ratio() for x in profiles])
-    df["BxBt_eff"] = [df["Btot_eff"].iloc[-1] / df["Btot_eff"].iloc[0] for df in front_dfs]
+    df["BxBt_eff"] = [df["BxBt_eff"].iloc[0] for df in front_dfs]
     df["Btot_eff"] = [df["Btot_eff"].iloc[0] for df in front_dfs]
     df["Lx"] = [profiles[x]["S"][profiles[x]["Xpoint"]] for x in profiles]
     df["Tu"] = [stores[x]["Tprofiles"][0][-1] for x in profiles]
@@ -373,8 +375,9 @@ def get_detachment_scalings(profiles, stores, kappa0 = 2500):
 
         
         
-        
+        ####################################################################################
         ### Old derivation terms
+        ####################################################################################
     
         ## C0
 
@@ -1251,14 +1254,14 @@ class plotProfiles():
 
 
 class compare_SOLPS_DLS():
-    def __init__(self, slc, out, region = "outer_lower", sepadd = 1):
+    def __init__(self, slc, out, cvar, impurity = "Ar", region = "outer_lower", sepadd = 1):
 
         # Read SOLPS
         self.solps = slc.get_1d_poloidal_data(["Btot", "hx", "vol", "R", 
-                                               "Te", "Td+", "RAr", "fAr", "ne", "fhex_cond", "fhx_total",
+                                               "Te", "Td+", f"R{impurity}", f"f{impurity}", "ne", "fhex_cond", "fhx_total",
                                                ], 
                                   sepadd = sepadd, region = region, target_first = True)
-        
+        self.impurity = impurity
         # Read DLS
         dls = pd.DataFrame()
         dls["Qrad"] = out["Rprofiles"][0]
@@ -1267,8 +1270,16 @@ class compare_SOLPS_DLS():
         dls["Te"] = out["Tprofiles"][0]
         dls["qpar"] = out["Qprofiles"][0]
         dls["Btot"] = out["Btotprofiles"][0]
-        dls["Ne"] = out["cvar"][0] * dls["Te"].iloc[-1] / dls["Te"]   ## Assuming cvar is ne
-        dls["cz"] = out["state"].si.cz0
+        
+        if cvar == "density":
+            dls["cz"] = out["state"].si.cz0
+            dls["Ne"] = out["cvar"][0] * dls["Te"].iloc[-1] / dls["Te"]   ## Assuming cvar is ne
+        elif cvar == "impurity_frac":
+            dls["cz"] = out["cvar"][0]
+            dls["Ne"] = dls.iloc[-1]["Te"] * out["state"].si.nu0 / dls["Te"]
+        else:
+            raise Exception()
+        
         Xpoint = out["Xpoints"][0]
         dls.loc[Xpoint, "Xpoint"] = 1
 
@@ -1291,10 +1302,10 @@ class compare_SOLPS_DLS():
 
 
         # Calculate radiation (see DLS comments)
-        solps["Prad_per_area_cum"] = sp.integrate.cumulative_trapezoid(y = solps["RAr"], x = solps["Spar"], initial = 0)   # Radiation integral over volume
+        solps["Prad_per_area_cum"] = sp.integrate.cumulative_trapezoid(y = solps[f"R{self.impurity}"], x = solps["Spar"], initial = 0)   # Radiation integral over volume
         solps["Prad_per_area_cum_norm"] = solps["Prad_per_area_cum"] / solps["Prad_per_area_cum"].max()
 
-        solps["Prad_cum"] = sp.integrate.cumulative_trapezoid(y = solps["RAr"] / solps["Btot"], x = solps["Spar"], initial = 0)   # Radiation integral over volume
+        solps["Prad_cum"] = sp.integrate.cumulative_trapezoid(y = solps[f"R{self.impurity}"] / solps["Btot"], x = solps["Spar"], initial = 0)   # Radiation integral over volume
         # NOTE: This is not correct, it should really be volume, but I'm doing  it like this to be the same as the DLS.
         solps["Prad_cum_norm"] = solps["Prad_cum"] / solps["Prad_cum"].max()
         
@@ -1318,6 +1329,28 @@ class compare_SOLPS_DLS():
         dls["Pe"] = dls["Te"] * dls["Ne"] * 1.60217662e-19
         
         return dls
+    
+    def get_front_location(self, mode = "dls", threshold = 0.5, debug_plot = False):
+        """
+        Returns the parallel position by which the total cumulative radiation fraction reached a threshold
+        """
+        
+        if mode == "dls":
+            data = self.dls
+        elif mode == "solps":
+            data = self.solps
+            
+        df = data[["Prad_cum_norm", "Spar"]].copy()
+        df = df.drop_duplicates(subset = ["Prad_cum_norm"])
+        fun = sp.interpolate.interp1d(df["Prad_cum_norm"], df["Spar"],  kind = "linear")
+        
+        if debug_plot:
+            fig, ax = plt.subplots()
+            ax.plot(df["Prad_cum_norm"], df["Spar"], marker = "o", lw = 0, ms = 3)
+            rad = np.linspace(0,1,100)
+            ax.plot(rad, [fun(r) for r in rad])
+        
+        return fun(threshold)
     
     def plot(self, list_plots, 
              normalise_radiation = True, 
@@ -1437,12 +1470,12 @@ class compare_SOLPS_DLS():
         ax.set_title("fAr * $n_e^2$ (normalised)")
         
         dls_var = dls["cz"]*dls["Ne"]**2
-        solps_var = solps["fAr"]*solps["ne"]**2
+        solps_var = solps[f"f{self.impurity}"]*solps["ne"]**2
         
         ax.plot(dls["Spar"], dls_var/dls_var.iloc[-1], label = "DLS")
         ax.plot(solps["Spar"], solps_var/solps_var.iloc[-1],  label = "SOLPS")
 
-        ax.set_ylabel("fAr * $n_e^2$ [m^-6")
+        ax.set_ylabel(f"f{self.impurity} * $n_e^2$ [m^-6")
         ax.set_yscale("log")
         self.plot_Xpoint(ax)
         self.apply_plot_settings(ax)
@@ -1453,7 +1486,7 @@ class compare_SOLPS_DLS():
         dls = self.dls
         
         ax.plot(dls["Spar"], dls["Qrad"], label = "DLS")
-        ax.plot(solps["Spar"], solps["RAr"], label = "SOLPS")
+        ax.plot(solps["Spar"], solps[f"R{self.impurity}"], label = "SOLPS")
         ax.set_title("Radiation source")
         ax.set_ylabel("[W/m3]")
 
@@ -1493,7 +1526,7 @@ class compare_SOLPS_DLS():
         
         if plot_cz:
             ax2 = ax.twinx()
-            ax2.plot(solps["Spar"], solps["fAr"] * solps["ne"]**2, 
+            ax2.plot(solps["Spar"], solps[f"f{self.impurity}"] * solps["ne"]**2, 
                      c = "orange", ls = "--", alpha = 0.8, lw = 2, 
                      label = "fAr*ne^2")
             ax2.set_ylabel("Cz*ne**2")
@@ -1507,59 +1540,137 @@ class compare_SOLPS_DLS():
         self.apply_plot_settings(ax)
         
         
+class DLScase():
+    def __init__(self, out):
+
+        dls = pd.DataFrame()
+        dls["Qrad"] = out["Rprofiles"][0]
+        dls["Spar"] = out["Sprofiles"][0]
+        dls["Spol"] = out["Spolprofiles"][0]
+        dls["Te"] = out["Tprofiles"][0]
+        dls["qpar"] = out["Qprofiles"][0]
+        dls["Btot"] = out["Btotprofiles"][0]
+        dls["Ne"] = out["cvar"][0] * dls["Te"].iloc[-1] / dls["Te"]   ## Assuming cvar is ne
+        dls["cz"] = out["state"].si.cz0
+        Xpoint = out["Xpoints"][0]
+        dls.loc[Xpoint, "Xpoint"] = 1
+
+        # qradial is the uniform upstream heat source
+        dls["qradial"] = 1.0
+        # dls["qradial"].iloc[Xpoint:] = out["state"].qradial
+        dls.loc[Xpoint:, "qradial"] = out["state"].qradial
         
-# def compare_SOLPS_DLS(slc, out, region = "outer_lower", sepadd = 1):
-
-    
-    
-
-#     nfigs = 5
-#     fsize = 4
-#     fig, axes =plt.subplots(1,nfigs, figsize = (nfigs*fsize, fsize))
-
-#     ax = axes[0]
-#     ax.plot(dls["Spar"], dls["Qrad"], label = "DLS")
-#     ax.plot(solps["Spar"], solps["RAr"], label = "SOLPS")
-    
-#     ax.set_title("Total Argon $Q_{rad}$ [W/m3]")
-#     # ax.set_yscale("log")
-
-#     ### Cumulative radiation plot
-#     ax = axes[1]
-#     ax.set_title("Cumulative Argon $Q_{rad}$ [W/m3]")
-#     ax.plot(dls["Spar"], dls["Pradcum"], label = "DLS")
-
+        # Radiative power loss without flux expansion effect.
+        # Units are W, bit integrated assuming unity cross-sectional area, so really W/m2
+        # Done by reconstructing the RHS of the qpar equation
+        dls["Prad_per_area"] = np.gradient(dls["qpar"]/dls["Btot"], dls["Spar"]) + dls["qradial"]/dls["Btot"]
+        dls["Prad_per_area_cum"] = sp.integrate.cumulative_trapezoid(y = dls["Prad_per_area"], x = dls["Spar"], initial = 0)  # W/m2
+        dls["Prad_per_area_cum_norm"] = dls["Prad_per_area_cum"] / dls["Prad_per_area_cum"].max()
+        # Proper radiative power integral [W]
+        dls["Prad_cum"] = sp.integrate.cumulative_trapezoid(y = dls["Qrad"] / dls["Btot"], x = dls["Spar"], initial = 0)   # Radiation integral over volume
+        dls["Prad_cum_norm"] = dls["Prad_cum"] / dls["Prad_cum"].max()
         
-#     cumR = df["RAr"][::-1].cumsum()[::-1]
-#     cumR /= cumR[0]
-#     ax.plot(solps["Spar"], Pradcum, label = "SOLPS")
+        dls["Pe"] = dls["Te"] * dls["Ne"] * 1.60217662e-19
+        
+        ### Calculate scalar properties
+        s = dict()
+        s["cvar"] = out["state"].cvar
+        s["kappa0"] = out["state"].si.kappa0
+        s["Bf"] = dls["Btot"].iloc[0]
+        s["Bx"] = dls[dls["Xpoint"]==1]["Btot"].iloc[0]
+        s["Beff"] = np.sqrt(sp.integrate.trapezoid(
+            y = dls["qpar"]*dls["Qrad"], x = dls["Spar"]) / sp.integrate.trapezoid(
+                y = dls["qpar"]*dls["Qrad"]/dls["Btot"]**2, x = dls["Spar"]))
+        s["BxBt"] = s["Bx"] / s["Bf"]
+        s["BxBteff"] = s["Bx"] / s["Beff"]
+        s["Lc"] = dls["Spol"].iloc[-1]
+        s["Wradial"] = out["state"].qradial
+        
+        dlsx = dls[dls["Xpoint"] == 1]
+        dls_sol = dls[dls["Spar"] <= dlsx["Spar"].iloc[0]]
+        avgB_sol = sp.integrate.trapz(dls_sol["Btot"], x = dls_sol["Spar"]) / dls_sol["Spar"].iloc[-1]
+
+        s["avgB_ratio"] = dlsx["Btot"].iloc[0] / avgB_sol
+        
+        # print(s["avgB_ratio"])
+        
+        ## DLS-Extended effects (see Kryjak 2024)
+        # Impact of radiation happening upstream (no easy physical explanation)
+        s["int_qoverBsq_dt"] = np.sqrt(2 * sp.integrate.trapz(
+            y = dls["qpar"].iloc[Xpoint:]/(dls["Btot"].iloc[Xpoint:]**2 * s["Wradial"]), x = dls["Spar"].iloc[Xpoint:]))
+        
+        
+        # Tu proportional term calculated from heat flux integral. Includes effects of Lpar and B/averageB.
+        # Simple version is just the Tu proportionality
+        s["W_Tu"] = (s["Wradial"]**(2/7)) / (sp.integrate.trapezoid(y = dls["qpar"], x = dls["Spar"])**(2/7))
+        s["W_Tu_simple"] = (
+                            (sp.integrate.trapezoid(
+                                y = dls["Btot"][Xpoint:]/s["Bx"] * (s["Lc"] - dls["Spar"].iloc[Xpoint:])/(s["Lc"] - dls["Spar"].iloc[Xpoint]), x = dls["Spar"].iloc[Xpoint:]) \
+                            + sp.integrate.trapezoid(
+                                y = dls["Btot"].iloc[:Xpoint]/s["Bx"], x = dls["Spar"].iloc[:Xpoint]))
+                        )**(-2/7)                    
+                                    
+        # Cooling curve integral which includes effect of Tu clipping integral limit
+        self.Lfunc = lambda x : out["state"].si.Lfunc(x)
+        Lz = [self.Lfunc(x) for x in dls["Te"]]
+        s["int_TLz_dt"] = np.sqrt(2 * sp.integrate.trapz(y = s["kappa0"] * dls["Te"]**0.5 * Lz, x = dls["Te"]))**-1
+        
+        self.data = dls
+        self.stats = s
+        
+        
+    def get_stats_dataframe(self):
+        """
+        Returns dataframe with a row of index 0 containing properties in self.stats
+        """
+        return pd.DataFrame.from_dict(self.stats, orient = "index").T
+        
+    def get_radiation_location(self, threshold):
+        """
+        Returns parallel location of point by which the cumulative radiation in W (not W/m2) crosses a threshold
+        
+        TRY 16 to 84
+        """
+        return sp.interpolate.interp1d(self.data["Prad_cum_norm"], self.data["Spar"], fill_value = "extrapolate")(threshold)
     
-#     ax = axes[2]
-#     ax.set_title("$q_{\parallel}$")
-#     ax.plot(dlsSpar, dlsqpar, label = "DLS")
-#     ax.plot(solps["Spar"], abs(solps["fhex_cond"]), label = "SOLPS electron cond")
-#     ax.plot(solps["Spar"], abs(solps["fhx_total"]), label = "SOLPS total")
-#     # ax.set_yscale("log")
-
-#     ax = axes[3]
-#     ax.set_title("Te")
-#     ax.plot(dlsSpar, dlsTe, label = "DLS")
-#     ax.plot(solps["Spar"], solps["Te"], label = "SOLPS")
-
-#     ax = axes[4]
-#     ax.set_title("Ne")
-#     ax.plot(dlsSpar, dlsNe, label = "DLS")
-#     ax.plot(solps["Spar"], solps["ne"], label = "SOLPS")
-#     ax.set_yscale("log")
-
-
-#     for ax in axes:
-#         ax.set_xlabel("Lpar [m]")
-#         ylims = ax.get_ylim()
-#         ax.vlines(dfx["Spar"], *ylims, color = "darkslategrey", ls = "-", alpha = 0.5, lw = 1, label = "X-point")
-#         # ax.vlines(dffront["Spar"], *ylims, color = "deeppink", ls = "-", alpha = 0.3, lw = 1, label = "Front")
-#         ax.set_ylim(ylims)
-#         ax.legend(fontsize = "x-small")
-
-#     # fig.tight_layout()
+    def get_front_width(self, lower_threshold, upper_threshold):
+        """
+        Return parallel difference between two cumulative radiation thresholds
+        Cumulative radiation is W not W/m2
+        """
+        
+        lower_position = sp.interpolate.interp1d(self.data["Prad_cum_norm"], self.data["Spar"], fill_value = "extrapolate")(lower_threshold)
+        upper_position = sp.interpolate.interp1d(self.data["Prad_cum_norm"], self.data["Spar"], fill_value = "extrapolate")(upper_threshold)
+        width = upper_position - lower_position
+        
+        return width
+        
+def test_scalings(df1, df2, param, cumulative = False):
+    """
+    Return scaling coefficients to break down impact of different terms on threshold
+    df1 is has DLScase stats dataframe for the case before the change and df2 after the change
+    """
+    diff = df2 / df1
+        
+    scalings = pd.DataFrame()
+    scalings["result"] = diff["cvar"]
+    scalings["param_ratio"] = diff[param]
+    scalings["simple_noavg_B"] = diff["BxBt"]**(-1) * diff["Lc"]**(-2/7)
+    scalings["simple"] = diff["BxBt"]**(-1) * diff["Lc"]**(-2/7) * (diff["avgB_ratio"])**(2/7)
     
+    
+    if cumulative:
+        scalings["abovex"] = scalings["simple"] * diff["W_Tu_simple"]
+        scalings["Beff"] = diff["BxBteff"]**(-1) * diff["W_Tu_simple"]
+        scalings["W_Tu"] = diff["BxBteff"]**(-1) * diff["W_Tu"]
+        scalings["curveclip"] = diff["BxBteff"]**(-1) * diff["W_Tu"] * diff["int_TLz_dt"]
+        scalings["upstream_rad"] = diff["BxBteff"]**(-1) * diff["W_Tu"] * diff["int_TLz_dt"] * diff["int_qoverBsq_dt"]
+    else:  
+        scalings["abovex"] = diff["W_Tu_simple"]
+        scalings["Beff"] = diff["BxBteff"]**(-1)
+        scalings["W_Tu"] = diff["W_Tu"]
+        scalings["curveclip"] = diff["int_TLz_dt"]
+        scalings["upstream_rad"] = diff["int_qoverBsq_dt"]
+        scalings["all"] = diff["BxBteff"]**(-1) * diff["W_Tu"] * diff["int_TLz_dt"] * diff["int_qoverBsq_dt"]
+
+    return scalings
