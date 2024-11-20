@@ -111,7 +111,11 @@ class SOLPScase():
         R = self.g["R"] = np.mean(bal["crx"], axis=2)
         Z = self.g["Z"] = np.mean(bal["cry"], axis=2)
         self.g["hx"] = bal["hx"]
-        self.g["hy"] = bal["hy"]
+        
+        if "hy" in bal:
+            self.g["hy"] = bal["hy"]
+        else:
+            print("Warning, hy not found in balance file")
         self.g["crx"] = bal["crx"]
         self.g["cry"] = bal["cry"]
         self.g["nx"] = self.g["crx"].shape[0]
@@ -162,24 +166,6 @@ class SOLPScase():
         for name in ["outer", "outer_lower", "outer_upper", "inner", "inner_lower", "inner_upper"]:
             s[name] = self.make_custom_sol_ring(name, i = 0)
             
-        # BOUT++ style regions - needs implementing leftcut, rightcut
-        # s["lower_inner_pfr"] = (slice(None, leftcut[0]+2), slice(None, sep+2))
-        # s["lower_inner_SOL"] = (slice(None, leftcut[0]+2), slice(sep+2, None))
-        # s["inner_core"] = (slice(leftcut[0]+2, leftcut[1]+2), slice(None, sep+2))
-        # s["inner_SOL"] = (slice(leftcut[0]+2, leftcut[1]+2), slice(sep+2, None))
-        # s["upper_inner_PFR"] = (slice(leftcut[1]+2, upper_break), slice(None, sep+2))
-        # s["upper_inner_SOL"] = (slice(leftcut[1]+2, upper_break), slice(sep+2, None))
-        # s["upper_outer_PFR"] = (slice(upper_break, rightcut[1]+2), slice(None, sep+2))
-        # s["upper_outer_SOL"] = (slice(upper_break, rightcut[1]+2), slice(sep+2, None))
-        # s["outer_core"] = (slice(rightcut[1]+2, rightcut[0]+2), slice(None, sep+2))
-        # s["outer_SOL"] = (slice(rightcut[1]+2, rightcut[0]+2), slice(sep+2, None))
-        # s["lower_outer_PFR"] = (slice(rightcut[0]+2, None), slice(None, sep+2))
-        # s["lower_outer_SOL"] = (slice(rightcut[0]+2, None), slice(sep+2, None))
-            
-        # ## Csalculate array of radial distance from separatrix
-        # dist = np.cumsum(self.g["hy"][self.s["omp"]])   # hy is radial length
-        # dist = dist - dist[self.g["sep"] - 1]
-        # self.g["radial_dist"] = dist
         self.get_species()
         self.derive_data()
         
@@ -222,8 +208,8 @@ class SOLPScase():
             self.get_species()
         bal = self.bal
         
-        dfimp = species[species["name"].str.contains(f"{species_name}\+")]
-        species_indices = list(dfimp.index)
+        dcz = species[species["name"].str.contains(f"{species_name}\+")]
+        species_indices = list(dcz.index)
         
         if len(species_indices) < 1:
             raise ValueError(f"No species found matching {species_name}")
@@ -244,9 +230,9 @@ class SOLPScase():
         
         if all_states:
             print("Saving all states")
-            dfimp = species[species["name"].str.contains(f"{species_name}")]
-            for i in dfimp.index:
-                species = dfimp.loc[i, "name"]
+            dcz = species[species["name"].str.contains(f"{species_name}")]
+            for i in dcz.index:
+                species = dcz.loc[i, "name"]
                 self.bal[f"n{species}"] = bal["na"][:,:,i]
             
         
@@ -326,9 +312,20 @@ class SOLPScase():
         bal["fhy_total"] = bal["fhey_total"] + bal["fhiy_total"]
         
         # flux = bal["fnax_D+1_tot"] / (bal["vol"] / bal["
-        bal["NVd+"] = bal["fnax_D+1_tot"] * Mi * 2 / bal["apar"]  # Parallel momentum flux kg/m2/s
-        bal["Vd+"] = bal["NVd+"] / bal["Ne"] / (Mi*2)   # NOTE: this will break for multiple ions
-        bal["M"] = bal["Vd+"] / np.sqrt((bal["Te"]*qe + bal["Td+"]*qe)/Mi*2)  # Mach number
+        if "fnax_D+1_tot" in bal:
+            bal["NVd+"] = bal["fnax_D+1_tot"] * Mi * 2 / bal["apar"]  # Parallel momentum flux kg/m2/s
+            bal["Vd+"] = bal["NVd+"] / bal["Ne"] / (Mi*2)   # NOTE: this will break for multiple ions
+            bal["M"] = bal["Vd+"] / np.sqrt((bal["Te"]*qe + bal["Td+"]*qe)/Mi*2)  # Mach number
+        else:
+            print("fnax_tot not found, skipping momentum calculation")
+            
+        # Reaction channels
+        # bal["Rd+_atm"] = bal["b2stel_she_bal"][:,:,1] / bal["vol"]  # Total atom radiation [W/m3]
+        
+        bal["Rd+_exiz"] = bal["eirene_mc_eael_she_bal"].sum(axis = 2) / bal["vol"]  # Loss of energy due to excitation and 13.6 iz potential [W/m3]
+        bal["Rd+_mol"] = bal["eirene_mc_emel_she_bal"].sum(axis = 2) / bal["vol"]  # Molecule radiation summed over all strata [W/m3]
+            
+        
         
                 
         self.bal = bal
@@ -841,7 +838,9 @@ class SOLPScase():
         
         ax.scatter(self.g["R"][sel], self.g["Z"][sel], c = "deeppink", s = 3)
         
-    def extract_cooling_curve(self, species, region, sepadd, order = 10, plot = False):
+    def extract_cooling_curve(self, species, region, sepadd, order = 10, 
+                              plot = False, cz_effect = False,
+                              ne_effect = False, other_losses = False, constant_cz = 0.05):
         """
         Extract cooling curve from a single SOL ring
         Inputs: species (e.g. Ar). Must calculate RAr and fAr first (get radiation stats)
@@ -853,13 +852,40 @@ class SOLPScase():
         Returns a function for the cooling curve which takes a float
         and returns the curve in Wm3
         """
+        
+        if other_losses:
+            param_list = ["Te", f"R{species}", "RC", "Rd+_exiz", "Rd+_mol", f"f{species}", "ne"]
+        else:
+            param_list = ["Te", f"R{species}", f"f{species}", "ne"]
 
-        solps = self.get_1d_poloidal_data(["Te", f"R{species}", f"f{species}", "ne"], sepadd = sepadd, region = region)
+        solps = self.get_1d_poloidal_data(param_list, sepadd = sepadd, region = region)
         solps = solps.iloc[:-1]  # Ignore guard cell
         solps[f"R{species}"] = abs(solps[f"R{species}"])
 
         x = solps["Te"]
-        y = solps["RAr"]/(solps["ne"]**2 * solps[f"f{species}"])
+        
+        
+            
+        if other_losses:
+            solps["RC"] = np.abs(solps["RC"])
+            solps["Rd+_exiz"] = np.abs(solps["Rd+_exiz"])
+            solps["Rd+_mol"] = np.abs(solps["Rd+_mol"])
+            Qrad = solps[f"R{species}"] + solps["RC"] + solps["Rd+_exiz"] + solps["Rd+_mol"]
+        else:
+            Qrad = solps[f"R{species}"]
+            
+        if cz_effect:
+            cz = constant_cz
+        else:
+            cz = solps[f"f{species}"]
+            
+        if ne_effect:
+            upstream = solps.iloc[0]
+            ne = upstream["ne"] * upstream["Te"] / solps["Te"]
+        else:
+            ne = solps["ne"]
+            
+        y = Qrad/(ne**2 * cz)
         logx = np.log10(x)
         logy = np.log10(y)
 
@@ -871,9 +897,21 @@ class SOLPScase():
             ms = 2
             fig, axes = plt.subplots(1,2, figsize = (10,4))
             axes[0].plot(logx, logy, c = "k", marker = "o", lw = 0, ms = ms, label = "SOLPS")
-            axes[1].plot(x, y, c = "k", marker = "o", lw = 0, ms = ms, label = "SOLPS")
             axes[0].plot(logx, fit_logy, c = "darkorange")
+            axes[0].set_title("Log space")
+            axes[0].set_xlabel("logTe")
+            axes[0].set_ylabel("logLz")
+            
             axes[1].plot(x, 10**(fit_logy), c = "darkorange")
+            axes[1].plot(x, y, c = "k", marker = "o", lw = 0, ms = ms, label = "SOLPS")
+            axes[1].set_title("Linear space")
+            axes[1].set_xlabel("Te")
+            axes[1].set_ylabel("Lz")
+            
+            for ax in axes:
+                ax.legend()
+            
+            
         
         def fit(T):
         
@@ -892,7 +930,52 @@ class SOLPScase():
             
         return fit
 
+    def extract_kappa0(self, sepadd, region, target_first = False, plot =False):
+        df = self.get_1d_poloidal_data(["Te", "fhex_cond", "fhx_total"], 
+                                  sepadd = sepadd, region = region, target_first = target_first)
+                                  
+
+        df = df.iloc[1:-1] # Remove guard cells
+        df = df[df["Te"]>5] # Discard below front
+
+        qpar = df["fhex_cond"] / df["apar"]
+        gradT = np.gradient(df["Te"], df["Spar"])
+        df["kappa0"] = qpar / (df["Te"]**(5/2) * gradT) * -1
+        if plot:
+            dfx = df[df["Xpoint"]==1]
+            plt.plot(df["Spar"], df["kappa0"])
+            plt.plot(dfx["Spar"], dfx["kappa0"], lw = 0, marker = "x", ms = 6)
+            
+        return(np.mean(df["kappa0"]))
+    
+    def extract_front_pos(self, sepadd, region, method = "qpar", threshold = 0.05):
+
+        df = self.get_1d_poloidal_data(["Te", "fhex_cond", "fhx_total", "RN", "Btot"], 
+                                  sepadd = sepadd, region = region, target_first = True)
+        df["qpar"] = df["fhex_cond"] / df["apar"]
         
+        cumR = scipy.integrate.cumulative_trapezoid(y = df["RN"] / df["Btot"], x = df["Spar"], initial = 0)
+        df["cumR"] = cumR/cumR[-1]
+        
+        param = method
+        
+        if param == "qpar":
+            max = df[param].max()
+            max_idx = df[param].idxmax()
+            df_low = df.loc[:max_idx]
+            df_low_rev = df_low.iloc[::-1].reset_index(drop=True)
+
+            df_after_front = df_low_rev[df_low_rev[param] <= max*threshold].reset_index(drop = True)
+            front_spar = df_after_front.iloc[0]["Spar"]
+            
+        else:
+            df_after_front = df[df[param] <= threshold].reset_index(drop = True)
+            front_spar = df_after_front.iloc[-1]["Spar"]
+        
+        
+        return front_spar
+                 
+
         
 def create_norm(logscale, norm, vmin, vmax, linthresh = None):
     if logscale:
