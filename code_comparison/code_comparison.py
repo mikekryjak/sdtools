@@ -107,7 +107,6 @@ class SOLEDGEdata:
         self.regions["outer_fieldline_0.003_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_upper", d_from_sep = 0.003, parallel_length = True)
         self.regions["outer_fieldline_0.015_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_upper", d_from_sep = 0.015, parallel_length = True)
         self.regions["outer_fieldline_0.030_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_upper", d_from_sep = 0.030, parallel_length = True)
-        print(self.regions["outer_fieldline_0.030_parallel"].columns)
         for region in self.regions.keys():
             if "fieldline" in region:
                 
@@ -144,6 +143,9 @@ class SOLEDGEdata:
                 df.index.name = "pos"
                 # df = df.query("index > 0")
                 self.regions[region] = df
+                
+            if "lower" in region or "upper" in region:
+                self.regions[region]["M"] = np.abs(self.regions[region]["M"])
     
     def read_csv(self, path, mode):
         
