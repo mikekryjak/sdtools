@@ -67,10 +67,15 @@ class SOLPScase():
         
         Balance file variables
         
-        HEAT FLUXES
+        FLUXES
         ------------
-        ALL ARE IN W
+        ALL ARE IN W OR S^-1 and defined at LHS cell edge
+        Many variable names are constructed from locations/concepts defined in the manual (e.g. emel)
         
+        Particle fluxes:
+        fna is particle flux
+        
+        Heat fluxes:
         The third dimension is the direction, 0 = poloidal, 1 = radial
         fhi_32 is the convective ion heat flux (52 is only if you use total energy)
         fhi_cond is conductive
@@ -102,14 +107,15 @@ class SOLPScase():
 
         self.params = list(bal.keys())
         self.params.sort()
+        self.params_original = self.params.copy()
         
         # Set up geometry
         
         g = self.g = {}
         
         # Get cell centre coordinates
-        R = self.g["R"] = np.mean(bal["crx"], axis=2)
-        Z = self.g["Z"] = np.mean(bal["cry"], axis=2)
+        R = self.bal["R"] = self.g["R"] = np.mean(bal["crx"], axis=2)
+        Z = self.bal["Z"] = self.g["Z"] = np.mean(bal["cry"], axis=2)
         self.g["hx"] = bal["hx"]
         
         if "hy" in bal:
@@ -122,12 +128,12 @@ class SOLPScase():
         self.g["ny"] = self.g["crx"].shape[1]
         self.g["vol"] = self.bal["vol"]
         
-        self.g["Btot"] = bal["bb"][:,:,3]
-        self.g["Bpol"] = bal["bb"][:,:,0]
-        self.g["Btor"] = np.sqrt(self.g["Btot"]**2 - self.g["Bpol"]**2) 
+        self.bal["Btot"] = self.g["Btot"] = bal["bb"][:,:,3]
+        self.bal["Bpol"] = self.g["Bpol"] = bal["bb"][:,:,0]
+        self.bal["Btor"] = self.g["Btor"] = np.sqrt(self.g["Btot"]**2 - self.g["Bpol"]**2) 
         
         
-        
+        ## Get branch cuts
         leftix = bal["leftix"]+1
         leftix_diff = np.diff(leftix[:,1])
         g["xcut"] = xcut = np.argwhere(leftix_diff<0).squeeze()
@@ -137,30 +143,54 @@ class SOLPScase():
         omp = self.g["omp"] = int((g["rightcut"][0] + g["rightcut"][1])/2) + 1
         imp = self.g["imp"] = int((g["leftcut"][0] + g["leftcut"][1])/2)
         upper_break = self.g["upper_break"] = g["xcut"][2] + 1
-        sep = self.g["sep"] = bal["jsep"][0] + 2
+        sep = self.g["sep"] = bal["jsep"][0] + 2  # Add 1 for guard cell and another to get first ring AFTER separatrix
         # self.g["xpoints"] = self.find_xpoints()   # NOTE: Not robust
         
         
         ## Prepare selectors
+        ## ALL SELECTORS HAVE GUARD CELLS   
+        psel = {}
+        psel["inner_lower_target"] = 1
+        psel["inner_upper_target"] = upper_break -2
+        psel["outer_upper_target"] = upper_break+1
+        psel["outer_lower_target"] = -2
+
+        psel["inner_lower_target_guard"] = 0
+        psel["inner_upper_target_guard"] = upper_break -1
+        psel["outer_upper_target_guard"] = upper_break
+        psel["outer_lower_target_guard"] = -1
+
+        psel["outer_upper_leg"] = slice(self.g["upper_break"]+1, self.g["rightcut"][1]+2)
+        psel["inner_upper_leg"] = slice(self.g["leftcut"][1]-2, self.g["upper_break"]-1)
+        psel["outer_lower_leg"] = slice(self.g["rightcut"][0]+2, -1)
+        psel["inner_lower_leg"] = slice(0, self.g["leftcut"][0]+2)
+        psel["omp"] = omp
+        psel["imp"] = imp
         
+        ## X-point indices: first cell downstream of X-point
+        psel["inner_lower_xpoint"] = g["xcut"][0] -1
+        psel["inner_upper_xpoint"] = g["xcut"][1]
+        psel["outer_upper_xpoint"] = g["xcut"][3]
+        psel["outer_lower_xpoint"] = g["xcut"][4]+1
+        
+        psel["inner_lower_xpoint_fromtarget"] = psel["inner_lower_xpoint"] - psel["inner_lower_target_guard"] #- 1
+        psel["inner_upper_xpoint_fromtarget"] = psel["inner_upper_target_guard"] - psel["inner_upper_xpoint"] + 1 
+        psel["outer_upper_xpoint_fromtarget"] = psel["outer_upper_xpoint"] - psel["outer_upper_target_guard"] + 1
+        psel["outer_lower_xpoint_fromtarget"] = self.g["nx"] - psel["outer_lower_xpoint"]# - 1
+        self.psel = psel
+
+        ## 2D selectors
         s = self.s = {}
-        s["imp"] = (imp, slice(None,None))
-        s["omp"] = (omp, slice(None,None))
-        s["outer_lower_target"] = (-2, slice(None,None))
-        s["inner_lower_target"] = (1, slice(None,None))
-        s["outer_upper_target"] = (upper_break+1, slice(None,None))
-        s["inner_upper_target"] = (upper_break-2, slice(None,None))
-        
-        poloidal_sel = {}
-        poloidal_sel["outer_upper_leg"] = slice(self.g["upper_break"]+1, self.g["rightcut"][1]+2)
-        poloidal_sel["inner_upper_leg"] = slice(self.g["leftcut"][1]-2, self.g["upper_break"]-1)
-        poloidal_sel["outer_lower_leg"] = slice(self.g["rightcut"][0]+2, -1)
-        poloidal_sel["inner_lower_leg"] = slice(1, self.g["leftcut"][0]+2)
-        poloidal_sel["omp"] = omp
-        poloidal_sel["imp"] = imp
-        self.poloidal_sel = poloidal_sel
-        
-        
+        for location in psel.keys():
+            s[location] = (slice(None,None), psel[location])
+        # s["inner_lower_target"] = (1, slice(None,None))
+        # s["inner_lower_target_guard"] = (0, slice(None,None))
+        # s["inner_upper_target"] = (upper_break-2, slice(None,None))
+        # s["inner_upper_target_guard"] = (upper_break-1, slice(None,None))
+        # s["outer_upper_target"] = (upper_break+1, slice(None,None))
+        # s["outer_upper_target_guard"] = (upper_break, slice(None,None))
+        # s["outer_lower_target"] = (-2, slice(None,None))
+        # s["outer_lower_target_guard"] = (-1, slice(None,None))
         
         # First SOL rings
         for name in ["outer", "outer_lower", "outer_upper", "inner", "inner_lower", "inner_upper"]:
@@ -312,12 +342,18 @@ class SOLPScase():
         bal["fhy_total"] = bal["fhey_total"] + bal["fhiy_total"]
         
         # flux = bal["fnax_D+1_tot"] / (bal["vol"] / bal["
-        if "fnax_D+1_tot" in bal:
-            bal["NVd+"] = bal["fnax_D+1_tot"] * Mi * 2 / bal["apar"]  # Parallel momentum flux kg/m2/s
-            bal["Vd+"] = bal["NVd+"] / bal["Ne"] / (Mi*2)   # NOTE: this will break for multiple ions
-            bal["M"] = bal["Vd+"] / np.sqrt((bal["Te"]*qe + bal["Td+"]*qe)/Mi*2)  # Mach number
-        else:
-            print("fnax_tot not found, skipping momentum calculation")
+        
+        bal["Vd+"] = bal["ua"][:,:,1]  # Note first species is fluid neutral
+        bal["NVd+"] = bal["Vd+"] * bal["Ne"] * Mi  # Parallel momentum flux kg/m2/s
+        bal["M"] = np.abs(bal["Vd+"] / np.sqrt((bal["Te"]*qe + bal["Td+"]*qe)/Mi))  # Mach number
+        
+        ## NOW FOUND ua, DONT NEED THIS. besides fluxes are at cell edges
+        # if "fnax_D+1_tot" in bal:
+        #     bal["NVd+"] = bal["fnax_D+1_tot"] * Mi  / bal["apar"]  # Parallel momentum flux kg/m2/s
+        #     bal["Vd+"] = bal["NVd+"] / bal["Ne"] / Mi   # NOTE: this will break for multiple ions
+        #     bal["M"] = bal["Vd+"] / np.sqrt((bal["Te"]*qe + bal["Td+"]*qe)/Mi)  # Mach number
+        # else:
+        #     print("fnax_tot not found, skipping momentum calculation")
             
         # Reaction channels
         # bal["Rd+_atm"] = bal["b2stel_she_bal"][:,:,1] / bal["vol"]  # Total atom radiation [W/m3]
@@ -372,7 +408,7 @@ class SOLPScase():
         selections["outer_upper"] = (slice(self.g["upper_break"], self.g["omp"]+1+1), yid)
         
         for leg_name in ["inner_upper_leg", "outer_upper_leg", "inner_lower_leg", "outer_lower_leg"]:
-            selections[leg_name] = (self.poloidal_sel[leg_name], yid)
+            selections[leg_name] = (self.psel[leg_name], yid)
         
         
         selections["inner"] =       (slice(1, self.g["upper_break"]), yid)
@@ -535,62 +571,113 @@ class SOLPScase():
         self,
         params,
         region = "omp",
-        verbose = False
+        verbose = False,
+        guards = False,
+        keep_geometry = False,
+        interpolate = True
     ):
         """
         Returns OMP, IMP or target data from the balance file
         Note that the balance file shape is a transpose of the geometry shape (e.g. crx)
         and contains guard cells.        
+        Target data is obtained from the guard cells which are very close to the wall.
         """
+        
+        print(interpolate)
+        
+        bal = self.bal
 
         if type(params) == str:
             params = [params]
         
         # Poloidal selector
         if any([region in name for name in [
-            "omp", "imp", 
+            "omp", "imp"]]):
+
+            p = self.s[region] 
+            selector = self.s[region]
+            
+        elif any([region in name for name in [
             "outer_lower_target", "inner_lower_target",
             "outer_upper_target", "inner_upper_target"]]):
-            p = self.s[region] 
+            
+            selector = self.s[region+"_guard"] # For targets take guard cell which is tiny & close to wall value
+            
         else:
             raise Exception(f"Unrecognised region: {region}")
         
-        selector = (p[0], slice(1,-1))  # Take out guards
-        df = pd.DataFrame()
-        hy = self.g["hy"][selector] 
+        ## Interpolate to Z = 0 for OMP and IMP
+        if (region == "omp" or region == "imp") and interpolate == True:
+            print("yes")
+            ## Select a couple of cells on each side of the midplane
+            if region == "omp":
+                pol_selector = slice(self.psel["omp"]-3, self.psel["omp"]+5)
+            elif region == "imp":
+                pol_selector = slice(self.psel["imp"]-4, self.psel["imp"]+4)
+                
+
+            no_rings = self.g["ny"]   # Number of radial cells
+                
+            # For every parameter, collect the value interpolated at Z = 0 
+
+            df_pol_slice = pd.DataFrame()  # Dataframe containing 2D data around the midplane for 
+            df_rad_slice = pd.DataFrame()   # Radial profile dataframe to construct
+
+            for ring_id in range(no_rings):
+
+                Z = self.g["Z"][pol_selector, ring_id]
+                
+                # Get parameters
+                for param in ["Z", "R", "hx", "hy", "vol", "Btot", "Bpol"] + params:
+                    if param in bal:
+                        df_pol_slice[param] = bal[param][pol_selector, ring_id]
+                    else:
+                        print(f"Parameter {param} not found")
+                    
+                # Interpolate to Z=0
+                
+                for param in df_pol_slice.drop(["Z"], axis = 1).columns:
+                    df_rad_slice.loc[ring_id, param] = scipy.interpolate.interp1d(df_pol_slice["Z"], df_pol_slice[param], kind = "cubic")(0)
+                    
+            df = df_rad_slice.copy()
+            
+        else:
+            df = pd.DataFrame()
+            for param in ["hx", "hy", "R", "Z", "hx", "Btot", "Bpol", "vol"] + params:
+                df[param] = bal[param][selector]
+                
         
         # Interpolate between cells to get separatrix distance
+        hy = df["hy"].values
+        vol = df["vol"].values
         
-        
-        df = pd.DataFrame()
-        
-        for i, _ in enumerate(hy):
+        for i, _ in enumerate(df["hy"]):
             if i == 0:
                 df.loc[i, "dist"] = hy[i] / 2
             else:
                 df.loc[i, "dist"] = df.loc[i-1, "dist"] + hy[i-1]/2 + hy[i]/2
         
         sepind = self.g["sep"]
-        sep_corr = (df["dist"][sepind] - df["dist"][sepind-1]) / 2
-        dist_sep = df["dist"][sepind]
-        df["dist"] -= dist_sep - sep_corr
+        dist_sep = df["dist"][sepind] - (df["dist"][sepind] - df["dist"][sepind-1]) / 2
+        print(dist_sep)
+        df["dist"] -= dist_sep 
         df["sep"] = 0
         df.loc[sepind, "sep"] = 1
-        
-        df["R"] = self.g["R"][selector]
-        df["Z"] = self.g["Z"][selector]
-        
-        hx = self.bal["hx"][selector]
-        Btot = self.g["Btot"][selector]
-        Bpol = self.g["Bpol"][selector]
-        R = self.g["R"][selector]
-        vol = self.g["vol"][selector]
-        
-        dSpar = hx * abs(Btot / Bpol)
-        df["apar"] = vol / dSpar
 
-        for param in params:
-            df[param] = self.bal[param][selector]
+        
+        dSpar = df["hx"] * abs(df["Btot"] / df["Bpol"])
+        df["apar"] = df["vol"] / dSpar
+        
+        df.insert(0, "dist", df.pop("dist"))
+        df.insert(1, "sep", df.pop("sep"))
+        df.insert(2, "apar", df.pop("apar"))
+        df.insert(3, "vol", df.pop("vol"))
+        
+        if keep_geometry is False:
+            df = df.drop(["R", "hx", "hy", "Btot", "Bpol"], axis = 1)
+        
+        if guards is False:
+            df = df.iloc[1:-1]  # Trim guards but keep indices          
         
         return df
     
@@ -601,6 +688,7 @@ class SOLPScase():
         sepadd = None,
         sepdist = None,
         target_first = False,
+        guards = False
         
     ):
         """
@@ -635,16 +723,6 @@ class SOLPScase():
         imp = self.g["imp"]
         
         selector = self.make_custom_sol_ring(region, i = sepadd)
-        
-        ## REPLACED BY MAKE_CUSTOM_SOL_RING
-        # if region == "outer_lower":
-        #     selector = (slice(omp, -1), yind)
-        # elif region == "inner_lower":
-        #     selector = (slice(1, imp+1), yind)
-        # elif region == "outer_upper":
-        #     selector = (slice(1, imp+1), yind)
-        # else:
-        #     raise Exception("Unrecognised region")
         
         hx = self.bal["hx"][selector]
         Btot = self.g["Btot"][selector]
@@ -708,16 +786,13 @@ class SOLPScase():
         df["Spol"] -= df["Spol"].iloc[0]   # Now 0 is at Z = 0
         df["Spar"] -= df["Spar"].iloc[0]   # Now 0 is at Z = 0
         
-        # X-point. Must be before target_first reversal (idk why)
-        if "inner" in region:
-            idxmin = np.argmin(abs(df["R"] - df["R"].max()))
-        elif "outer" in region:
-            idxmin = np.argmin(abs(df["R"] - df["R"].min()))
-        else:
-            raise ValueError("Region not recognised")
-
+        
+        ## Value of X-point column will be 1 in the cell just downstream of X-point
         df["Xpoint"] = 0
-        df.loc[idxmin, "Xpoint"] = 1
+        Xpoint_index = df.index[-self.psel[f"{region}_xpoint_fromtarget"]]
+        df.loc[Xpoint_index, "Xpoint"] = 1
+        # df["Xpoint"] = 1
+
 
         if target_first:
             df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
@@ -736,74 +811,76 @@ class SOLPScase():
         for param in self.params:
             if name in param: print(param)
             
-    def find_xpoints(self, plot = False):
-        """
-        Returns poloidal IDs of xpoints, works for double null only
-        the IDs are for the cell immediately after the X-point
-        in the direction of ascending X (poloidal) coordinate.
-        They are arranged clockwise starting at inner lower
+    # def find_xpoints(self, plot = False):
+    #     """
+    #     Returns poloidal IDs of xpoints, works for double null only
+    #     the IDs are for the cell immediately after the X-point
+    #     in the direction of ascending X (poloidal) coordinate.
+    #     They are arranged clockwise starting at inner lower
         
-        NOT VERY ROBUST
-        """
+    #     NOT VERY ROBUST
+        
+    #     DEPRECATED - USING DAVID MOULTON'S XCUT METHOD INSTEAD
+    #     """
 
-        x = range(self.g["nx"])
-        R = self.g["R"][:,self.g["sep"]]
+        # x = range(self.g["nx"])
+        # R = self.g["R"][:,self.g["sep"]]
 
-        inner_R = self.g["R"][slice(None, self.g["upper_break"]),self.g["sep"]]
-        inner_x = np.array(range(self.g["upper_break"]))
+        # inner_R = self.g["R"][slice(None, self.g["upper_break"]),self.g["sep"]]
+        # inner_x = np.array(range(self.g["upper_break"]))
 
 
-        outer_R = self.g["R"][slice(self.g["upper_break"], None),self.g["sep"]]
-        outer_x = np.array(range(self.g["upper_break"], self.g["nx"]))
+        # outer_R = self.g["R"][slice(self.g["upper_break"], None),self.g["sep"]]
+        # outer_x = np.array(range(self.g["upper_break"], self.g["nx"]))
 
-        import scipy
+        # import scipy
 
-        inner_ids = scipy.signal.find_peaks(inner_R, threshold = 0.0007)
-        outer_ids = scipy.signal.find_peaks(outer_R*-1, threshold = 0.001)
+        # inner_ids = scipy.signal.find_peaks(inner_R, threshold = 0.0007)
+        # outer_ids = scipy.signal.find_peaks(outer_R*-1, threshold = 0.001)
 
             
                 
-        issue = False
+        # issue = False
         
-        if (len(inner_ids[0]) > 2):
-            print("Too many X-points found in inner SOL")
-            issue = True
-        elif (len(inner_ids[0]) < 2):
-            print("Too few X-points found in inner SOL")
-            issue = True
+        # if (len(inner_ids[0]) > 2):
+        #     print("Too many X-points found in inner SOL")
+        #     issue = True
+        # elif (len(inner_ids[0]) < 2):
+        #     print("Too few X-points found in inner SOL")
+        #     issue = True
             
-        if (len(outer_ids[0]) > 2):
-            print("Too many X-points found in outer SOL")
-            issue = True
+        # if (len(outer_ids[0]) > 2):
+        #     print("Too many X-points found in outer SOL")
+        #     issue = True
             
-        elif (len(outer_ids[0]) < 2):
-            print("Too few X-points found in outer SOL")
-            issue = True
+        # elif (len(outer_ids[0]) < 2):
+        #     print("Too few X-points found in outer SOL")
+        #     issue = True
             
-        if issue or plot:
-            fig, axes = plt.subplots(1,2, figsize = (8,4))
-            ax = axes[0]
-            ax.set_title("Inner SOL")
-            ax.plot(inner_x, inner_R)
-            for i in inner_ids[0]:
-                ax.scatter(inner_x[i], inner_R[i])
-            ax = axes[1]
-            ax.set_title("Outer SOL")
-            ax.plot(outer_x, outer_R)
-            for i in outer_ids[0]:
-                ax.scatter(outer_x[i], outer_R[i])
+        # if issue or plot:
+        #     fig, axes = plt.subplots(1,2, figsize = (8,4))
+        #     ax = axes[0]
+        #     ax.set_title("Inner SOL")
+        #     ax.plot(inner_x, inner_R)
+        #     for i in inner_ids[0]:
+        #         ax.scatter(inner_x[i], inner_R[i])
+        #     ax = axes[1]
+        #     ax.set_title("Outer SOL")
+        #     ax.plot(outer_x, outer_R)
+        #     for i in outer_ids[0]:
+        #         ax.scatter(outer_x[i], outer_R[i])
                 
-        if issue:
-            raise Exception("Issue in peak finder, try reducing threshold")
+        # if issue:
+        #     raise Exception("Issue in peak finder, try reducing threshold")
 
-        xpoints = [
-            inner_ids[0][0], 
-            inner_ids[0][1]+1, 
-            outer_ids[0][0]+ self.g["upper_break"] + 1, 
-            outer_ids[0][1]+ self.g["upper_break"]
-            ]
+        # xpoints = [
+        #     inner_ids[0][0], 
+        #     inner_ids[0][1]+1, 
+        #     outer_ids[0][0]+ self.g["upper_break"] + 1, 
+        #     outer_ids[0][1]+ self.g["upper_break"]
+        #     ]
 
-        return xpoints
+        # return xpoints
     
     def plot_selection(self, sel, ax = None, **kwargs):
         """
@@ -948,15 +1025,12 @@ class SOLPScase():
             
         return(np.mean(df["kappa0"]))
     
-    def extract_front_pos(self, sepadd, region, method = "qpar", threshold = 0.05):
+    def extract_front_pos(self, sepadd, region, impurity = "N", method = "qpar", threshold = 0.05):
 
-        df = self.get_1d_poloidal_data(["Te", "fhex_cond", "fhx_total", "RN", "Btot"], 
+        df = self.get_1d_poloidal_data(["Te", "fhex_cond", "fhx_total", f"R{impurity}", "Btot"], 
                                   sepadd = sepadd, region = region, target_first = True)
         df["qpar"] = df["fhex_cond"] / df["apar"]
-        
-        cumR = scipy.integrate.cumulative_trapezoid(y = df["RN"] / df["Btot"], x = df["Spar"], initial = 0)
-        df["cumR"] = cumR/cumR[-1]
-        
+
         param = method
         
         if param == "qpar":
@@ -969,11 +1043,42 @@ class SOLPScase():
             front_spar = df_after_front.iloc[0]["Spar"]
             
         else:
+            cumR = scipy.integrate.cumulative_trapezoid(y = df[f"R{impurity}"] / df["Btot"], x = df["Spar"], initial = 0)
+            df["cumR"] = cumR/cumR[-1]
             df_after_front = df[df[param] <= threshold].reset_index(drop = True)
             front_spar = df_after_front.iloc[-1]["Spar"]
         
         
         return front_spar
+    
+    
+    def get_leg_energy_balance(self, sepadd, region, impurities = ["N", "C"]):
+        sepadd = 0
+        df = pd.DataFrame()
+        region = "outer_lower"
+        case = "100MW_innerar_midplanepuff"
+        out = {}
+        
+        impurity_variables = [f"R{impurity}" for impurity in impurities]
+        
+        fline = self.get_1d_poloidal_data(impurity_variables + ["vol", "fhex_total", "fhey_total", "fhix_total", "fhiy_total", "Rd+_exiz", "Rd+_mol"], sepadd = sepadd, region = region, target_first = True)
+        fline_right = self.get_1d_poloidal_data(["fhex_total", "fhey_total", "fhix_total", "fhiy_total"], sepadd = sepadd+1, region = region, target_first = True)
+        fline_x = fline.query("Xpoint == 1").squeeze()
+        fline_right_x = fline_right.query("Xpoint ==1").squeeze()
+        fline_sol = fline.iloc[:fline_x.name]
+        fline_right_sol = fline_right.iloc[:fline_right_x.name]
+        
+        for impurity in impurities:
+            out[f"Q_{impurity}"] = (fline[f"R{impurity}"] * fline["vol"]).sum()
+        out["Q_H"] = ((fline["Rd+_exiz"].abs() + fline["Rd+_mol"].abs()) * fline["vol"]).sum()
+        out["Q_xpoint"] = fline_x["fhex_total"] + fline_x["fhix_total"]
+        
+        out["Q_perp_out_e"] = (fline_right_sol["fhey_total"] - fline_sol["fhey_total"]).sum() 
+        out["Q_perp_out_i"] = (fline_right_sol["fhiy_total"] - fline_sol["fhiy_total"]).sum() 
+        out["Q_perp_out"] = out["Q_perp_out_e"] + out["Q_perp_out_i"]
+
+        return out
+
                  
 
         
@@ -1140,4 +1245,6 @@ def returnS(R, Z, B, Bpol):
         PrevR = R[i]
         PrevZ = Z[i]
     return s
+
+
 
