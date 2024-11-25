@@ -135,7 +135,7 @@ class SOLEDGEdata:
                 
                 df["M"] = df["Mi"]  # Somehow M not available anymore but Vd+ is 
                 df["Vd+"] = df["M"] * cs
-                df["NVd+"] = df["Vd+"] * df["Nd+"] * constants("mass_p") * 2
+                df["NVd+"] = df["Vd+"] * df["Ne"] * constants("mass_p") * 2
 
                 df["dist"] = df["dist"][0] - df["dist"]
                 
@@ -144,8 +144,10 @@ class SOLEDGEdata:
                 # df = df.query("index > 0")
                 self.regions[region] = df
                 
-            if "lower" in region or "upper" in region:
+            if "inner" in region or "outer" in region:
                 self.regions[region]["M"] = np.abs(self.regions[region]["M"])
+                self.regions[region]["Vd+"] = np.abs(self.regions[region]["Vd+"])
+                self.regions[region]["NVd+"] = np.abs(self.regions[region]["NVd+"])
     
     def read_csv(self, path, mode):
         
@@ -215,13 +217,16 @@ class SOLEDGEdata:
                             ' ni (*10^19 m-3)': "Nd+", 
                             ' Ti (eV)' : "Td+",
                             ' Jsat_i (kA/m^2)': "Jsat_d+", 
-                            ' Mach_i': "Md+,",
+                            ' Mach_i': "Md+",
                             ' Ioniz_H' : "Ioniz_H",
                             'l (m)' : "l"
                             })
         
         self.wallring["Ne"] *= 10**19
         self.wallring["Nd+"] *= 10**19
+        self.wallring["M"] = np.abs(self.wallring["Md+"])
+        self.wallring["NVd+"] = np.abs(self.wallring["Jsat_d+"] * 1e6) / constants("q_e") * constants("mass_p") * 2
+        self.wallring["Vd+"] = self.wallring["NVd+"] / ((constants("mass_p")*2) * self.wallring["Ne"])
         self.wallring = self.wallring.set_index("l")
         self.wallring.index.name = "pos"
         
@@ -288,9 +293,6 @@ class SOLPSdata:
         spc.derive_data()
         data = spc.bal
         
-        print("NVd+" in data.keys())
-        
-        
         regions = {}
 
         # index = np.cumsum(self.g["hx"][selector])
@@ -350,6 +352,13 @@ class SOLPSdata:
                     regions[region].index = regions[region]["Spar"]
                 else:
                     regions[region].index = regions[region]["Spol"] 
+                    
+                for param in ["Vd+", "NVd+"]:
+                    regions[region][param] = regions[region][param] * -1
+                    
+            if "outer_lower" in region or "inner_lower" in region:
+                for param in ["Vd+", "NVd+", "M"]:
+                    regions[region][param] = np.abs(regions[region][param])
         
         self.regions = regions
         
@@ -610,7 +619,7 @@ def lineplot_compare(
     cases,
     mode = "log",
     colors = ["black", "red", "black", "red", "navy", "limegreen", "firebrick",  "limegreen", "magenta","cyan", "navy"],
-    params = ["Td+", "Te", "Td", "Ne", "Nd"],
+    params = ["Td+", "Te", "Ta", "Ne", "Nd"],
     regions = ["imp", "omp", "outer_lower", "outer_fieldline_parallel"],
     ylims = (None,None),
     dpi = 120,
@@ -775,6 +784,8 @@ def lineplot_compare(
                     ## Some issue with parameter
                     else:
                         print(f"{parsed_param} not available in {name}, {region}")
+                else:
+                    print(f"{region} not available in {name}")
                     
             # Set yscales
             if "fieldline" in region:
