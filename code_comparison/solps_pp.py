@@ -71,9 +71,10 @@ class SOLPScase():
         ------------
         ALL ARE IN W OR S^-1 and defined at LHS cell edge
         Many variable names are constructed from locations/concepts defined in the manual (e.g. emel)
+        ALL fluxes have dimensions: y (poloidal), x (radial), direction (0=pol,1=rad), species
         
         Particle fluxes:
-        fna is particle flux
+        fna is particle flux. fna_pll is the parallel advection. 
         
         Heat fluxes:
         The third dimension is the direction, 0 = poloidal, 1 = radial
@@ -173,10 +174,11 @@ class SOLPScase():
         psel["outer_upper_xpoint"] = g["xcut"][3]
         psel["outer_lower_xpoint"] = g["xcut"][4]+1
         
-        psel["inner_lower_xpoint_fromtarget"] = psel["inner_lower_xpoint"] - psel["inner_lower_target_guard"] #- 1
-        psel["inner_upper_xpoint_fromtarget"] = psel["inner_upper_target_guard"] - psel["inner_upper_xpoint"] + 1 
-        psel["outer_upper_xpoint_fromtarget"] = psel["outer_upper_xpoint"] - psel["outer_upper_target_guard"] + 1
-        psel["outer_lower_xpoint_fromtarget"] = self.g["nx"] - psel["outer_lower_xpoint"]# - 1
+        # These are for 1d poloidal data getter
+        psel["inner_lower_xpoint_fromtarget"] = psel["inner_lower_xpoint"] - psel["inner_lower_target_guard"] + 1
+        psel["inner_upper_xpoint_fromtarget"] = psel["inner_upper_target_guard"] - psel["inner_upper_xpoint"] + 2
+        psel["outer_upper_xpoint_fromtarget"] = psel["outer_upper_xpoint"] - psel["outer_upper_target_guard"] + 2
+        psel["outer_lower_xpoint_fromtarget"] = self.g["nx"] - psel["outer_lower_xpoint"] + 1
         self.psel = psel
 
         ## 2D selectors
@@ -358,10 +360,13 @@ class SOLPScase():
         # Reaction channels
         # bal["Rd+_atm"] = bal["b2stel_she_bal"][:,:,1] / bal["vol"]  # Total atom radiation [W/m3]
         
+        # We follow Hermes-3 convention: all channels as sources (per volume basis)
+        # S is particle source, E energy transfer, R radiation (or system loss), F momentum transfer
         bal["Rd+_exiz"] = bal["eirene_mc_eael_she_bal"].sum(axis = 2) / bal["vol"]  # Loss of energy due to excitation and 13.6 iz potential [W/m3]
         bal["Rd+_mol"] = bal["eirene_mc_emel_she_bal"].sum(axis = 2) / bal["vol"]  # Molecule radiation summed over all strata [W/m3]
             
-        
+        bal["Sd+_iz"] = bal["eirene_mc_papl_sna_bal"][:,:,1,:].sum(axis = 2) / bal["vol"]  # Choose ion species and sum over strata
+        bal["Sd+_rec"] = bal["eirene_mc_pppl_sna_bal"][:,:,1,:].sum(axis = 2) / bal["vol"]   # Choose ion species and sum over strata
         
                 
         self.bal = bal
@@ -769,13 +774,11 @@ class SOLPScase():
         df["Spar"] = np.cumsum(dSpar)
         df["apar"] = vol / dSpar
 
-        
 
         if any([name in region for name in ["outer_upper", "inner_lower"]]):
             df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
             df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
             df = df.iloc[::-1].reset_index(drop = True)
-
 
         # Interpolate onto Z = 0
         for param in df.columns.drop("Z"):
@@ -788,9 +791,17 @@ class SOLPScase():
         
         
         ## Value of X-point column will be 1 in the cell just downstream of X-point
+        # df["Xpoint"] = ""
+        Xpoint_index = df.index[-self.psel[f"{region}_xpoint_fromtarget"]+1]
+        
+        df.loc[:Xpoint_index, "region"] = "upstream"
+        df.loc[Xpoint_index:, "region"] = "divertor"
+        
         df["Xpoint"] = 0
-        Xpoint_index = df.index[-self.psel[f"{region}_xpoint_fromtarget"]]
         df.loc[Xpoint_index, "Xpoint"] = 1
+        
+        # df.loc[Xpoint_index + 1, "Xpoint"] = "before"
+        # df.loc[Xpoint_index, "Xpoint"] = "after"
         # df["Xpoint"] = 1
 
 
@@ -799,7 +810,7 @@ class SOLPScase():
             df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
             df = df.iloc[::-1]
         
-        
+        df = df.reset_index(drop = True)
         
         return df
         # return df[::-1]
@@ -917,7 +928,8 @@ class SOLPScase():
         
     def extract_cooling_curve(self, species, region, sepadd, order = 10, 
                               plot = False, cz_effect = False,
-                              ne_effect = False, other_losses = False, constant_cz = 0.05):
+                              ne_effect = False, other_losses = False, constant_cz = 0.05,
+                              polyval = True):
         """
         Extract cooling curve from a single SOL ring
         Inputs: species (e.g. Ar). Must calculate RAr and fAr first (get radiation stats)
@@ -940,7 +952,7 @@ class SOLPScase():
         solps[f"R{species}"] = abs(solps[f"R{species}"])
 
         x = solps["Te"]
-        
+        upper_limit = solps["Te"].max()  # Upper validity limit
         
             
         if other_losses:
@@ -963,84 +975,168 @@ class SOLPScase():
             ne = solps["ne"]
             
         y = Qrad/(ne**2 * cz)
-        logx = np.log10(x)
-        logy = np.log10(y)
-
-        coeffs = np.polyfit(logx, logy, order)
-        fit_logy = np.polyval(coeffs, logx)
-        upper_limit = solps["Te"].max()  # Upper validity limit
         
-        if plot:
-            ms = 2
-            fig, axes = plt.subplots(1,2, figsize = (10,4))
-            axes[0].plot(logx, logy, c = "k", marker = "o", lw = 0, ms = ms, label = "SOLPS")
-            axes[0].plot(logx, fit_logy, c = "darkorange")
-            axes[0].set_title("Log space")
-            axes[0].set_xlabel("logTe")
-            axes[0].set_ylabel("logLz")
-            
-            axes[1].plot(x, 10**(fit_logy), c = "darkorange")
-            axes[1].plot(x, y, c = "k", marker = "o", lw = 0, ms = ms, label = "SOLPS")
-            axes[1].set_title("Linear space")
-            axes[1].set_xlabel("Te")
-            axes[1].set_ylabel("Lz")
-            
-            for ax in axes:
-                ax.legend()
-            
-            
         
-        def fit(T):
-        
-            if not any([type(T) != format for format in [np.float64, float]]):
-                raise ValueError("T must be a float")
+        if polyval:
+            logx = np.log10(x)
+            logy = np.log10(y)
 
-            logT = np.log10(T)
-            fit = lambda x: 10 ** np.polyval(coeffs, logT)
+            coeffs = np.polyfit(logx, logy, order)
+            fit_logy = np.polyval(coeffs, logx)
+            
+            
+            if plot:
+                ms = 2
+                fig, axes = plt.subplots(1,2, figsize = (10,4))
+                axes[0].plot(logx, logy, c = "k", marker = "o", lw = 0, ms = ms, label = "SOLPS")
+                
+                axes[0].set_title("Log space")
+                axes[0].set_xlabel("logTe")
+                axes[0].set_ylabel("logLz")
+                
+                axes[1].plot(x, 10**(fit_logy), c = "darkorange")
+                axes[1].plot(x, y, c = "k", marker = "o", lw = 0, ms = ms, label = "SOLPS")
+                axes[1].set_title("Linear space")
+                axes[1].set_xlabel("Te")
+                axes[1].set_ylabel("Lz")
+                
+                for ax in axes:
+                    ax.legend()
+                
+                
+            
+            def fit(T):
+            
+                if not any([type(T) != format for format in [np.float64, float]]):
+                    raise ValueError("T must be a float")
 
-            if T > upper_limit:
-                return 0
-            elif T < 2:
-                return 0
-            else:
-                return fit(logT)
+                logT = np.log10(T)
+                fit = lambda x: 10 ** np.polyval(coeffs, logT)
+                
+                if T > upper_limit:
+                    return 0
+                elif T < 2:
+                    return 0
+                else:
+                    return fit(logT)
+                
+        else:
+            interp = scipy.interpolate.interp1d(np.log10(x), y, kind = "quadratic")
+            
+            def fit(T):
+                if not any([type(T) != format for format in [np.float64, float]]):
+                    raise ValueError("T must be a float")
+
+                if T > upper_limit:
+                    return 0
+                elif T < 2:
+                    return 0
+                else:
+                    return interp(np.log10(T))
             
         return fit
 
-    def extract_kappa0(self, sepadd, region, target_first = False, plot =False):
+    def extract_kappa0(self, sepadd, region, target_first = True, plot =False, 
+                       qpar_weighted = True, total_hflux = True, skip_xpoint = False, print_kappa=False):
+        
         df = self.get_1d_poloidal_data(["Te", "fhex_cond", "fhx_total"], 
                                   sepadd = sepadd, region = region, target_first = target_first)
                                   
 
-        df = df.iloc[1:-1] # Remove guard cells
-        df = df[df["Te"]>5] # Discard below front
-
-        qpar = df["fhex_cond"] / df["apar"]
-        gradT = np.gradient(df["Te"], df["Spar"])
-        df["kappa0"] = qpar / (df["Te"]**(5/2) * gradT) * -1
-        if plot:
-            dfx = df[df["Xpoint"]==1]
-            plt.plot(df["Spar"], df["kappa0"])
-            plt.plot(dfx["Spar"], dfx["kappa0"], lw = 0, marker = "x", ms = 6)
+        if "outer_upper" in region or "inner_lower" in region:
+            mult = -1
+        else:
+            mult = 1
             
-        return(np.mean(df["kappa0"]))
+        if total_hflux:
+            df["qpar"] = df["fhx_total"] / df["apar"] * mult
+        else:
+            df["qpar"] = df["fhex_cond"] / df["apar"] * mult
+
+        ### TRIM FIELD LINE
+        df = df.iloc[1:-1] # Remove guard cells
+        # df = df[df["Te"]>10] # Discard below front (temp)
+        qpar_front_idx = df[df["qpar"] > df["qpar"].max() * 0.15].index[0]  # Discard below front (qpar)
+        df = df.iloc[qpar_front_idx:]
+        df = df.iloc[:-2]
+
+        # Skip points around X-point due to temperature gradient anomaly
+        if skip_xpoint:
+            xpoint_index = df[df["Xpoint"] == 1].index[0]
+            skip_indices = [xpoint_index-1, xpoint_index, xpoint_index+1]
+            df = df[~df.index.isin(skip_indices)]
+
+        ### Kappa calc
+        df["gradT"] = np.gradient(df["Te"], df["Spar"])
+        df = df[df["gradT"]>0]  # Discard negative T gradient
+
+        df["kappa0"] = df["qpar"] / (df["Te"]**(5/2) * df["gradT"]) 
+        df["kappa0_times_qpar"] = df["kappa0"] * df["qpar"]
+
+            
+        if plot:
+            
+            dfx = df[df["Xpoint"]==1]
+            fig, ax = plt.subplots()
+            ax.plot(df["Spar"], df["kappa0"], marker = "o", label = "kappa0", ms = 3, lw = 1)
+            ax.plot(dfx["Spar"], dfx["kappa0"], lw = 0, marker = "x", ms = 3)
+            ax2 = ax.twinx()
+            ax2.plot(df["Spar"], df["Te"], c = "r", marker = "o", label = "Te", ms = 3, lw = 1)
+            
+            ax.set_ylabel("kappa0")
+            ax2.set_ylabel("Te [eV]")
+            ax3 = ax.twinx()
+            ax3.plot(df["Spar"], df["qpar"], c = "darkorange", marker = "*", label = "qpar")
+            
+            for x in [ax, ax2, ax3]:
+                x.grid(which = "both", visible = False)
+            fig.legend(loc = "upper right", bbox_to_anchor = (0.9, 0.9))
+            
+        if qpar_weighted:
+            out = (df["kappa0_times_qpar"] / df["qpar"].sum()).sum()
+        else:
+            out = df["kappa0"].mean()
+            
+        if print_kappa:
+            print(f"Kappa0: {out:.0f}")
+            
+        return out
     
-    def extract_front_pos(self, sepadd, region, impurity = "N", method = "qpar", threshold = 0.05):
+    def extract_front_pos(self, sepadd, region, impurity = "N", method = "qpar_tot", threshold = 0.05):
+        """
+        Extract front position. 
+        
+        Inputs
+        ------
+        sepadd: no. of SOL rings beyond separatrix
+        region: string like "outer_lower"
+        impurity: string like "N"
+        method: usually qpar_tot
+        threshold: fraction of max value to define front
+        """
 
         df = self.get_1d_poloidal_data(["Te", "fhex_cond", "fhx_total", f"R{impurity}", "Btot"], 
                                   sepadd = sepadd, region = region, target_first = True)
-        df["qpar"] = df["fhex_cond"] / df["apar"]
+        
+
+        df["qpar_cond"] = df["fhex_cond"] / df["apar"]
+        df["qpar_tot"] = df["fhx_total"] / df["apar"]
+        df["qpar_total"] = df["qpar_tot"]
 
         param = method
         
-        if param == "qpar":
+        if "qpar" in param:
+            df[param] = df[param].abs()
             max = df[param].max()
             max_idx = df[param].idxmax()
             df_low = df.loc[:max_idx]
             df_low_rev = df_low.iloc[::-1].reset_index(drop=True)
 
             df_after_front = df_low_rev[df_low_rev[param] <= max*threshold].reset_index(drop = True)
-            front_spar = df_after_front.iloc[0]["Spar"]
+            if len(df_after_front) == 0:
+                front_spar = 0
+            else:
+                front_spar = df_after_front.iloc[0]["Spar"]
             
         else:
             cumR = scipy.integrate.cumulative_trapezoid(y = df[f"R{impurity}"] / df["Btot"], x = df["Spar"], initial = 0)
@@ -1052,31 +1148,113 @@ class SOLPScase():
         return front_spar
     
     
-    def get_leg_energy_balance(self, sepadd, region, impurities = ["N", "C"]):
-        sepadd = 0
-        df = pd.DataFrame()
-        region = "outer_lower"
-        case = "100MW_innerar_midplanepuff"
-        out = {}
+    def get_leg_energy_balance(self, sepadd, region, impurities = ["N", "C"], plot = False):
         
         impurity_variables = [f"R{impurity}" for impurity in impurities]
         
-        fline = self.get_1d_poloidal_data(impurity_variables + ["vol", "fhex_total", "fhey_total", "fhix_total", "fhiy_total", "Rd+_exiz", "Rd+_mol"], sepadd = sepadd, region = region, target_first = True)
-        fline_right = self.get_1d_poloidal_data(["fhex_total", "fhey_total", "fhix_total", "fhiy_total"], sepadd = sepadd+1, region = region, target_first = True)
-        fline_x = fline.query("Xpoint == 1").squeeze()
-        fline_right_x = fline_right.query("Xpoint ==1").squeeze()
-        fline_sol = fline.iloc[:fline_x.name]
-        fline_right_sol = fline_right.iloc[:fline_right_x.name]
+        fluxlist = ["fhex_total", "fhey_total", "fhix_total", "fhiy_total", "fhey_32", "fhey_cond", "fhiy_32", "fhiy_cond", "fhx_total"]
+        fline = self.get_1d_poloidal_data(impurity_variables + fluxlist + ["vol","Rd+_exiz", "Rd+_mol"], sepadd = sepadd, region = region, target_first = True)
+        fline_right = self.get_1d_poloidal_data(fluxlist, sepadd = sepadd+1, region = region, target_first = True)
         
+        for param in fluxlist:
+            if "inner_lower" in region or "outer_upper" in region:
+                fline[param] *= -1
+                fline_right[param] *= -1
+                
+        if fline["fhx_total"].max() < 0:
+            raise Exception("Total heat flux negative: fix sign")
+        
+        fline_x = fline.query("Xpoint == 1").squeeze()  # First cell after X-point
+        fline_right_x = fline_right.query("Xpoint == 1").squeeze()
+        fline_div = fline.query("region == 'divertor'")   # Cells below X-point
+        fline_right_div = fline_right.query("region == 'divertor'") 
+        out = {}
         for impurity in impurities:
-            out[f"Q_{impurity}"] = (fline[f"R{impurity}"] * fline["vol"]).sum()
-        out["Q_H"] = ((fline["Rd+_exiz"].abs() + fline["Rd+_mol"].abs()) * fline["vol"]).sum()
-        out["Q_xpoint"] = fline_x["fhex_total"] + fline_x["fhix_total"]
+            out[f"P_{impurity}"] = (fline[f"R{impurity}"] * fline["vol"]).sum()
+            
         
-        out["Q_perp_out_e"] = (fline_right_sol["fhey_total"] - fline_sol["fhey_total"]).sum() 
-        out["Q_perp_out_i"] = (fline_right_sol["fhiy_total"] - fline_sol["fhiy_total"]).sum() 
-        out["Q_perp_out"] = out["Q_perp_out_e"] + out["Q_perp_out_i"]
+            
+        
+        out["P_H"] = ((fline["Rd+_exiz"].abs() + fline["Rd+_mol"].abs()) * fline["vol"]).sum()
+        out["P_div"] = fline_x["fhex_total"] + fline_x["fhix_total"]
+        
+        out["qpar_mapped_to_target"] = out["P_div"] / fline.iloc[0]["apar"]
+        
+        # Radial divergences: positive = flow radially outwards
+        # Top = towards SOL, bottom = towards core (logical grid convention)
+        # out["P_radial_e_bottom"] = fline_div["fhey_total"].sum()
+        # out["P_radial_e_top"] = fline_right_div["fhey_total"].sum() 
+        
+        # out["P_radial_i_bottom"] = fline_div["fhiy_total"].sum() 
+        # out["P_radial_i_top"] = fline_right_div["fhiy_total"].sum()  
+        
+        # Need to know what "stays" in the tube, so take what entered and subtract what left
+        # out["P_radial_e"] = (out["P_radial_e_bottom"] - out["P_radial_e_top"]).sum() 
+        # out["P_radial_i"] = (out["P_radial_i_bottom"] - out["P_radial_i_top"]).sum() 
+        # out["P_radial"] = out["P_radial_e"] + out["P_radial_i"]
+        
+        P_radial_e_bottom = fline_div["fhey_total"]
+        P_radial_e_top = fline_right_div["fhey_total"] 
+        
+        P_radial_i_bottom = fline_div["fhiy_total"] 
+        P_radial_i_top = fline_right_div["fhiy_total"]  
+        
+        P_radial_e = P_radial_e_bottom - P_radial_e_top
+        P_radial_i = P_radial_i_bottom - P_radial_i_top
+        P_radial = P_radial_e + P_radial_i
+        
+        out["P_radial_e"] = P_radial_e.sum() 
+        out["P_radial_i"] = P_radial_i.sum() 
+        out["P_radial"] = P_radial.sum()
+        
+        if plot:
+            fig, ax = plt.subplots()
+            ax.plot(fline_div["Spar"], fline_div["fhx_total"], label = "total", c = "k")
+            ax.plot(fline_div["Spar"], (fline_div["Rd+_exiz"].abs() + fline_div["Rd+_mol"].abs()) * fline_div["vol"], label = "H")
+            ax.plot(fline_div["Spar"], fline_div["RAr"]*fline_div["vol"], label = "Ar")
+            ax.plot(fline_div["Spar"], P_radial, label = "radial")
+            ax.set_title(f"{region}, ring {sepadd+1}")
+            ax.legend()
+            ax.set_ylabel(f"Integrated power source [W]")
+            ax.set_xlabel("Spar")
 
+
+        return out
+    
+    def get_leg_particle_balance(self, sepadd, region, Te_threshold = 0):
+        """
+        Return integrals of particle sources along a single field line
+        and comparison of them to the particle flux entering the divertor
+        Ability to filter by temperature to exclude detachment region with Te_threshold
+        """
+        
+        variables = ["Te", "vol", "fnax_D+1_pll", "fnay_D+1_nanom", "Sd+_iz", "Sd+_rec"]
+        fline = self.get_1d_poloidal_data(variables, sepadd = sepadd, region = region, target_first = True)
+        fline_right = self.get_1d_poloidal_data(variables, sepadd = sepadd+1, region = region, target_first = True)
+        
+
+        fline_x = fline.query("Xpoint == 1").squeeze()  # First cell after X-point
+        fline_right_x = fline_right.query("Xpoint == 1").squeeze()
+        fline_div = fline.query(f"region == 'divertor' & Te > {Te_threshold}")   # Cells below X-point
+        fline_right_div = fline_right.query(f"region == 'divertor' & Spar > {fline_div['Spar'].min()}")  # Same filter on RHS fline   
+        
+        if any([x in region for x in ["inner_lower"]]):
+            mult = -1
+        else:
+            mult = 1
+            
+        # plt.plot(fline_div["Spar"] , fline_div["Sd+_iz"] * fline_div["vol"])
+        
+        out = {}
+        out["S_div"] = fline_x["fnax_D+1_pll"] * mult
+        out["S_iz"] = (fline_div["Sd+_iz"]*fline_div["vol"]).sum()
+        
+        out["S_rec"] = (fline_div["Sd+_rec"]*fline_div["vol"]).sum()
+        
+        out["S_radial_bottom"] = fline_div["fnay_D+1_nanom"].sum() * -1 * mult
+        out["S_radial_top"] = fline_right_div["fnay_D+1_nanom"].sum() * -1 * mult
+        out["S_radial"] = out["S_radial_bottom"] - out["S_radial_top"]
+        
         return out
 
                  
