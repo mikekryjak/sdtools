@@ -4,6 +4,7 @@ import scipy as sp
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from collections import defaultdict
 # from ThermalFrontFormulation import *
 
 class DLSoutput():
@@ -1270,6 +1271,7 @@ class compare_SOLPS_DLS():
         dls["Te"] = out["Tprofiles"][0]
         dls["qpar"] = out["Qprofiles"][0]
         dls["Btot"] = out["Btotprofiles"][0]
+        dls["qpar_over_B"] = dls["qpar"] / dls["Btot"]
         
         if cvar == "density":
             dls["cz"] = out["state"].si.cz0
@@ -1310,6 +1312,21 @@ class compare_SOLPS_DLS():
         solps["Prad_cum_norm"] = solps["Prad_cum"] / solps["Prad_cum"].max()
         
         solps["Pe"] = solps["Te"] * solps["ne"] * 1.60217662e-19
+        solps["Ne"] = solps["ne"]
+        
+        solps["fhex_cond"] = solps["fhex_cond"].abs()
+        solps["fhx_total"] = solps["fhx_total"].abs()
+        solps["qpar"] = solps["fhx_total"]
+        solps["qpar_cond"] = solps["fhex_cond"]
+        
+        cond_capped = np.minimum(solps["fhex_cond"], solps["fhx_total"])
+        
+        ratio = cond_capped / solps["fhx_total"]
+        ratio.iloc[-2] = np.mean([ratio.iloc[-3], ratio.iloc[-1]])
+        solps["qpar_cond_frac"] = ratio
+        
+        solps["Ne_sq_cz"] = solps["Ne"]**2 * solps[f"f{self.impurity}"]
+        
                 
         return solps
 
@@ -1327,6 +1344,8 @@ class compare_SOLPS_DLS():
         dls["Prad_cum_norm"] = dls["Prad_cum"] / dls["Prad_cum"].max()
         
         dls["Pe"] = dls["Te"] * dls["Ne"] * 1.60217662e-19
+        dls["Ne_sq_cz"] = dls["Ne"]**2 * dls["cz"]
+        dls["qpar_cond_frac"] = 1
         
         return dls
     
@@ -1356,12 +1375,15 @@ class compare_SOLPS_DLS():
              normalise_radiation = True, 
              radiation_per_area = False,
              plot_cz = False,
-             legend_loc = "upper left"):
+             legend_loc = "upper left",
+             title = ""):
         
         self.legend_loc = legend_loc
         fsize = 4
         nfigs = len(list_plots)
         fig, axes =plt.subplots(1,nfigs, figsize = (nfigs*fsize, fsize))
+        if title != "":
+            fig.suptitle(title)
         
         for i, plot in enumerate(list_plots):
             if plot == "Ne":
@@ -1380,6 +1402,8 @@ class compare_SOLPS_DLS():
                 self.plot_radiation_integral(axes[i], normalise = normalise_radiation, per_area= radiation_per_area, plot_cz = plot_cz)
             elif plot == "cz":
                 self.plot_cz(axes[i])
+            elif plot == "Ne_cz":
+                self.plot_ne_cz(axes[i])
             else:
                 print(f"Plot {plot} not found")
         
@@ -1464,6 +1488,22 @@ class compare_SOLPS_DLS():
         self.apply_plot_settings(ax)
         
     def plot_cz(self, ax):
+        solps = self.solps
+        dls = self.dls
+        
+        ax.set_title("fAr (normalised)")
+        
+        dls_var = dls["cz"]
+        solps_var = solps[f"f{self.impurity}"]
+        
+        ax.plot(dls["Spar"], dls_var/dls_var.iloc[-1], label = "DLS")
+        ax.plot(solps["Spar"], solps_var/solps_var.iloc[-1],  label = "SOLPS")
+
+        ax.set_ylabel(f"f{self.impurity}")
+        self.plot_Xpoint(ax)
+        self.apply_plot_settings(ax)
+        
+    def plot_ne_cz(self, ax):
         solps = self.solps
         dls = self.dls
         
@@ -1571,6 +1611,7 @@ class DLScase():
         dls["Prad_cum_norm"] = dls["Prad_cum"] / dls["Prad_cum"].max()
         
         dls["Pe"] = dls["Te"] * dls["Ne"] * 1.60217662e-19
+        dls["qpar_over_B"] = dls["qpar"] / dls["Btot"]
         
         ### Calculate scalar properties
         s = dict()
@@ -1585,6 +1626,7 @@ class DLScase():
         s["BxBteff"] = s["Bx"] / s["Beff"]
         s["Lc"] = dls["Spol"].iloc[-1]
         s["Wradial"] = out["state"].qradial
+        s["Tu"] = dls["Te"].iloc[-1]
         
         dlsx = dls[dls["Xpoint"] == 1]
         dls_sol = dls[dls["Spar"] <= dlsx["Spar"].iloc[0]]
@@ -1595,8 +1637,9 @@ class DLScase():
         # print(s["avgB_ratio"])
         
         ## DLS-Extended effects (see Kryjak 2024)
-        # Impact of radiation happening upstream (no easy physical explanation)
-        s["int_qoverBsq_dt"] = np.sqrt(2 * sp.integrate.trapz(
+        # Impact of qpar profile changing upstream due to B field and radiation,
+        # leading to a different qpar at the X-point
+        s["upstream_rad"] = np.sqrt(2 * sp.integrate.trapz(
             y = dls["qpar"].iloc[Xpoint:]/(dls["Btot"].iloc[Xpoint:]**2 * s["Wradial"]), x = dls["Spar"].iloc[Xpoint:]))
         
         
@@ -1613,7 +1656,7 @@ class DLScase():
         # Cooling curve integral which includes effect of Tu clipping integral limit
         self.Lfunc = lambda x : out["state"].si.Lfunc(x)
         Lz = [self.Lfunc(x) for x in dls["Te"]]
-        s["int_TLz_dt"] = np.sqrt(2 * sp.integrate.trapz(y = s["kappa0"] * dls["Te"]**0.5 * Lz, x = dls["Te"]))**-1
+        s["curveclip"] = np.sqrt(2 * sp.integrate.trapz(y = s["kappa0"] * dls["Te"]**0.5 * Lz, x = dls["Te"]))**-1
         
         self.data = dls
         self.stats = s
@@ -1674,3 +1717,198 @@ def test_scalings(df1, df2, param, cumulative = False):
         scalings["all"] = diff["BxBteff"]**(-1) * diff["W_Tu"] * diff["int_TLz_dt"] * diff["int_qoverBsq_dt"]
 
     return scalings
+
+
+class plot_comparison():
+    def __init__(self, comps, studies):
+        self.comps = comps
+        self.studies = studies
+        # self.studies = list(comps.keys())
+        self.cases = comps[self.studies[0]].keys()
+        
+        self.study_labels = dict(
+            adas_curve = r"Constant $n_e \tau$ cooling curve",
+            fit_curve = "Extract cooling curve",
+            fit_curve_kappa = "Extract cooling curve, tune $\kappa_{0,e}$",
+            other_losses = "Total rad. losses",
+            include_cz = "Fix $f_{N}$",
+            include_cz_ne = "Fix $f_{N}n_{e}^{2}$"
+        )
+        
+        # self.DLSstyles = dict(
+        # adas_curve =    dict(lw = 0, marker = "o", ms = 2, markerfacecolor = "None"),
+        # fit_curve =     dict(lw = 0, marker = "x", ms = 4, markeredgewidth = 1, markerfacecolor = "None"),   
+        # other_losses =     dict(lw = 0, marker = "p", ms = 4, markeredgewidth = 1, markerfacecolor = "None"),   
+        # include_cz =    dict(lw = 0, marker = "s", ms = 3, markeredgewidth = 1, markerfacecolor = "None"),   
+        # include_cz_ne = dict(lw = 0, marker = "1", ms = 6, markeredgewidth = 1, markerfacecolor = "None"),   
+        # )
+        
+        self.DLSstyles = dict(
+        adas_curve =       dict(lw = 1.5, ls = "--", marker = "o", ms = 0, markerfacecolor = "None"),
+        fit_curve =        dict(lw = 1.5, ls = "--", marker = "x", ms = 0, markeredgewidth = 1, markerfacecolor = "None"),   
+        fit_curve_kappa =  dict(lw = 1.5, ls = "--", marker = "p", ms = 0, markeredgewidth = 1, markerfacecolor = "None"),   
+        include_cz =    dict(lw = 0, marker = "s", ms = 3, markeredgewidth = 1, markerfacecolor = "None"),   
+        include_cz_ne = dict(lw = 0, marker = "1", ms = 6, markeredgewidth = 1, markerfacecolor = "None"),   
+        )
+
+        self.SOLPSstyle = dict(lw = 1.0, ms = 0, c = "darkslategrey")
+        self.Xpointstyle = dict(ls = "-", lw = 1, alpha = 0.5)
+        self.figure_labels = ["a)", "b)", "c)"]
+        self.ylabels = {
+            "Te" : r"eV",
+            "Ne" : r"$m^{-3}$",
+            "Ne_sq_cz" : r"$m^{-6}$",
+            "qpar" : r"$MWm^{-2}$",
+            "Prad_cum_norm" : r"fraction",
+            "qpar_cond_frac" : r"fraction",
+        }
+        self.titles = {
+            "Prad_cum_norm" : "Cum. rad. integral (normalised)",
+            "Te" : "Electron temp.",
+            "Ne" : "Electron dens. (normalised)",
+            "Ne_sq_cz" : f"$N_e^2 f_Ar$ (normalised)",
+            "qpar" : "Tot. par. heat flux",
+        }         
+
+        # self.colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        # self.colors = ["darkorange", "firebrick"]
+        self.colors = ["teal", "darkorange", "firebrick"]
+        self.dls_skip = 4
+        
+        
+        
+    def make_grid(self, ax):
+        ax.grid(which = "major", visible = True, c = "k", alpha = 0.15)
+        ax.grid(which = "minor", visible = True, c = "k", alpha = 0.075)
+        
+    def make_xpoint(self, spc, ax):
+        ylim = ax.get_ylim()
+        ax.vlines(spc[spc["Xpoint"]==1]["Spar"].values[0], *ylim, **Xpointstyle, color = "deeppink", label = "X-point")
+        ax.set_ylim(ylim)
+        
+    def make_legend_elements(self):
+        elements = [mpl.lines.Line2D([0],[0], **self.SOLPSstyle, label = "SOLPS")]
+        for i, study in enumerate(self.studies):
+            elements.append(mpl.lines.Line2D([0],[0], **self.DLSstyles[study], color = self.colors[i], label = self.study_labels[study]))
+        elements.append(mpl.lines.Line2D([0],[0], **self.Xpointstyle, color = "deeppink", label = "X-point"))
+        
+        return elements
+        
+    def plot(self, param, axes, normalise = False):
+        
+        for i, case in enumerate(self.cases):
+            ax = axes[i]
+            
+            for study_no, study in enumerate(self.studies):
+                comp = self.comps[study][case]
+                dls = comp.dls.copy()
+                solps = comp.solps.copy()  
+                
+                if normalise:
+                    dls_data = dls[param] / dls.iloc[-1][param]
+                    solps_data = solps[param] / solps.iloc[-1][param]
+                else:
+                    dls_data = dls[param]
+                    solps_data = solps[param]
+                    
+                # Spar_interp = np.linspace(0, dls.iloc[-1]["Spar"], 50)
+                # dls_data_interp = [sp.interpolate.interp1d(dls["Spar"], dls_data)(s) for s in Spar_interp]
+                
+                if param == "qpar": 
+                    mult = 1e-6
+                    if solps_data.max() < 0:  # Correct for -ve hflux 
+                        solps_data *= -1
+                else:
+                    mult = 1
+                
+                ax.plot(solps["Spar"], solps_data*mult, label = study, **self.SOLPSstyle)  # SOLPS
+                ax.plot(dls["Spar"], dls_data*mult, **self.DLSstyles[study], c = self.colors[study_no], alpha = 0.8)   # DLS
+                
+                # if param == "qpar":
+                #     ax.plot(solps["Spar"], solps["qpar_cond"]*mult, label = study, **{**dict(ls=":"), **self.SOLPSstyle})  # SOLPS
+                
+            ## Make X-point
+            ax.set_xlabel("$S_{\parallel}$ [m]")
+            ax.set_ylabel(self.ylabels[param])
+            ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(5))
+            ax.grid(which = "both", visible = True, lw = 0.16, c = "k", alpha = 0.3)
+            # ax.make_xpoint()
+            
+            if any([x in param for x in ["Ne"]]):
+                ax.set_yscale("log")
+                
+            ylim = ax.get_ylim()
+            ax.vlines(solps[solps["Xpoint"]==1]["Spar"].values[0], *ylim, **self.Xpointstyle, colors = "deeppink", label = "X-point")
+            ax.set_ylim(ylim)
+                
+                
+            
+        
+    # def make_title(self, ax, case):
+        # ax.set_title(figure_labels[i], loc = "right", y = 0.02, x = 0.97, fontsize = 20)
+        
+        
+class scaling_comparison():
+    def __init__(self, out1, out2, param):
+        
+        
+        # Compare last and first case only!!
+        df1 = DLScase(out1).get_stats_dataframe()
+        df2 = DLScase(out2).get_stats_dataframe()
+        param_ratio = (df2[param] / df1[param]).squeeze()
+        terms = pd.concat([df1, df2], axis = 0)
+        terms.index = ["base", "test"]
+        terms = terms.T
+        
+        terms_check = pd.DataFrame()
+        terms_check.loc["total", "cvar_ratio"] = (terms.loc['cvar', 'test'] / terms.loc['cvar', 'base'])**(-1)
+        
+        
+        terms["ratio"] = (terms["test"] / terms["base"])**(-1)   # Remember that K is positive for lower threshold
+        terms_full = terms.copy()
+        terms = terms.loc[["Beff", "W_Tu", "curveclip", "upstream_rad"],:]
+        terms["log10(ratio)"] = np.log10(terms["ratio"])
+        terms["abs(log10(ratio))"] = terms["log10(ratio)"].abs()
+        terms["fraction"] = terms["log10(ratio)"] / terms["abs(log10(ratio))"].sum()
+        
+        ## Plot needs the positive bits to sum up to K. 
+        # Take fraction (sums to 1) and scale to K. now sum(abs(weights)) = K.
+        # Then divide by the sum of the positive fractions. Now sum of positive weights = K, and 
+        # the negative weight is scaled the same as the positive weights for consistency.
+        K = np.log(terms["ratio"].product()) / np.log(param_ratio)
+        terms["weights"] = terms["fraction"] * K / terms[terms>0]["fraction"].sum()   
+
+        
+        terms_check.loc["total", "scaling_ratio"] = terms["ratio"].product(axis=0)
+        terms_check.loc["total", "abs(fraction)"] = terms["fraction"].abs().sum(axis=0)
+        terms_check.loc["total", "weights"] = terms["weights"].sum(axis=0)
+        terms_check.loc["total", "abs(weights)"] = terms["weights"].abs().sum(axis=0)
+        terms_check.loc["total", "weights_pos"] = terms[terms > 0]["weights"].sum(axis=0)
+        terms_check.loc["total", "K"] = K
+        
+        self.df1 = df1
+        self.df2 = df2
+        self.terms = terms
+        self.terms_full = terms_full
+        self.terms_check = terms_check
+        
+        
+def compare_dls(toplot, params, settings = defaultdict(dict), xlims = defaultdict(dict), scales = defaultdict(dict)):
+
+    no_figs = len(params)
+    fig, axes = plt.subplots(1,no_figs,figsize=(3*no_figs,3))
+
+    for i, name in enumerate(toplot):
+        df = toplot[name]
+
+        for j, param in enumerate(params):
+            axes[j].plot(df["Spar"], df[param], label = name, **settings[param])
+            axes[j].set_title(param)
+            if param in xlims:
+                axes[j].set_xlim(xlims[param])
+            
+            if param in scales:
+                axes[j].set_yscale(scales[param])
+
+        for ax in axes:
+            ax.legend()
