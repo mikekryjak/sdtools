@@ -648,7 +648,7 @@ def plot_morph_results(profiles,
         ax.set_ylabel("Relative change")
         
     axes[0,2].set_ylabel(r"$(\frac{1}{B}) \frac{dB}{ds_{pol}}$")
-    axes[1,2].set_ylabel("$S_{front, final} \ /\  S_{pol, x}$")
+    axes[1,2].set_ylabel(r"$S_{front, final} \ /\  S_{pol, x}$")
     fig.tight_layout()
     
     
@@ -723,7 +723,7 @@ def plot_profiles(base, stages, profiles, poloidal = True,  ylims = (None,None),
         BxBtkwargs = dict(zorder = 100, alpha = 1, color = colors[idx], lw = 0, marker = "x", ms = 10, markeredgewidth = 5, ls = "-")
         
         if idx == 0: Lkwargs["label"] = "Lc"
-        if idx == 0: BxBtkwargs["label"] = "$B_{X} \/ B_{t}$"
+        if idx == 0: BxBtkwargs["label"] = r"$B_{X} \/ B_{t}$"
         ax.plot(idx, L[idx], **Lkwargs)
         ax.plot(idx, BxBt[idx], **BxBtkwargs)
         
@@ -1419,7 +1419,7 @@ class compare_SOLPS_DLS():
         
     def apply_plot_settings(self, ax):
         ax.legend(fontsize = "x-small", loc = self.legend_loc)
-        ax.set_xlabel("$s_{\parallel}$ [m]")
+        ax.set_xlabel(r"$s_{\parallel}$ [m]")
         
     def plot_qpar(self, ax):
         
@@ -1431,7 +1431,7 @@ class compare_SOLPS_DLS():
         ax.plot(solps["Spar"], abs(solps["fhex_cond"]), label = "SOLPS electron cond")
         ax.plot(solps["Spar"], abs(solps["fhx_total"]), label = "SOLPS total")
         
-        ax.set_ylabel("$q_{\parallel}$ $[Wm^{-2}]$")
+        ax.set_ylabel(r"$q_{\parallel}$ $[Wm^{-2}]$")
         self.plot_Xpoint(ax)
         self.apply_plot_settings(ax)
         
@@ -1445,7 +1445,7 @@ class compare_SOLPS_DLS():
         ax.plot(solps["Spar"], abs(solps["fhex_cond"])/solps["Btot"], label = "SOLPS electron cond")
         ax.plot(solps["Spar"], abs(solps["fhx_total"])/solps["Btot"], label = "SOLPS total")
         
-        ax.set_ylabel("$q_{\parallel}/B_{tot}$ $[Wm^{-2}T^{-1}]$")
+        ax.set_ylabel(r"$q_{\parallel}/B_{tot}$ $[Wm^{-2}T^{-1}]$")
         self.plot_Xpoint(ax)
         self.apply_plot_settings(ax)
         
@@ -1581,18 +1581,18 @@ class compare_SOLPS_DLS():
         
         
 class DLScase():
-    def __init__(self, out):
+    def __init__(self, out, index=0):
 
         dls = pd.DataFrame()
-        dls["Qrad"] = out["Rprofiles"][0]
-        dls["Spar"] = out["Sprofiles"][0]
-        dls["Spol"] = out["Spolprofiles"][0]
-        dls["Te"] = out["Tprofiles"][0]
-        dls["qpar"] = out["Qprofiles"][0]
-        dls["Btot"] = out["Btotprofiles"][0]
-        dls["Ne"] = out["cvar"][0] * dls["Te"].iloc[-1] / dls["Te"]   ## Assuming cvar is ne
+        dls["Qrad"] = out["Rprofiles"][index]
+        dls["Spar"] = out["Sprofiles"][index]
+        dls["Spol"] = out["Spolprofiles"][index]
+        dls["Te"] = out["Tprofiles"][index]
+        dls["qpar"] = out["Qprofiles"][index]
+        dls["Btot"] = out["Btotprofiles"][index]
+        dls["Ne"] = out["cvar"][index] * dls["Te"].iloc[-1] / dls["Te"]   ## Assuming cvar is ne
         dls["cz"] = out["state"].si.cz0
-        Xpoint = out["Xpoints"][0]
+        Xpoint = out["Xpoints"][index]
         dls.loc[Xpoint, "Xpoint"] = 1
 
         # qradial is the uniform upstream heat source
@@ -1629,10 +1629,10 @@ class DLScase():
         s["Tu"] = dls["Te"].iloc[-1]
         
         dlsx = dls[dls["Xpoint"] == 1]
-        dls_sol = dls[dls["Spar"] <= dlsx["Spar"].iloc[0]]
-        avgB_sol = sp.integrate.trapz(dls_sol["Btot"], x = dls_sol["Spar"]) / dls_sol["Spar"].iloc[-1]
+        dls_div = dls[dls["Spar"] <= dlsx["Spar"].iloc[0]]
+        avgB_div = sp.integrate.trapz(dls_div["Btot"], x = dls_div["Spar"]) / dls_div["Spar"].iloc[-1]
 
-        s["avgB_ratio"] = dlsx["Btot"].iloc[0] / avgB_sol
+        s["avgB_ratio"] = dlsx["Btot"].iloc[0] / avgB_div
         
         # print(s["avgB_ratio"])
         
@@ -1687,6 +1687,135 @@ class DLScase():
         width = upper_position - lower_position
         
         return width
+    
+    
+class DLScasedeck:
+    def __init__(self, store):
+        num_locations = len(store["Sprofiles"])
+        self.cases = []
+        for i in range(num_locations):
+            self.cases.append(DLScase(store, index=i))
+
+        self.data = pd.DataFrame()
+        self.data["Spar"] = store["Splot"]
+        self.data["Spol"] = store["SpolPlot"]
+        self.data["cvar"] = store["cvar"]   # cvar at detachment threshold
+        self.data["crel"] = store["cvar"] / store["cvar"][0]
+        self.window = store["window"]             # Cx - Ct
+        self.window_frac = store["window_frac"]   # (Cx - Ct) / Ct
+        self.window_ratio = store["window_ratio"] # Cx / Ct
+        
+        if len(self.data) != len(self.data.drop_duplicates(subset = "Spar")):
+            print("Warning: Duplicate Spar values found, removing!")
+            self.data = self.data.drop_duplicates(subset = "Spar")
+        
+        self.get_stable_region()
+        # self.get_stability_breakpoint()
+        
+        
+    def get_stable_region(self, diagnostic_plot = False):
+        """
+        Trim the crel and cvar arrays to only include stable region
+        """
+        
+        self.data.loc[:, "crel_grad"] = np.gradient(self.data["crel"])
+        self.data.loc[:, "stable"] = False
+        self.data.loc[self.data["crel_grad"] > 0, "stable"] = True
+        data_stable = self.data[self.data["stable"] == True]
+        data_unstable = self.data[self.data["stable"] == False]
+
+        ## Size of unstable region when going backward
+        if len(data_stable) == 0:
+            self.unstable_Lpol_backward = self.data.iloc[-1]["Spol"]
+            self.unstable_Lpar_backward = self.data.iloc[-1]["Spar"]
+        elif len(data_unstable) > 0:
+            self.unstable_Lpol_backward = data_stable.iloc[0]["Spol"]
+            self.unstable_Lpar_backward = data_stable.iloc[0]["Spar"]
+        else:
+            self.unstable_Lpol_backward = 0
+            self.unstable_Lpar_backward = 0
+
+        if self.data["crel"].iloc[-1] < 1:
+            self.unstable_Lpol_forward = self.data["Spol"].iloc[-1]
+            self.unstable_Lpar_forward = self.data["Spar"].iloc[-1]
+        else:
+            self.unstable_Lpol_forward = sp.interpolate.interp1d(data_stable["crel"], data_stable["Spol"], kind = "linear")(1)
+            self.unstable_Lpar_forward = sp.interpolate.interp1d(data_stable["crel"], data_stable["Spar"], kind = "linear")(1)
+            
+        if diagnostic_plot:
+            fig, ax = plt.subplots(dpi = 120)
+            ax.plot(self.data["crel"], self.data["Spol"], label = "Crel")
+            ax.plot(data_stable["crel"], data_stable["Spol"])
+            ax.hlines(self.unstable_Lpol_backward, self.data["crel"].min(), self.data["crel"].max(), ls = "--", color = "red", label = "forward stability breakpoint")
+            ax.hlines(self.unstable_Lpol_forward, self.data["crel"].min(), self.data["crel"].max(), ls = "--", color = "orange", label = "backward stability breakpoint")
+            ax.legend()
+        
+    def get_stability_breakpoint(self):
+        """
+        Find the exact point in Crel where the stable region starts
+        through interpolation.
+        Forward and backward refer to the direction of front movement.
+        Unstable regions see hysteresis where the stable region going towards the
+        target is greater.
+        """
+        
+        crel = self.data["crel"]
+        Spar = self.data["Spar"]
+        Spol = self.data["Spol"]
+
+        # Find values on either side of C = 1 and interpolate onto 1
+        if len(crel) > 1:
+            
+            for i in range(len(crel) - 1):
+                if np.sign(crel[i] - 1) != np.sign(crel[i + 1] - 1) and i > 0:
+                    interp_par = sp.interpolate.interp1d(
+                        [crel[i], crel[i + 1]], [Spar[i], Spar[i + 1]]
+                    )
+                    interp_pol = sp.interpolate.interp1d(
+                        [crel[i], crel[i + 1]], [Spol[i], Spol[i + 1]]
+                    )
+
+                    spar_onset = float(interp_par(1))
+                    spol_onset = float(interp_pol(1))
+                    break
+                if i == len(crel) - 2:
+                    spar_onset = 0
+                    spol_onset = 0
+                    
+        if crel.iloc[-1] < 1:
+            # print(Spar)
+            spar_onset_forward = Spar.iloc[-1]
+            spol_onset_forward = Spol.iloc[-1]
+                    
+        self.unstable_Lpar_backward = spar_onset
+        self.unstable_Lpol_backward = spol_onset
+        self.unstable_Lpar_forward = spar_onset_forward
+        self.unstable_Lpol_forward = spol_onset_forward
+                    
+    def plot_front_movement(self, ax=None, label="", parallel=False, relative=True):
+        if ax is None:
+            fig, ax = plt.subplots()
+        data = self.data
+
+        if parallel:
+            y = data["Spar"]
+            ylabel = r"$S_{\parallel} [m]$"
+        else:
+            y = data["Spol"]
+            ylabel = "$S_{pol} [m]$"
+
+        if relative:
+            x = data["cvar"] / data["cvar"].iloc[0]
+            xlabel = "$C_{rel}$"
+        else:
+            x = data["cvar"]
+            xlabel = "C"
+
+        ax.plot(x, y, marker="o", lw=1, ms=3, label=label)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        ax.set_title("Front movement")
+
         
 def test_scalings(df1, df2, param, cumulative = False):
     """
@@ -1706,15 +1835,15 @@ def test_scalings(df1, df2, param, cumulative = False):
         scalings["abovex"] = scalings["simple"] * diff["W_Tu_simple"]
         scalings["Beff"] = diff["BxBteff"]**(-1) * diff["W_Tu_simple"]
         scalings["W_Tu"] = diff["BxBteff"]**(-1) * diff["W_Tu"]
-        scalings["curveclip"] = diff["BxBteff"]**(-1) * diff["W_Tu"] * diff["int_TLz_dt"]
-        scalings["upstream_rad"] = diff["BxBteff"]**(-1) * diff["W_Tu"] * diff["int_TLz_dt"] * diff["int_qoverBsq_dt"]
+        scalings["curveclip"] = diff["BxBteff"]**(-1) * diff["W_Tu"] * diff["curveclip"]
+        scalings["upstream_rad"] = diff["BxBteff"]**(-1) * diff["W_Tu"] * diff["curveclip"] * diff["upstream_rad"]
     else:  
         scalings["abovex"] = diff["W_Tu_simple"]
         scalings["Beff"] = diff["BxBteff"]**(-1)
         scalings["W_Tu"] = diff["W_Tu"]
-        scalings["curveclip"] = diff["int_TLz_dt"]
-        scalings["upstream_rad"] = diff["int_qoverBsq_dt"]
-        scalings["all"] = diff["BxBteff"]**(-1) * diff["W_Tu"] * diff["int_TLz_dt"] * diff["int_qoverBsq_dt"]
+        scalings["curveclip"] = diff["curveclip"]
+        scalings["upstream_rad"] = diff["upstream_rad"]
+        scalings["all"] = diff["BxBteff"]**(-1) * diff["W_Tu"] * diff["curveclip"] * diff["upstream_rad"]
 
     return scalings
 
@@ -1729,7 +1858,7 @@ class plot_comparison():
         self.study_labels = dict(
             adas_curve = r"Constant $n_e \tau$ cooling curve",
             fit_curve = "Extract cooling curve",
-            fit_curve_kappa = "Extract cooling curve, tune $\kappa_{0,e}$",
+            fit_curve_kappa = r"Extract cooling curve, tune $\kappa_{0,e}$",
             other_losses = "Total rad. losses",
             include_cz = "Fix $f_{N}$",
             include_cz_ne = "Fix $f_{N}n_{e}^{2}$"
@@ -1774,17 +1903,13 @@ class plot_comparison():
         # self.colors = ["darkorange", "firebrick"]
         self.colors = ["teal", "darkorange", "firebrick"]
         self.dls_skip = 4
-        
+    
         
         
     def make_grid(self, ax):
         ax.grid(which = "major", visible = True, c = "k", alpha = 0.15)
         ax.grid(which = "minor", visible = True, c = "k", alpha = 0.075)
         
-    def make_xpoint(self, spc, ax):
-        ylim = ax.get_ylim()
-        ax.vlines(spc[spc["Xpoint"]==1]["Spar"].values[0], *ylim, **Xpointstyle, color = "deeppink", label = "X-point")
-        ax.set_ylim(ylim)
         
     def make_legend_elements(self):
         elements = [mpl.lines.Line2D([0],[0], **self.SOLPSstyle, label = "SOLPS")]
@@ -1828,17 +1953,27 @@ class plot_comparison():
                 #     ax.plot(solps["Spar"], solps["qpar_cond"]*mult, label = study, **{**dict(ls=":"), **self.SOLPSstyle})  # SOLPS
                 
             ## Make X-point
-            ax.set_xlabel("$S_{\parallel}$ [m]")
+            ax.set_xlabel(r"$S_{\parallel}$ [m]")
             ax.set_ylabel(self.ylabels[param])
             ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(5))
             ax.grid(which = "both", visible = True, lw = 0.16, c = "k", alpha = 0.3)
             # ax.make_xpoint()
             
             if any([x in param for x in ["Ne"]]):
+                logscale = True
                 ax.set_yscale("log")
-                
+            else:
+                logscale = False
+            
+            Spar_x = solps[solps["Xpoint"]==1]["Spar"].values[0]
             ylim = ax.get_ylim()
-            ax.vlines(solps[solps["Xpoint"]==1]["Spar"].values[0], *ylim, **self.Xpointstyle, colors = "deeppink", label = "X-point")
+            ax.vlines(Spar_x, -100, 1e30, **self.Xpointstyle, colors = "deeppink", label = "X-point")
+            
+                
+            # ax.text(0.55, 0.5, "X-point", transform = ax.transAxes,
+            #         fontsize = "xx-small", verticalalignment="top", 
+            #         color = "deeppink", rotation = "vertical", alpha = 0.8)
+
             ax.set_ylim(ylim)
                 
                 
