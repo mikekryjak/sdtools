@@ -7,7 +7,7 @@ from cycler import cycler
 mpl.rcParams["mathtext.fontset"] = "stix"
 mpl.rcParams["mathtext.default"] = "regular"
 
-mpl.rcParams["axes.grid"] = True
+mpl.rcParams["axes.grid"] = False
 mpl.rcParams["axes.grid.which"] = "both"
 mpl.rcParams["axes.formatter.limits"] = (-3,3)
 mpl.rcParams["axes.formatter.useoffset"] = False
