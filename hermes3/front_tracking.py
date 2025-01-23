@@ -5,7 +5,7 @@ import numpy as np
 import xarray as xr
 
 
-def find_front_position(ds, more_fronts = False):
+def _get_front_position(ds, more_fronts = False):
     """
     Find front position and add it to the dataset
     It's very slow... maybe it can be optimised
@@ -13,7 +13,7 @@ def find_front_position(ds, more_fronts = False):
     """
     if "t" not in ds.dims:
         raise Exception("Dataset must contain more than one timestep")
-    fl = ds.hermesm.select_custom_sol_ring(int(ds.metadata["ixseps1"]), "outer_lower").squeeze()
+    fl = ds.hermesm.select_custom_sol_ring("outer_lower", sepadd = 0).squeeze()
     dist = np.cumsum(fl["dl"]).values
     dist_from_target = dist[-1] - dist
 
