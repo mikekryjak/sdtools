@@ -173,8 +173,6 @@ class Case:
         
         if self.is_2d is True:
             self.extract_2d_tokamak_geometry()
-            vol = self.ds.dv.values.sum()
-            # print(f"CHECK: Total domain volume is {vol:.3E} [m3]")
         else:
             self.ds = self.ds.hermes.extract_1d_tokamak_geometry()
             if guard_replace:
