@@ -1816,6 +1816,82 @@ class DLScasedeck:
         ax.set_ylabel(ylabel)
         ax.set_title("Front movement")
 
+class CoolingCurve:
+    def __init__(self, T, Lz, neTau, species, order=8, Tmin=0.5, Tmax=400):
+        self.data_original = pd.DataFrame()
+        self.data_original["T"] = T
+        self.data_original["Lz"] = Lz
+
+        self.neTau = neTau
+        self.species = species
+        self.order = order
+        self.Tmax = Tmax
+        self.Tmin = Tmin
+        self.resolution = 1000
+
+        self.interpolate()
+
+    def interpolate(self):
+        """
+        Note that the resulting Tmax may not be the same as specified as input.
+        This is because the original data may not have a value exactly at Tmax -
+        this means it's clipped to the nearest value under Tmax.
+        """
+
+        original_clipped = self.data_original[
+            (self.Tmin < self.data_original["T"])
+            & (self.data_original["T"] <= self.Tmax)
+        ]
+
+        logx = np.log10(original_clipped["T"].values)
+        logy = np.log10(original_clipped["Lz"].values)
+
+        coeffs = np.polyfit(logx, logy, self.order)
+
+        def Lz_func(T):
+            if T < self.Tmin:
+                return 0
+            elif T > original_clipped["T"].max():
+                return 0
+            else:
+                return 10 ** np.polyval(coeffs, np.log10(T))
+
+        self.Lz_func = Lz_func
+        self.data = pd.DataFrame()
+        self.data["T"] = np.linspace(0, self.Tmax + 50, self.resolution)
+        self.data["Lz"] = [Lz_func(T) for T in self.data["T"]]
+
+    def plot(self, ax=None, xmax=None, show_fit=False, label="", **kwargs):
+        """
+        Kwargs are passed to line plot of fitted curve
+        """
+
+        if xmax is None:
+            xmax = self.Tmax * 1.1
+
+            if ax is None:
+        fig, ax = plt.subplots()
+
+        if show_fit:
+            ax.plot(
+                self.data_original["T"],
+                self.data_original["Lz"],
+                marker="o",
+                lw=0,
+                label="Original data",
+            )
+
+            label = "Fit"
+        elif label != "":
+            label = label
+        else:
+            label = f"{self.species}, $n_{{e}} \\tau = {self.neTau}$"
+
+        ax.plot(self.data["T"], self.data["Lz"], label=label, **kwargs)
+        ax.set_xlim(0, xmax)
+        ax.set_xlabel("$T_e$ [eV]")
+        ax.set_ylabel("Lz [$Wm^3$]")
+        ax.legend()
         
 def test_scalings(df1, df2, param, cumulative = False):
     """
