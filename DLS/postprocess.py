@@ -1869,8 +1869,8 @@ class CoolingCurve:
         if xmax is None:
             xmax = self.Tmax * 1.1
 
-            if ax is None:
-        fig, ax = plt.subplots()
+        if ax is None:
+            fig, ax = plt.subplots()
 
         if show_fit:
             ax.plot(
