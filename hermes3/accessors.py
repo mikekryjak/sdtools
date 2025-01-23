@@ -1,7 +1,7 @@
 from xarray import register_dataset_accessor, register_dataarray_accessor
 from xbout import BoutDatasetAccessor, BoutDataArrayAccessor
 from hermes3.plotting import *
-from hermes3.front_tracking import *
+from hermes3.front_tracking import _get_front_position
 from hermes3.selectors import get_1d_radial_data
 import numpy as np
 
@@ -93,6 +93,9 @@ class HermesDatasetAccessor(BoutDatasetAccessor):
             
         return {"nn_floor" : nn_floor, "pn_floor" : pn_floor, "nn_floor_si" : nn_floor_si, "pn_floor_si" : pn_floor_si}    
     
+    def get_front_position(self, **kwargs):
+        self.data = _get_front_position(self.data, **kwargs)
+    
     
 def _guard_replace_1d(da):
         """
@@ -122,8 +125,7 @@ def _guard_replace_1d(da):
         return da
 
 
-def get_front_positions(self, **kwargs):
-    self.data = find_front_position(self.data, **kwargs)
+
 
 def _select_region(ds, name):
     """
