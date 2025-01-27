@@ -1265,16 +1265,16 @@ class compare_SOLPS_DLS():
         self.impurity = impurity
         # Read DLS
         dls = pd.DataFrame()
-        dls["Qrad"] = out["Rprofiles"][0]
-        dls["Spar"] = out["Sprofiles"][0]
-        dls["Spol"] = out["Spolprofiles"][0]
-        dls["Te"] = out["Tprofiles"][0]
-        dls["qpar"] = out["Qprofiles"][0]
-        dls["Btot"] = out["Btotprofiles"][0]
+        dls["Qrad"] = out["Qrad_profiles"][0]
+        dls["Spar"] = out["Spar_profiles"][0]
+        dls["Spol"] = out["Spol_profiles"][0]
+        dls["Te"] = out["Te_profiles"][0]
+        dls["qpar"] = out["qpar_profiles"][0]
+        dls["Btot"] = out["Btot_profiles"][0]
         dls["qpar_over_B"] = dls["qpar"] / dls["Btot"]
         
         if cvar == "density":
-            dls["cz"] = out["state"].si.cz0
+            dls["cz"] = out.inputs.cz0
             dls["Ne"] = out["cvar"][0] * dls["Te"].iloc[-1] / dls["Te"]   ## Assuming cvar is ne
         elif cvar == "impurity_frac":
             dls["cz"] = out["cvar"][0]
@@ -1697,19 +1697,30 @@ class DLScasedeck:
             self.cases.append(DLScase(store, index=i))
 
         self.data = pd.DataFrame()
-        self.data["Spar"] = store["Splot"]
-        self.data["Spol"] = store["SpolPlot"]
+        self.data["Spar"] = store["Spar_front"]
+        self.data["Spol"] = store["Spol_front"]
         self.data["cvar"] = store["cvar"]   # cvar at detachment threshold
         self.data["crel"] = store["cvar"] / store["cvar"][0]
-        self.window = store["window"]             # Cx - Ct
-        self.window_frac = store["window_frac"]   # (Cx - Ct) / Ct
-        self.window_ratio = store["window_ratio"] # Cx / Ct
+        
+        self.single_case = "window" not in store.keys()
+        
+        if self.single_case:
+            print("Warning, deck contains only one case! Detachment window and unstable region not available.")
+            self.window = 0
+            self.window_frac = 0
+            self.window_ratio = 0
+        else:
+            self.window = store["window"]             # Cx - Ct
+            self.window_frac = store["window_frac"]   # (Cx - Ct) / Ct
+            self.window_ratio = store["window_ratio"] # Cx / Ct
+            
         
         if len(self.data) != len(self.data.drop_duplicates(subset = "Spar")):
             print("Warning: Duplicate Spar values found, removing!")
             self.data = self.data.drop_duplicates(subset = "Spar")
         
-        self.get_stable_region()
+        if not self.single_case:
+            self.get_stable_region()
         # self.get_stability_breakpoint()
         
         
