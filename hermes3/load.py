@@ -172,7 +172,7 @@ class Case:
             self.derive_vars()
         
         if self.is_2d is True:
-            self.extract_2d_tokamak_geometry()
+            self.ds = self.ds.hermes.extract_2d_tokamak_geometry()
         else:
             self.ds = self.ds.hermes.extract_1d_tokamak_geometry()
             if guard_replace:
