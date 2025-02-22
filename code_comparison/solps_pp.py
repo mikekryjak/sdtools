@@ -240,7 +240,7 @@ class SOLPScase():
             self.get_species()
         bal = self.bal
         
-        dcz = species[species["name"].str.contains(f"{species_name}\+")]
+        dcz = species[species["name"].str.contains(fr"{species_name}\+")]
         species_indices = list(dcz.index)
         
         if len(species_indices) < 1:
@@ -588,8 +588,6 @@ class SOLPScase():
         Target data is obtained from the guard cells which are very close to the wall.
         """
         
-        print(interpolate)
-        
         bal = self.bal
 
         if type(params) == str:
@@ -613,7 +611,6 @@ class SOLPScase():
         
         ## Interpolate to Z = 0 for OMP and IMP
         if (region == "omp" or region == "imp") and interpolate == True:
-            print("yes")
             ## Select a couple of cells on each side of the midplane
             if region == "omp":
                 pol_selector = slice(self.psel["omp"]-3, self.psel["omp"]+5)
@@ -664,7 +661,6 @@ class SOLPScase():
         
         sepind = self.g["sep"]
         dist_sep = df["dist"][sepind] - (df["dist"][sepind] - df["dist"][sepind-1]) / 2
-        print(dist_sep)
         df["dist"] -= dist_sep 
         df["sep"] = 0
         df.loc[sepind, "sep"] = 1
@@ -1306,9 +1302,9 @@ def read_display_tallies(path):
     
     # Some lines have no parameter title and the delimiter parsing makes it start as a number
     # Shift those back to be in line with the others
-    df[df["param"].str.contains("E\+")] = df[df["param"].str.contains("E\+")].shift(axis=1)
+    df[df["param"].str.contains(r"E\+")] = df[df["param"].str.contains(r"E\+")].shift(axis=1)
 
-    params = df["param"][df["param"].str.contains("D0|D\+|None") == False].values
+    params = df["param"][df["param"].str.contains(r"D0|D\+|None") == False].values
 
     for i in df.index:
         # Empty rows due to the shifting above are now labelled correctly
