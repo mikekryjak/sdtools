@@ -418,7 +418,7 @@ class Mesh():
                      linecolor = "k",
                      plot_region_borders = True):
         
-        linewidth = 0.5
+        linewidth = 0.1
         ax.set_title("R, Z space")
         
         
