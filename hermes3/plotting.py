@@ -847,7 +847,7 @@ def lineplot(
             
         fig.legend(legend_items, cases.keys(), ncol = len(cases), loc = "upper center", bbox_to_anchor=(0.5,0.15))
         if save_name != "":
-            fig.savefig(f"{save_name}.png", bbox_inches="tight", pad_inches=0.2)
+            fig.savefig(f"{save_name}_{region}.png", bbox_inches="tight", pad_inches=0.2)
         # fig.tight_layout()
         
 def create_norm(logscale, norm, vmin, vmax):
