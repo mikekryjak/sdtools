@@ -779,7 +779,7 @@ def lineplot(
                 region_ds[name] = ds.hermesm.select_region("outer_lower_target")
                 xlabel = "dist from sep [m]"
             elif region == "field_line":
-                region_ds[name] = ds.hermesm.select_custom_sol_ring("outer_lower", sepadd = ds.metadata["ixseps1"]-1).squeeze()
+                region_ds[name] = ds.hermesm.select_custom_sol_ring("outer_lower", sepadd = 0).squeeze()
                 xlabel = "Distance from midplane [m]"
             elif region == "1d":
                 region_ds[name] = ds.squeeze()
