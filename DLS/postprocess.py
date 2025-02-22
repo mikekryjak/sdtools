@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from collections import defaultdict
+from fusiondls.postprocessing import FrontLocation, FrontLocationScan
 # from ThermalFrontFormulation import *
 
 class DLSoutput():
@@ -1164,94 +1165,6 @@ class plotProfiles():
                 ax.spines[spine].set_visible(True)
         
     
-            
-        
-# def plot_designs(profiles, colors = None, basis = "Spol", mode = "outer"):
-#     fig, axes = plt.subplots(2,3, figsize = self.figsize)
-#     titlesize = "x-large"
-#     lw = 3
-#     colors = plt.rcParams['axes.prop_cycle'].by_key()['color'] if colors == None else colors
-#     spines = True
-    
-    
-#     for i, key in enumerate(profiles.keys()):
-#         p = profiles[key]
-#         ax = axes[0,0]
-#         ax.plot(p.R - p.R[p.Xpoint], p.Z - p.Z[p.Xpoint], label = key, color = colors[i], lw = lw)
-#         ax.set_aspect("equal")
-#         ax.set_ylim(-3.0, 1)
-#         ax.set_title("Design", fontsize = titlesize)
-#         ax.set_xlabel(r"$R - R_{Xpoint}\ [m]$")
-#         ax.set_ylabel(r"$Z - Z_{Xpoint}\ [m]$")
-#         ax.legend()
-        
-#         selector = slice(None,p.Xpoint)
-        
-#         xplot = (p[basis] - p[basis][p.Xpoint])[selector] 
-        
-#         ## Reverse X so that inner can go from left to right
-#         # Distance still m from X-point
-#         # if mode == "inner":
-#         #     xplot *= -1
-            
-#         xplot *= -1
-            
-#         xlabel = dict(
-#             Spol = r"$S_{\theta}\ [m]$",
-#             S = r"$S_{\parallel}\ [m]$"
-#         )[basis]
-            
-        
-        
-#         ax = axes[1,0]
-#         L = [p.get_connection_length() for p in profiles.values()]
-#         L = L/L[0]
-#         BxBt = [p.get_total_flux_expansion() for p in profiles.values()]
-#         BxBt /= BxBt[0]
-#         Lkwargs = dict(zorder = 100, alpha = 1, color = colors[i], lw = 0, marker = "o", ms = 10,  ls = "-")
-#         BxBtkwargs = dict(zorder = 100, alpha = 1, color = colors[i], lw = 0, marker = "x", ms = 10, markeredgewidth = 5, ls = "-")
-        
-#         if i == 0: Lkwargs["label"] = "Lc"
-#         if i == 0: BxBtkwargs["label"] = "$B_{X} \/ B_{t}$"
-#         ax.plot(i, L[i], **Lkwargs)
-#         ax.plot(i, BxBt[i], **BxBtkwargs)
-#         ax.set_title("Flux expansion and connection length", fontsize = titlesize)
-#         ax.legend(bbox_to_anchor = (0.3,0.95))
-        
-#         ax = axes[0,1]
-#         ax.plot(xplot, p.Btot[selector], label = key, color = colors[i], lw = lw)
-#         ax.set_title(r"Total field", fontsize = titlesize)
-#         ax.set_xlabel(xlabel)
-#         ax.set_ylabel(r"$B_{tot}\ [T]$")
-        
-#         ax = axes[1,1]
-#         ax.plot(xplot, p.Bpol[selector], label = key, color = colors[i], lw = lw)
-#         ax.set_title(r"Poloidal field", fontsize = titlesize)
-#         ax.set_xlabel(xlabel)
-#         ax.set_ylabel(r"$B_{\theta}\ [T]$")
-        
-#         ax = axes[0,2]
-#         ax.plot(xplot, (np.gradient(p.Btot, p.S)/p.Btot)[selector], label = key, color = colors[i], lw = lw)
-#         ax.set_title(r"Parallel B gradient", fontsize = titlesize)
-#         ax.set_xlabel(xlabel)
-#         ax.set_ylabel(r"$\frac{1}{B} \frac{dB}{dS_{\parallel}}\ [T]$")
-        
-#         ax = axes[1,2]
-#         ax.plot(xplot, (p.Bpol/p.Btot)[selector], label = key, color = colors[i], lw = lw)
-#         ax.set_title(r"Field pitch", fontsize = titlesize)
-#         ax.set_xlabel(xlabel)
-#         ax.set_ylabel(r"$B_{\theta} / B_{tot}$")
-        
-#     # Reverse axes so inner goes left to right
-#     if mode == "inner":
-#         for ax in [axes[0,1], axes[1,1], axes[0,2], axes[1,2]]:
-#             ax.set_xlim(ax.get_xlim()[::-1])
-        
-#     fig.tight_layout()
-    
-#     if spines is True:
-#         for spine in ["top", "left", "right", "bottom"]:
-#             ax.spines[spine].set_visible(True)
 
 
 class compare_SOLPS_DLS():
@@ -1262,38 +1175,50 @@ class compare_SOLPS_DLS():
                                                "Te", "Td+", f"R{impurity}", f"f{impurity}", "ne", "fhex_cond", "fhx_total",
                                                ], 
                                   sepadd = sepadd, region = region, target_first = True)
+        
         self.impurity = impurity
-        # Read DLS
-        dls = pd.DataFrame()
-        dls["Qrad"] = out["Qrad_profiles"][0]
-        dls["Spar"] = out["Spar_profiles"][0]
-        dls["Spol"] = out["Spol_profiles"][0]
-        dls["Te"] = out["Te_profiles"][0]
-        dls["qpar"] = out["qpar_profiles"][0]
-        dls["Btot"] = out["Btot_profiles"][0]
-        dls["qpar_over_B"] = dls["qpar"] / dls["Btot"]
         
-        if cvar == "density":
-            dls["cz"] = out.inputs.cz0
-            dls["Ne"] = out["cvar"][0] * dls["Te"].iloc[-1] / dls["Te"]   ## Assuming cvar is ne
-        elif cvar == "impurity_frac":
-            dls["cz"] = out["cvar"][0]
-            dls["Ne"] = dls.iloc[-1]["Te"] * out["state"].si.nu0 / dls["Te"]
-        else:
-            raise Exception()
         
-        Xpoint = out["Xpoints"][0]
-        dls.loc[Xpoint, "Xpoint"] = 1
-
-        # qradial is the uniform upstream heat source
-        dls["qradial"] = 1.0
-        # dls["qradial"].iloc[Xpoint:] = out["state"].qradial
-        dls.loc[Xpoint:, "qradial"] = out["state"].qradial
-        
-        self.dls = dls
+        DLScase = FrontLocation(out)
+        self.dls = DLScase.data
+        self.dls["qpar_cond_frac"] = 1
+        self.dls["Ne_sq_cz"] = self.dls["Ne"]**2 * self.dls["cz"]
         
         self.solps = self.calculate_solps(self.solps)
-        self.dls = self.calculate_dls(self.dls)
+        
+        # # Read DLS
+        # dls = pd.DataFrame()
+        # dls["Qrad"] = out["Qrad_profiles"][0]
+        # dls["Spar"] = out["Spar_profiles"][0]
+        # dls["Spol"] = out["Spol_profiles"][0]
+        # dls["Te"] = out["Te_profiles"][0]
+        # dls["qpar"] = out["qpar_profiles"][0]
+        # dls["Btot"] = out["Btot_profiles"][0]
+        # dls["qpar_over_B"] = dls["qpar"] / dls["Btot"]
+        
+        # if cvar == "density":
+        #     dls["cz"] = out.inputs.cz0
+        #     dls["Ne"] = out["cvar"][0] * dls["Te"].iloc[-1] / dls["Te"]   ## Assuming cvar is ne
+        # elif cvar == "impurity_frac":
+        #     dls["cz"] = out["cvar"][0]
+        #     dls["Ne"] = dls.iloc[-1]["Te"] * out.inputs.nu0 / dls["Te"]
+        # else:
+        #     raise Exception()
+        
+        # Xpoint = out["Xpoints"][0]
+        # dls.loc[Xpoint, "Xpoint"] = 1
+
+        # # qradial is the uniform upstream heat source
+        # dls["qradial"] = 1.0
+        # # dls["qradial"].iloc[Xpoint:] = out["state"].qradial
+        # dls.loc[Xpoint:, "qradial"] = out["state"].qradial
+        
+        # self.dls = dls
+        
+        
+        
+        
+        # self.dls = self.calculate_dls(self.dls)
         
         
     def calculate_solps(self, solps):
@@ -1304,12 +1229,12 @@ class compare_SOLPS_DLS():
 
 
         # Calculate radiation (see DLS comments)
-        solps["Prad_per_area_cum"] = sp.integrate.cumulative_trapezoid(y = solps[f"R{self.impurity}"], x = solps["Spar"], initial = 0)   # Radiation integral over volume
-        solps["Prad_per_area_cum_norm"] = solps["Prad_per_area_cum"] / solps["Prad_per_area_cum"].max()
+        solps["Qrad_per_area_cum"] = sp.integrate.cumulative_trapezoid(y = solps[f"R{self.impurity}"], x = solps["Spar"], initial = 0)   # Radiation integral over volume
+        solps["Qrad_per_area_cum_norm"] = solps["Qrad_per_area_cum"] / solps["Qrad_per_area_cum"].max()
 
-        solps["Prad_cum"] = sp.integrate.cumulative_trapezoid(y = solps[f"R{self.impurity}"] / solps["Btot"], x = solps["Spar"], initial = 0)   # Radiation integral over volume
+        solps["Qrad_cum"] = sp.integrate.cumulative_trapezoid(y = solps[f"R{self.impurity}"] / solps["Btot"], x = solps["Spar"], initial = 0)   # Radiation integral over volume
         # NOTE: This is not correct, it should really be volume, but I'm doing  it like this to be the same as the DLS.
-        solps["Prad_cum_norm"] = solps["Prad_cum"] / solps["Prad_cum"].max()
+        solps["Qrad_cum_norm"] = solps["Qrad_cum"] / solps["Qrad_cum"].max()
         
         solps["Pe"] = solps["Te"] * solps["ne"] * 1.60217662e-19
         solps["Ne"] = solps["ne"]
@@ -1330,24 +1255,24 @@ class compare_SOLPS_DLS():
                 
         return solps
 
-    def calculate_dls(self, dls):
+    # def calculate_dls(self, dls):
         
         
-        # Radiative power loss without flux expansion effect.
-        # Units are W, bit integrated assuming unity cross-sectional area, so really W/m2
-        # Done by reconstructing the RHS of the qpar equation
-        dls["Prad_per_area"] = np.gradient(dls["qpar"]/dls["Btot"], dls["Spar"]) + dls["qradial"]/dls["Btot"]
-        dls["Prad_per_area_cum"] = sp.integrate.cumulative_trapezoid(y = dls["Prad_per_area"], x = dls["Spar"], initial = 0)  # W/m2
-        dls["Prad_per_area_cum_norm"] = dls["Prad_per_area_cum"] / dls["Prad_per_area_cum"].max()
-        # Proper radiative power integral [W]
-        dls["Prad_cum"] = sp.integrate.cumulative_trapezoid(y = dls["Qrad"] / dls["Btot"], x = dls["Spar"], initial = 0)   # Radiation integral over volume
-        dls["Prad_cum_norm"] = dls["Prad_cum"] / dls["Prad_cum"].max()
+    #     # Radiative power loss without flux expansion effect.
+    #     # Units are W, bit integrated assuming unity cross-sectional area, so really W/m2
+    #     # Done by reconstructing the RHS of the qpar equation
+    #     dls["Prad_per_area"] = np.gradient(dls["qpar"]/dls["Btot"], dls["Spar"]) + dls["qradial"]/dls["Btot"]
+    #     dls["Prad_per_area_cum"] = sp.integrate.cumulative_trapezoid(y = dls["Prad_per_area"], x = dls["Spar"], initial = 0)  # W/m2
+    #     dls["Prad_per_area_cum_norm"] = dls["Prad_per_area_cum"] / dls["Prad_per_area_cum"].max()
+    #     # Proper radiative power integral [W]
+    #     dls["Prad_cum"] = sp.integrate.cumulative_trapezoid(y = dls["Qrad"] / dls["Btot"], x = dls["Spar"], initial = 0)   # Radiation integral over volume
+    #     dls["Prad_cum_norm"] = dls["Prad_cum"] / dls["Prad_cum"].max()
         
-        dls["Pe"] = dls["Te"] * dls["Ne"] * 1.60217662e-19
-        dls["Ne_sq_cz"] = dls["Ne"]**2 * dls["cz"]
-        dls["qpar_cond_frac"] = 1
+    #     dls["Pe"] = dls["Te"] * dls["Ne"] * 1.60217662e-19
+    #     dls["Ne_sq_cz"] = dls["Ne"]**2 * dls["cz"]
+    #     dls["qpar_cond_frac"] = 1
         
-        return dls
+    #     return dls
     
     def get_front_location(self, mode = "dls", threshold = 0.5, debug_plot = False):
         """
@@ -1359,13 +1284,13 @@ class compare_SOLPS_DLS():
         elif mode == "solps":
             data = self.solps
             
-        df = data[["Prad_cum_norm", "Spar"]].copy()
-        df = df.drop_duplicates(subset = ["Prad_cum_norm"])
-        fun = sp.interpolate.interp1d(df["Prad_cum_norm"], df["Spar"],  kind = "linear")
+        df = data[["Qrad_cum_norm", "Spar"]].copy()
+        df = df.drop_duplicates(subset = ["Qrad_cum_norm"])
+        fun = sp.interpolate.interp1d(df["Qrad_cum_norm"], df["Spar"],  kind = "linear")
         
         if debug_plot:
             fig, ax = plt.subplots()
-            ax.plot(df["Prad_cum_norm"], df["Spar"], marker = "o", lw = 0, ms = 3)
+            ax.plot(df["Qrad_cum_norm"], df["Spar"], marker = "o", lw = 0, ms = 3)
             rad = np.linspace(0,1,100)
             ax.plot(rad, [fun(r) for r in rad])
         
@@ -1554,13 +1479,13 @@ class compare_SOLPS_DLS():
             label_suffix = ""
         
         if per_area:
-            ax.plot(dls["Spar"], dls[f"Prad_per_area_cum{suffix}"], label = "DLS")
-            ax.plot(solps["Spar"], solps[f"Prad_per_area_cum{suffix}"], label = "SOLPS")
+            ax.plot(dls["Spar"], dls[f"Qrad_per_area_cum{suffix}"], label = "DLS")
+            ax.plot(solps["Spar"], solps[f"Qrad_per_area_cum{suffix}"], label = "SOLPS")
             ax.set_title(f"Cumulative radiation\nintegral (per area) {label_suffix}")
             ax.set_ylabel("[W/m2]")
         else:
-            ax.plot(dls["Spar"], dls[f"Prad_cum{suffix}"], label = "DLS")
-            ax.plot(solps["Spar"], solps[f"Prad_cum{suffix}"], label = "SOLPS")
+            ax.plot(dls["Spar"], dls[f"Qrad_cum{suffix}"], label = "DLS")
+            ax.plot(solps["Spar"], solps[f"Qrad_cum{suffix}"], label = "SOLPS")
             ax.set_title(f"Cumulative radiation integral {label_suffix}")
             ax.set_ylabel(f"[W] {label_suffix}")
         
@@ -1580,252 +1505,252 @@ class compare_SOLPS_DLS():
         self.apply_plot_settings(ax)
         
         
-class DLScase():
-    def __init__(self, out, index=0):
+# class DLScase():
+#     def __init__(self, out, index=0):
 
-        dls = pd.DataFrame()
-        dls["Qrad"] = out["Rprofiles"][index]
-        dls["Spar"] = out["Sprofiles"][index]
-        dls["Spol"] = out["Spolprofiles"][index]
-        dls["Te"] = out["Tprofiles"][index]
-        dls["qpar"] = out["Qprofiles"][index]
-        dls["Btot"] = out["Btotprofiles"][index]
-        dls["Ne"] = out["cvar"][index] * dls["Te"].iloc[-1] / dls["Te"]   ## Assuming cvar is ne
-        dls["cz"] = out["state"].si.cz0
-        Xpoint = out["Xpoints"][index]
-        dls.loc[Xpoint, "Xpoint"] = 1
+#         dls = pd.DataFrame()
+#         dls["Qrad"] = out["Rprofiles"][index]
+#         dls["Spar"] = out["Sprofiles"][index]
+#         dls["Spol"] = out["Spolprofiles"][index]
+#         dls["Te"] = out["Tprofiles"][index]
+#         dls["qpar"] = out["Qprofiles"][index]
+#         dls["Btot"] = out["Btotprofiles"][index]
+#         dls["Ne"] = out["cvar"][index] * dls["Te"].iloc[-1] / dls["Te"]   ## Assuming cvar is ne
+#         dls["cz"] = out["state"].si.cz0
+#         Xpoint = out["Xpoints"][index]
+#         dls.loc[Xpoint, "Xpoint"] = 1
 
-        # qradial is the uniform upstream heat source
-        dls["qradial"] = 1.0
-        # dls["qradial"].iloc[Xpoint:] = out["state"].qradial
-        dls.loc[Xpoint:, "qradial"] = out["state"].qradial
+#         # qradial is the uniform upstream heat source
+#         dls["qradial"] = 1.0
+#         # dls["qradial"].iloc[Xpoint:] = out["state"].qradial
+#         dls.loc[Xpoint:, "qradial"] = out["state"].qradial
         
-        # Radiative power loss without flux expansion effect.
-        # Units are W, bit integrated assuming unity cross-sectional area, so really W/m2
-        # Done by reconstructing the RHS of the qpar equation
-        dls["Prad_per_area"] = np.gradient(dls["qpar"]/dls["Btot"], dls["Spar"]) + dls["qradial"]/dls["Btot"]
-        dls["Prad_per_area_cum"] = sp.integrate.cumulative_trapezoid(y = dls["Prad_per_area"], x = dls["Spar"], initial = 0)  # W/m2
-        dls["Prad_per_area_cum_norm"] = dls["Prad_per_area_cum"] / dls["Prad_per_area_cum"].max()
-        # Proper radiative power integral [W]
-        dls["Prad_cum"] = sp.integrate.cumulative_trapezoid(y = dls["Qrad"] / dls["Btot"], x = dls["Spar"], initial = 0)   # Radiation integral over volume
-        dls["Prad_cum_norm"] = dls["Prad_cum"] / dls["Prad_cum"].max()
+#         # Radiative power loss without flux expansion effect.
+#         # Units are W, bit integrated assuming unity cross-sectional area, so really W/m2
+#         # Done by reconstructing the RHS of the qpar equation
+#         dls["Prad_per_area"] = np.gradient(dls["qpar"]/dls["Btot"], dls["Spar"]) + dls["qradial"]/dls["Btot"]
+#         dls["Prad_per_area_cum"] = sp.integrate.cumulative_trapezoid(y = dls["Prad_per_area"], x = dls["Spar"], initial = 0)  # W/m2
+#         dls["Prad_per_area_cum_norm"] = dls["Prad_per_area_cum"] / dls["Prad_per_area_cum"].max()
+#         # Proper radiative power integral [W]
+#         dls["Prad_cum"] = sp.integrate.cumulative_trapezoid(y = dls["Qrad"] / dls["Btot"], x = dls["Spar"], initial = 0)   # Radiation integral over volume
+#         dls["Prad_cum_norm"] = dls["Prad_cum"] / dls["Prad_cum"].max()
         
-        dls["Pe"] = dls["Te"] * dls["Ne"] * 1.60217662e-19
-        dls["qpar_over_B"] = dls["qpar"] / dls["Btot"]
+#         dls["Pe"] = dls["Te"] * dls["Ne"] * 1.60217662e-19
+#         dls["qpar_over_B"] = dls["qpar"] / dls["Btot"]
         
-        ### Calculate scalar properties
-        s = dict()
-        s["cvar"] = out["state"].cvar
-        s["kappa0"] = out["state"].si.kappa0
-        s["Bf"] = dls["Btot"].iloc[0]
-        s["Bx"] = dls[dls["Xpoint"]==1]["Btot"].iloc[0]
-        s["Beff"] = np.sqrt(sp.integrate.trapezoid(
-            y = dls["qpar"]*dls["Qrad"], x = dls["Spar"]) / sp.integrate.trapezoid(
-                y = dls["qpar"]*dls["Qrad"]/dls["Btot"]**2, x = dls["Spar"]))
-        s["BxBt"] = s["Bx"] / s["Bf"]
-        s["BxBteff"] = s["Bx"] / s["Beff"]
-        s["Lc"] = dls["Spol"].iloc[-1]
-        s["Wradial"] = out["state"].qradial
-        s["Tu"] = dls["Te"].iloc[-1]
+#         ### Calculate scalar properties
+#         s = dict()
+#         s["cvar"] = out["state"].cvar
+#         s["kappa0"] = out["state"].si.kappa0
+#         s["Bf"] = dls["Btot"].iloc[0]
+#         s["Bx"] = dls[dls["Xpoint"]==1]["Btot"].iloc[0]
+#         s["Beff"] = np.sqrt(sp.integrate.trapezoid(
+#             y = dls["qpar"]*dls["Qrad"], x = dls["Spar"]) / sp.integrate.trapezoid(
+#                 y = dls["qpar"]*dls["Qrad"]/dls["Btot"]**2, x = dls["Spar"]))
+#         s["BxBt"] = s["Bx"] / s["Bf"]
+#         s["BxBteff"] = s["Bx"] / s["Beff"]
+#         s["Lc"] = dls["Spol"].iloc[-1]
+#         s["Wradial"] = out["state"].qradial
+#         s["Tu"] = dls["Te"].iloc[-1]
         
-        dlsx = dls[dls["Xpoint"] == 1]
-        dls_div = dls[dls["Spar"] <= dlsx["Spar"].iloc[0]]
-        avgB_div = sp.integrate.trapz(dls_div["Btot"], x = dls_div["Spar"]) / dls_div["Spar"].iloc[-1]
+#         dlsx = dls[dls["Xpoint"] == 1]
+#         dls_div = dls[dls["Spar"] <= dlsx["Spar"].iloc[0]]
+#         avgB_div = sp.integrate.trapz(dls_div["Btot"], x = dls_div["Spar"]) / dls_div["Spar"].iloc[-1]
 
-        s["avgB_ratio"] = dlsx["Btot"].iloc[0] / avgB_div
+#         s["avgB_ratio"] = dlsx["Btot"].iloc[0] / avgB_div
         
-        # print(s["avgB_ratio"])
+#         # print(s["avgB_ratio"])
         
-        ## DLS-Extended effects (see Kryjak 2024)
-        # Impact of qpar profile changing upstream due to B field and radiation,
-        # leading to a different qpar at the X-point
-        s["upstream_rad"] = np.sqrt(2 * sp.integrate.trapz(
-            y = dls["qpar"].iloc[Xpoint:]/(dls["Btot"].iloc[Xpoint:]**2 * s["Wradial"]), x = dls["Spar"].iloc[Xpoint:]))
+#         ## DLS-Extended effects (see Kryjak 2024)
+#         # Impact of qpar profile changing upstream due to B field and radiation,
+#         # leading to a different qpar at the X-point
+#         s["upstream_rad"] = np.sqrt(2 * sp.integrate.trapz(
+#             y = dls["qpar"].iloc[Xpoint:]/(dls["Btot"].iloc[Xpoint:]**2 * s["Wradial"]), x = dls["Spar"].iloc[Xpoint:]))
         
         
-        # Tu proportional term calculated from heat flux integral. Includes effects of Lpar and B/averageB.
-        # Simple version is just the Tu proportionality
-        s["W_Tu"] = (s["Wradial"]**(2/7)) / (sp.integrate.trapezoid(y = dls["qpar"], x = dls["Spar"])**(2/7))
-        s["W_Tu_simple"] = (
-                            (sp.integrate.trapezoid(
-                                y = dls["Btot"][Xpoint:]/s["Bx"] * (s["Lc"] - dls["Spar"].iloc[Xpoint:])/(s["Lc"] - dls["Spar"].iloc[Xpoint]), x = dls["Spar"].iloc[Xpoint:]) \
-                            + sp.integrate.trapezoid(
-                                y = dls["Btot"].iloc[:Xpoint]/s["Bx"], x = dls["Spar"].iloc[:Xpoint]))
-                        )**(-2/7)                    
+#         # Tu proportional term calculated from heat flux integral. Includes effects of Lpar and B/averageB.
+#         # Simple version is just the Tu proportionality
+#         s["W_Tu"] = (s["Wradial"]**(2/7)) / (sp.integrate.trapezoid(y = dls["qpar"], x = dls["Spar"])**(2/7))
+#         s["W_Tu_simple"] = (
+#                             (sp.integrate.trapezoid(
+#                                 y = dls["Btot"][Xpoint:]/s["Bx"] * (s["Lc"] - dls["Spar"].iloc[Xpoint:])/(s["Lc"] - dls["Spar"].iloc[Xpoint]), x = dls["Spar"].iloc[Xpoint:]) \
+#                             + sp.integrate.trapezoid(
+#                                 y = dls["Btot"].iloc[:Xpoint]/s["Bx"], x = dls["Spar"].iloc[:Xpoint]))
+#                         )**(-2/7)                    
                                     
-        # Cooling curve integral which includes effect of Tu clipping integral limit
-        self.Lfunc = lambda x : out["state"].si.Lfunc(x)
-        Lz = [self.Lfunc(x) for x in dls["Te"]]
-        s["curveclip"] = np.sqrt(2 * sp.integrate.trapz(y = s["kappa0"] * dls["Te"]**0.5 * Lz, x = dls["Te"]))**-1
+#         # Cooling curve integral which includes effect of Tu clipping integral limit
+#         self.Lfunc = lambda x : out["state"].si.Lfunc(x)
+#         Lz = [self.Lfunc(x) for x in dls["Te"]]
+#         s["curveclip"] = np.sqrt(2 * sp.integrate.trapz(y = s["kappa0"] * dls["Te"]**0.5 * Lz, x = dls["Te"]))**-1
         
-        self.data = dls
-        self.stats = s
+#         self.data = dls
+#         self.stats = s
         
         
-    def get_stats_dataframe(self):
-        """
-        Returns dataframe with a row of index 0 containing properties in self.stats
-        """
-        return pd.DataFrame.from_dict(self.stats, orient = "index").T
+#     def get_stats_dataframe(self):
+#         """
+#         Returns dataframe with a row of index 0 containing properties in self.stats
+#         """
+#         return pd.DataFrame.from_dict(self.stats, orient = "index").T
         
-    def get_radiation_location(self, threshold):
-        """
-        Returns parallel location of point by which the cumulative radiation in W (not W/m2) crosses a threshold
+#     def get_radiation_location(self, threshold):
+#         """
+#         Returns parallel location of point by which the cumulative radiation in W (not W/m2) crosses a threshold
         
-        TRY 16 to 84
-        """
-        return sp.interpolate.interp1d(self.data["Prad_cum_norm"], self.data["Spar"], fill_value = "extrapolate")(threshold)
+#         TRY 16 to 84
+#         """
+#         return sp.interpolate.interp1d(self.data["Prad_cum_norm"], self.data["Spar"], fill_value = "extrapolate")(threshold)
     
-    def get_front_width(self, lower_threshold, upper_threshold):
-        """
-        Return parallel difference between two cumulative radiation thresholds
-        Cumulative radiation is W not W/m2
-        """
+#     def get_front_width(self, lower_threshold, upper_threshold):
+#         """
+#         Return parallel difference between two cumulative radiation thresholds
+#         Cumulative radiation is W not W/m2
+#         """
         
-        lower_position = sp.interpolate.interp1d(self.data["Prad_cum_norm"], self.data["Spar"], fill_value = "extrapolate")(lower_threshold)
-        upper_position = sp.interpolate.interp1d(self.data["Prad_cum_norm"], self.data["Spar"], fill_value = "extrapolate")(upper_threshold)
-        width = upper_position - lower_position
+#         lower_position = sp.interpolate.interp1d(self.data["Prad_cum_norm"], self.data["Spar"], fill_value = "extrapolate")(lower_threshold)
+#         upper_position = sp.interpolate.interp1d(self.data["Prad_cum_norm"], self.data["Spar"], fill_value = "extrapolate")(upper_threshold)
+#         width = upper_position - lower_position
         
-        return width
+#         return width
     
     
-class DLScasedeck:
-    def __init__(self, store):
-        num_locations = len(store["Sprofiles"])
-        self.cases = []
-        for i in range(num_locations):
-            self.cases.append(DLScase(store, index=i))
+# class DLScasedeck:
+#     def __init__(self, store):
+#         num_locations = len(store["Sprofiles"])
+#         self.cases = []
+#         for i in range(num_locations):
+#             self.cases.append(DLScase(store, index=i))
 
-        self.data = pd.DataFrame()
-        self.data["Spar"] = store["Spar_front"]
-        self.data["Spol"] = store["Spol_front"]
-        self.data["cvar"] = store["cvar"]   # cvar at detachment threshold
-        self.data["crel"] = store["cvar"] / store["cvar"][0]
+#         self.data = pd.DataFrame()
+#         self.data["Spar"] = store["Spar_front"]
+#         self.data["Spol"] = store["Spol_front"]
+#         self.data["cvar"] = store["cvar"]   # cvar at detachment threshold
+#         self.data["crel"] = store["cvar"] / store["cvar"][0]
         
-        self.single_case = "window" not in store.keys()
+#         self.single_case = "window" not in store.keys()
         
-        if self.single_case:
-            print("Warning, deck contains only one case! Detachment window and unstable region not available.")
-            self.window = 0
-            self.window_frac = 0
-            self.window_ratio = 0
-        else:
-            self.window = store["window"]             # Cx - Ct
-            self.window_frac = store["window_frac"]   # (Cx - Ct) / Ct
-            self.window_ratio = store["window_ratio"] # Cx / Ct
+#         if self.single_case:
+#             print("Warning, deck contains only one case! Detachment window and unstable region not available.")
+#             self.window = 0
+#             self.window_frac = 0
+#             self.window_ratio = 0
+#         else:
+#             self.window = store["window"]             # Cx - Ct
+#             self.window_frac = store["window_frac"]   # (Cx - Ct) / Ct
+#             self.window_ratio = store["window_ratio"] # Cx / Ct
             
         
-        if len(self.data) != len(self.data.drop_duplicates(subset = "Spar")):
-            print("Warning: Duplicate Spar values found, removing!")
-            self.data = self.data.drop_duplicates(subset = "Spar")
+#         if len(self.data) != len(self.data.drop_duplicates(subset = "Spar")):
+#             print("Warning: Duplicate Spar values found, removing!")
+#             self.data = self.data.drop_duplicates(subset = "Spar")
         
-        if not self.single_case:
-            self.get_stable_region()
-        # self.get_stability_breakpoint()
+#         if not self.single_case:
+#             self.get_stable_region()
+#         # self.get_stability_breakpoint()
         
         
-    def get_stable_region(self, diagnostic_plot = False):
-        """
-        Trim the crel and cvar arrays to only include stable region
-        """
+#     def get_stable_region(self, diagnostic_plot = False):
+#         """
+#         Trim the crel and cvar arrays to only include stable region
+#         """
         
-        self.data.loc[:, "crel_grad"] = np.gradient(self.data["crel"])
-        self.data.loc[:, "stable"] = False
-        self.data.loc[self.data["crel_grad"] > 0, "stable"] = True
-        data_stable = self.data[self.data["stable"] == True]
-        data_unstable = self.data[self.data["stable"] == False]
+#         self.data.loc[:, "crel_grad"] = np.gradient(self.data["crel"])
+#         self.data.loc[:, "stable"] = False
+#         self.data.loc[self.data["crel_grad"] > 0, "stable"] = True
+#         data_stable = self.data[self.data["stable"] == True]
+#         data_unstable = self.data[self.data["stable"] == False]
 
-        ## Size of unstable region when going backward
-        if len(data_stable) == 0:
-            self.unstable_Lpol_backward = self.data.iloc[-1]["Spol"]
-            self.unstable_Lpar_backward = self.data.iloc[-1]["Spar"]
-        elif len(data_unstable) > 0:
-            self.unstable_Lpol_backward = data_stable.iloc[0]["Spol"]
-            self.unstable_Lpar_backward = data_stable.iloc[0]["Spar"]
-        else:
-            self.unstable_Lpol_backward = 0
-            self.unstable_Lpar_backward = 0
+#         ## Size of unstable region when going backward
+#         if len(data_stable) == 0:
+#             self.unstable_Lpol_backward = self.data.iloc[-1]["Spol"]
+#             self.unstable_Lpar_backward = self.data.iloc[-1]["Spar"]
+#         elif len(data_unstable) > 0:
+#             self.unstable_Lpol_backward = data_stable.iloc[0]["Spol"]
+#             self.unstable_Lpar_backward = data_stable.iloc[0]["Spar"]
+#         else:
+#             self.unstable_Lpol_backward = 0
+#             self.unstable_Lpar_backward = 0
 
-        if self.data["crel"].iloc[-1] < 1:
-            self.unstable_Lpol_forward = self.data["Spol"].iloc[-1]
-            self.unstable_Lpar_forward = self.data["Spar"].iloc[-1]
-        else:
-            self.unstable_Lpol_forward = sp.interpolate.interp1d(data_stable["crel"], data_stable["Spol"], kind = "linear")(1)
-            self.unstable_Lpar_forward = sp.interpolate.interp1d(data_stable["crel"], data_stable["Spar"], kind = "linear")(1)
+#         if self.data["crel"].iloc[-1] < 1:
+#             self.unstable_Lpol_forward = self.data["Spol"].iloc[-1]
+#             self.unstable_Lpar_forward = self.data["Spar"].iloc[-1]
+#         else:
+#             self.unstable_Lpol_forward = sp.interpolate.interp1d(data_stable["crel"], data_stable["Spol"], kind = "linear")(1)
+#             self.unstable_Lpar_forward = sp.interpolate.interp1d(data_stable["crel"], data_stable["Spar"], kind = "linear")(1)
             
-        if diagnostic_plot:
-            fig, ax = plt.subplots(dpi = 120)
-            ax.plot(self.data["crel"], self.data["Spol"], label = "Crel")
-            ax.plot(data_stable["crel"], data_stable["Spol"])
-            ax.hlines(self.unstable_Lpol_backward, self.data["crel"].min(), self.data["crel"].max(), ls = "--", color = "red", label = "forward stability breakpoint")
-            ax.hlines(self.unstable_Lpol_forward, self.data["crel"].min(), self.data["crel"].max(), ls = "--", color = "orange", label = "backward stability breakpoint")
-            ax.legend()
+#         if diagnostic_plot:
+#             fig, ax = plt.subplots(dpi = 120)
+#             ax.plot(self.data["crel"], self.data["Spol"], label = "Crel")
+#             ax.plot(data_stable["crel"], data_stable["Spol"])
+#             ax.hlines(self.unstable_Lpol_backward, self.data["crel"].min(), self.data["crel"].max(), ls = "--", color = "red", label = "forward stability breakpoint")
+#             ax.hlines(self.unstable_Lpol_forward, self.data["crel"].min(), self.data["crel"].max(), ls = "--", color = "orange", label = "backward stability breakpoint")
+#             ax.legend()
         
-    def get_stability_breakpoint(self):
-        """
-        Find the exact point in Crel where the stable region starts
-        through interpolation.
-        Forward and backward refer to the direction of front movement.
-        Unstable regions see hysteresis where the stable region going towards the
-        target is greater.
-        """
+#     def get_stability_breakpoint(self):
+#         """
+#         Find the exact point in Crel where the stable region starts
+#         through interpolation.
+#         Forward and backward refer to the direction of front movement.
+#         Unstable regions see hysteresis where the stable region going towards the
+#         target is greater.
+#         """
         
-        crel = self.data["crel"]
-        Spar = self.data["Spar"]
-        Spol = self.data["Spol"]
+#         crel = self.data["crel"]
+#         Spar = self.data["Spar"]
+#         Spol = self.data["Spol"]
 
-        # Find values on either side of C = 1 and interpolate onto 1
-        if len(crel) > 1:
+#         # Find values on either side of C = 1 and interpolate onto 1
+#         if len(crel) > 1:
             
-            for i in range(len(crel) - 1):
-                if np.sign(crel[i] - 1) != np.sign(crel[i + 1] - 1) and i > 0:
-                    interp_par = sp.interpolate.interp1d(
-                        [crel[i], crel[i + 1]], [Spar[i], Spar[i + 1]]
-                    )
-                    interp_pol = sp.interpolate.interp1d(
-                        [crel[i], crel[i + 1]], [Spol[i], Spol[i + 1]]
-                    )
+#             for i in range(len(crel) - 1):
+#                 if np.sign(crel[i] - 1) != np.sign(crel[i + 1] - 1) and i > 0:
+#                     interp_par = sp.interpolate.interp1d(
+#                         [crel[i], crel[i + 1]], [Spar[i], Spar[i + 1]]
+#                     )
+#                     interp_pol = sp.interpolate.interp1d(
+#                         [crel[i], crel[i + 1]], [Spol[i], Spol[i + 1]]
+#                     )
 
-                    spar_onset = float(interp_par(1))
-                    spol_onset = float(interp_pol(1))
-                    break
-                if i == len(crel) - 2:
-                    spar_onset = 0
-                    spol_onset = 0
+#                     spar_onset = float(interp_par(1))
+#                     spol_onset = float(interp_pol(1))
+#                     break
+#                 if i == len(crel) - 2:
+#                     spar_onset = 0
+#                     spol_onset = 0
                     
-        if crel.iloc[-1] < 1:
-            # print(Spar)
-            spar_onset_forward = Spar.iloc[-1]
-            spol_onset_forward = Spol.iloc[-1]
+#         if crel.iloc[-1] < 1:
+#             # print(Spar)
+#             spar_onset_forward = Spar.iloc[-1]
+#             spol_onset_forward = Spol.iloc[-1]
                     
-        self.unstable_Lpar_backward = spar_onset
-        self.unstable_Lpol_backward = spol_onset
-        self.unstable_Lpar_forward = spar_onset_forward
-        self.unstable_Lpol_forward = spol_onset_forward
+#         self.unstable_Lpar_backward = spar_onset
+#         self.unstable_Lpol_backward = spol_onset
+#         self.unstable_Lpar_forward = spar_onset_forward
+#         self.unstable_Lpol_forward = spol_onset_forward
                     
-    def plot_front_movement(self, ax=None, label="", parallel=False, relative=True):
-        if ax is None:
-            fig, ax = plt.subplots()
-        data = self.data
+#     def plot_front_movement(self, ax=None, label="", parallel=False, relative=True):
+#         if ax is None:
+#             fig, ax = plt.subplots()
+#         data = self.data
 
-        if parallel:
-            y = data["Spar"]
-            ylabel = r"$S_{\parallel} [m]$"
-        else:
-            y = data["Spol"]
-            ylabel = "$S_{pol} [m]$"
+#         if parallel:
+#             y = data["Spar"]
+#             ylabel = r"$S_{\parallel} [m]$"
+#         else:
+#             y = data["Spol"]
+#             ylabel = "$S_{pol} [m]$"
 
-        if relative:
-            x = data["cvar"] / data["cvar"].iloc[0]
-            xlabel = "$C_{rel}$"
-        else:
-            x = data["cvar"]
-            xlabel = "C"
+#         if relative:
+#             x = data["cvar"] / data["cvar"].iloc[0]
+#             xlabel = "$C_{rel}$"
+#         else:
+#             x = data["cvar"]
+#             xlabel = "C"
 
-        ax.plot(x, y, marker="o", lw=1, ms=3, label=label)
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(ylabel)
-        ax.set_title("Front movement")
+#         ax.plot(x, y, marker="o", lw=1, ms=3, label=label)
+#         ax.set_xlabel(xlabel)
+#         ax.set_ylabel(ylabel)
+#         ax.set_title("Front movement")
 
 class CoolingCurve:
     def __init__(self, T, Lz, neTau, species, order=8, Tmin=0.5, Tmax=400):
@@ -1975,11 +1900,11 @@ class plot_comparison():
             "Ne" : r"$m^{-3}$",
             "Ne_sq_cz" : r"$m^{-6}$",
             "qpar" : r"$MWm^{-2}$",
-            "Prad_cum_norm" : r"fraction",
+            "Qrad_cum_norm" : r"fraction",
             "qpar_cond_frac" : r"fraction",
         }
         self.titles = {
-            "Prad_cum_norm" : "Cum. rad. integral (normalised)",
+            "Qrad_cum_norm" : "Cum. rad. integral (normalised)",
             "Te" : "Electron temp.",
             "Ne" : "Electron dens. (normalised)",
             "Ne_sq_cz" : f"$N_e^2 f_Ar$ (normalised)",
@@ -2015,6 +1940,9 @@ class plot_comparison():
                 comp = self.comps[study][case]
                 dls = comp.dls.copy()
                 solps = comp.solps.copy()  
+                
+                if param == "qpar_cond_frac":
+                    dls["qpar_cond_frac"] = 1
                 
                 if normalise:
                     dls_data = dls[param] / dls.iloc[-1][param]
@@ -2075,8 +2003,9 @@ class scaling_comparison():
         
         
         # Compare last and first case only!!
-        df1 = DLScase(out1).get_stats_dataframe()
-        df2 = DLScase(out2).get_stats_dataframe()
+
+        df1 = pd.DataFrame([FrontLocation(out1).stats])
+        df2 = pd.DataFrame([FrontLocation(out2).stats])
         param_ratio = (df2[param] / df1[param]).squeeze()
         terms = pd.concat([df1, df2], axis = 0)
         terms.index = ["base", "test"]
