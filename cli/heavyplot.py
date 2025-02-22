@@ -16,6 +16,9 @@ from hermes3.plotting import lineplot
 from hermes3.case_db import CaseDB
 from hermes3.accessors import *
 
+import warnings
+warnings.filterwarnings("ignore")
+
 def heavyplot(casename, save = True):
     """
     Computationally heavy plots
@@ -24,6 +27,7 @@ def heavyplot(casename, save = True):
     -----
 
     """
+    tstart = tm.time()
     db = CaseDB(case_dir = r"/users/mjk557/scratch/cases", grid_dir = r"/users/mjk557/scratch/cases")
     
     casename = casename.split(r"/")[-1]
@@ -32,9 +36,12 @@ def heavyplot(casename, save = True):
         
     # ds = ds2
     tlen = ds.dims["t"]
-    tres = 10
+    if tlen > 10:
+        tres = 10
+    else:
+        tres = tlen
     ts = np.linspace(0, tlen-1, tres, dtype = int)
-    colors = [plt.cm.get_cmap("plasma", tres)(x) for x in range(tres)]
+    colors = [plt.cm.get_cmap("Spectral_r", tres)(x) for x in range(tres)]
 
     toplot = {}
     for t in ts:
@@ -48,12 +55,14 @@ def heavyplot(casename, save = True):
     lineplot(
         toplot,
         clean_guards = False,
-        params = ["Te", "Td", "Ne", "Nd", "Pd+", "Pd", "Sd+_iz"],
+        params = ["Te", "Td+",  "Ne", "Nd", "NVd", "Rd+_ex", "Rc"],
         regions = ["omp", "outer_lower", "field_line"],
         colors = colors,
         save_name = save_name
     )
 
+    tend = tm.time()
+    print(f"Executed in {tend-tstart:.1f} seconds")
         
 #------------------------------------------------------------
 # PARSER
