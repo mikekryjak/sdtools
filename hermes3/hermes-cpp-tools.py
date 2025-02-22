@@ -28,12 +28,22 @@ output<<std::string("\n\n****************************************************\n"
 output << std::string("Collisions: ") << species1.name() << species2.name();
 output<<std::string("\n****************************************************\n\n");
 
-output<<std::string("\n------------------------\n");
-output << std::string("Definitely doing this");
-output<<std::string("\n------------------------\n");
+output<<"\n------------------------\n";
+output << "Definitely doing this";
+output<<"\n------------------------\n";
+
+
   output << std::string("\n******************************************\n");
   output << s1->first << s2->first << std::string(": ") << collision_rates[s1->first][s2->first];
   output << std::string("\n******************************************");
+  
+  
+output<<"\n------------------------\n";
+output << "sheath_boundary_simple";
+output << "upper_y, after limitFree";
+output<<"\n------------------------\n";
+output << Ne[ip];
+output<<"\n------------------------\n";
 
 
 for(int ix=0; ix < mesh->LocalNx ; ix++){
@@ -65,6 +75,36 @@ for(int ix=0; ix < mesh->LocalNx ; ix++){
 if (gx == 3) {
               output << std::setw(10) << nu_12(ix,iy,iz) << "\t" << nu(ix, iy, iz) << "\n";
             }
+
+
+
+        output << "\n*****************************\n";
+        output << "phisheath = " << phisheath << "\n";
+        output << "phi_wall = " << phi_wall << "\n";
+        output << "Me = " << Me << "\n";
+        output << "gamma_e = " << gamma_e << "\n";
+        output << "tesheath = " << tesheath << "\n";
+        output << "nesheath = " << nesheath << "\n";
+        output << "vesheath = " << vesheath << "\n";
+        output << "q_e = " << q << "\n";
+        output << "da = " << da << "\n";
+        output << "dv = " << dv << "\n";
+        output << "q = " << q << "\n";
+        output << "q * da / dv = " << q * da / dv << "\n";
+        output << "*****************************\n";
+
+          output << "\n*****************************\n";
+          output << "gamma_i = " << gamma_i << "\n";
+          output << "tisheath = " << tisheath << "\n";
+          output << "nisheath = " << nisheath << "\n";
+          output << "visheath = " << visheath << "\n";
+          output << "q = " << q << "\n";
+          output << "da = " << da << "\n";
+          output << "dv = " << dv << "\n"; 
+          output << "hflux_i = " << hflux_i[i] << "\n";
+          output << "\n*****************************\n";
+
+
 
 ###################### Options objects
 ####### Iterate through children of options:

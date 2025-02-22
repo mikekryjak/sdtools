@@ -27,10 +27,12 @@ except:
     print("Viewer_2D: Gridtools not found")
     
 # SOLEDGE functions
-from files.load_plasma_files						import load_plasma_files
-from files.load_soledge_mesh_file				import load_soledge_mesh_file
-from routines.h5_routines							import h5_read
-
+try:
+    from files.load_plasma_files						import load_plasma_files
+    from files.load_soledge_mesh_file				import load_soledge_mesh_file
+    from routines.h5_routines							import h5_read
+except:
+    print("Viewer_2D: SOLEDGE functions not found")
 
 
 class viewer_2d():
@@ -62,7 +64,8 @@ class viewer_2d():
                 plots.append(HermesPlot(case["ds"], param = param))
             
             elif case["code"] == "solps":
-                plots.append(SOLPSplotOLD(case["path"], param = param))
+                # plots.append(SOLPSplotOLD(case["path"], param = param))
+                plots.append(SOLPSplot(case["path"], param = param))
                 
             elif case["code"] == "soledge":
                 plots.append(SOLEDGEplot(case["path"], param = param))
@@ -121,7 +124,7 @@ class viewer_2d():
             
             case = cases[i]
             plot.plot(ax = axes[i], norm = norm, cmap = cmap, separatrix = True)
-            axes[i].set_title(f"{case['code']}: {case['name']}")
+            axes[i].set_title(f"{case['name']}")
             
             # SET LIMITS------------------------------------
             if xlim != (None, None):
@@ -149,6 +152,7 @@ class viewer_2d():
                 axes[-1].get_position().height])
         
             cbar = plt.colorbar(mappable = sm, cax=cax, label = param) # Similar to fig.colorbar(im, cax = cax)
+            cax.grid(which = "both", visible = False)
             
         for ax in axes:
             ax.grid(False)
@@ -362,14 +366,30 @@ class SOLEDGEplot():
             rhs[coord] = np.concatenate([rhs[coord], sep["LOT"].__dict__[coord]])
             
         return lhs, rhs
+    
+    
 class SOLPSplot():
     def __init__(self, path, data = None, param = None):
         
         slc = self.slc = SOLPScase(path)
+        crx = slc.bal["crx"]
+        cry = slc.bal["cry"]
+        self.Rlim = [crx[0,:,:].max(), crx[0,:,:].min()]
+        self.Zlim = [cry[0,:,:].max(), cry[0,:,:].min()]
+    
+        
+        if data != None:
+            self.vmin = data.min()
+            self.vmax = data.max()
+        if param != None:
+            self.vmin = slc.bal[param].min()
+            self.vmax = slc.bal[param].max()
+            
+        self.param = param
+        self.data = data
         
     def plot(self, 
              ax = None,
-             fig = None,
              norm = None, 
              cmap = "Spectral_r",
              antialias = False,
@@ -382,8 +402,9 @@ class SOLPSplot():
              separatrix = True):
         
         self.slc.plot_2d(
+            self.param,
+            data = None,
             ax = ax,
-            fig = fig,
             norm = norm,
             cmap = cmap,
             antialias = antialias,
@@ -519,7 +540,7 @@ class SOLPSplotOLD():
         b2fgmtry = self.g
         colour = "white"
 
-        iy = int(b2fgmtry['ny'] / 2)
+        iy = int(b2fgmtry['ny'] / 2) + 1
 
         if len(b2fgmtry['rightcut']) == 2:
             ix_mid = int((b2fgmtry['rightcut'][1] + b2fgmtry['leftcut'][1]) / 2 - 1)
@@ -627,7 +648,7 @@ class viewer_2d_next():
             
             if model["code"] == "hermes":
                 model["ds"][param].bout.polygon(ax = axes[i], add_colorbar = False, logscale = logscale, separatrix = True, cmap = cmap, vmin = vmin, vmax = vmax, antialias = False)
-                axes[i].set_title(f"Hermes-3\{casename}")
+                axes[i].set_title(fr"Hermes-3\{casename}")
                 
             elif model["code"] == "solps":
                 try:
@@ -639,10 +660,10 @@ class viewer_2d_next():
                     
                 if solps_name != None:
                     plot_2d(fig, axes[i], where = model["path"], what = name_parser(param,"solps"), cmap = "Spectral_r", scale = ("log" if logscale is True else "linear"), vmin = vmin, vmax = vmax, plot_cbar = False)
-                    axes[i].set_title(f"SOLPS\{casename}")
+                    axes[i].set_title(fr"SOLPS\{casename}")
                 
                 else:
-                    axes[i].set_title(f"SOLPS\{casename}: {param} not found")
+                    axes[i].set_title(rf"SOLPS\{casename}: {param} not found")
                 
             if xlim != (None, None):
                 axes[i].set_xlim(xlim)

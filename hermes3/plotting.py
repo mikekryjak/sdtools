@@ -402,6 +402,7 @@ def plot_ddt(case,
              smoothing = 1, 
              dpi = 120, 
              volume_weighted = True, 
+             normalised = True,
              ylims = (None,None), 
              xlims = (None,None)):
     """
@@ -416,10 +417,8 @@ def plot_ddt(case,
     else:
         # No guard cells at all
         ds = case.ds.isel(pos=slice(2,-2))
-    
 
-        
-    
+    m = ds.metadata
     
     # Find parameters (species dependent)
     list_params = []
@@ -449,6 +448,10 @@ def plot_ddt(case,
         else:
             res[param] = np.sqrt(np.mean(res[param]**2, axis = 1))    # Root mean square
         res[param] = np.convolve(res[param], np.ones(smoothing), "same")    # Moving average with window = smoothing
+        
+        if normalised:
+            res[param] /= ds[param].attrs["conversion"]
+            # res[param] = res[param] / res[param][0]
 
     fig, ax = plt.subplots(figsize = (5,4), dpi = dpi)
     fig.subplots_adjust(right=0.8)
@@ -533,8 +536,7 @@ def plot_monitors(self, to_plot, what = ["mean", "max", "min"], ignore = []):
     ax.set_title(f"{to_plot}: {self.name}")
     
     
-def diagnose_cvode(self, lims = (0,0), scale = "log"):
-    ds = self.ds
+def diagnose_cvode(ds, lims = (0,0), scale = "log"):
 
     fig, axes = plt.subplots(2,2, figsize = (8,6))
 
@@ -601,7 +603,7 @@ def plot_selection(ds, selection, dpi = 100, rz_only = False, show_selection = T
 
     
 
-def plot_performance(cs):
+def plot_performance(cs, logscale = True):
     """
     Do a plot showing simulation speed in ms sim time / 24hrs compute time
     Takes a dictionary of datasets
@@ -614,15 +616,15 @@ def plot_performance(cs):
         m = ds.metadata
         # data = ds.hermesm.select_region("outer_midplane_a")["Ne"].isel(x=10)
         wtime = ds["wtime"]
-        t = ds["t"].values
-        stime = np.diff(t, prepend = t[0])
+        t = ds["t"].values * 1000   # ms
+        stime = np.diff(t, prepend = t[0])  
         ms_per_24hrs = (stime) / (wtime/(60*60*24))  # ms simulated per 24 hours
         ax.plot(t - t[0], ms_per_24hrs, label = name)
         
     ax.legend()
     ax.set_title("ms simulation time per 24hrs compute time")
     ax.set_ylabel("ms / 24hr")
-    ax.set_xlabel("Sim time [s]")
+    ax.set_xlabel("Sim time [ms]")
     ax.set_yscale("log")
 
     
@@ -729,19 +731,23 @@ def lineplot(
     ylims = (None,None),
     xlims = (None,None),
     markersize = 2,
+    lw = 2,
     dpi = 120,
     clean_guards = True,
     logscale = True,
+    log_threshold = 10,  # Ratio of max to min required for logscale
     save_name = "",
+    guard_replace = False,
+    auto_y_pad = 0.1,   # Padding on Y lims when automatically calculated (difference)
+    auto_y_pad_log = 0.5,  # Same as above but logscale (factor)
     ):
-    
     """
-    Provide a dictionary where key is name and value is a single time slice of a dataset
+    Versatile lineplot for 1D profiles in 2D models at OMP, IMP or target, as well as 1D models
     """
     
     marker = "o"
     ms = markersize
-    lw = 2.5
+    lw = lw
     set_ylims = dict()
     set_yscales = dict()
     
@@ -757,6 +763,9 @@ def lineplot(
         fig.subplots_adjust(hspace = 0, wspace = 0.3, bottom = 0.25, left = 0.1, right = 0.9)
         ls = "-"
         
+        if type(axes) != np.ndarray:
+            axes = [axes]
+        
         region_ds = dict()
         for name in cases.keys():
             ds = cases[name]
@@ -770,7 +779,7 @@ def lineplot(
                 region_ds[name] = ds.hermesm.select_region("outer_lower_target")
                 xlabel = "dist from sep [m]"
             elif region == "field_line":
-                region_ds[name] = ds.hermesm.select_custom_sol_ring(ds.metadata["ixseps1"], "outer_lower").squeeze()
+                region_ds[name] = ds.hermesm.select_custom_sol_ring("outer_lower", sepadd = ds.metadata["ixseps1"]-1).squeeze()
                 xlabel = "Distance from midplane [m]"
             elif region == "1d":
                 region_ds[name] = ds.squeeze()
@@ -784,16 +793,22 @@ def lineplot(
                 elif region == "field_line":
                     region_ds[name] = region_ds[name].isel(theta = slice(None,-2))
                 elif region == "1d":
+                    if guard_replace is True:
+                        raise Exception("Cannot guard replace and clean guards at the same time")
                     region_ds[name] = region_ds[name].isel(pos=slice(2,-2))
-                    print("Warning: not including target cell")
+                    print("Warning: 1D plot omitting target values")
                 else:
                     raise Exception(f"{region} guard cleaning not implemented")
                 
-            
         
             
         for i, param in enumerate(params):
+            
+            datamins = []
+            datamaxes = []
+            
             for j, name in enumerate(cases.keys()):
+                
                 
                 
                 if region == "1d":
@@ -805,42 +820,77 @@ def lineplot(
                     sep_R = region_ds[name].coords["R"][region_ds[name].metadata["ixseps1"]- region_ds[name].metadata["MXG"]]
                     xplot = region_ds[name].coords["R"] - sep_R
                     
+                xplot = xplot.values.copy()  # Extract numpy array
+                    
                 if param in region_ds[name].data_vars:
-                    data = region_ds[name][param]
+                    data = region_ds[name][param].values.copy()   # Extract numpy array
                 else: 
                     data = np.zeros_like(region_ds[name]["Ne"])
-                    print(f"Warning: {param} not found!")
+                    print(f"Warning: {param} not found in {name}!")
+                    
                 
+                if guard_replace is True:
 
+                    if region == "1d":
+                        xplot = guard_replace_1d(xplot)
+                        data = guard_replace_1d(data)
+                    else:
+                        raise Exception("Guard replacement only implemented for 1D")
+    
+                # Recover colors from cycler if unset
                 if colors == None:
                     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
                     
                 axes[i].plot(xplot, data, label = name, c = colors[j], marker = marker, ms = ms, lw = lw, ls = ls)
                 
-             
-            if ylims != (None, None):
-                axes[i].set_ylim(ylims)
-            if xlims != (None, None):
-                axes[i].set_xlim(xlims)
                 
-            datarange = abs(axes[i].get_ylim()[1] / axes[i].get_ylim()[0])
-
+                # If custom xlims, calculate appropriate ylim ranges and store them
+                if xlims != (None, None):
+                    if xlims[-1] > xplot.max()*1.1:
+                        print("Waring: xlim maximum exceeds data maximum")
+                    axes[i].set_xlim(xlims)
+                    idxmin = np.argmin(abs(xplot - xlims[0]))
+                    idxmax = np.argmin(abs(xplot - xlims[1]))+1
+                    
+                    limited_data = data[idxmin:idxmax]
+                else:
+                    limited_data = data
+                    
+                datamaxes.append(limited_data.max())
+                datamins.append(limited_data.min())
+                
+        
+            datamin = np.min(datamins)
+            datamax = np.max(datamaxes)
+            datarange = abs(datamax - datamin)
             
-            if logscale is True and datarange > 10:
+                
+            # Make yscale log if data range is over threshold
+            # print(param, new_ylim[0], new_ylim[1])
+            
+            if logscale is True and datamax/datamin > log_threshold:
                 axes[i].set_yscale("symlog")
-                # axes[i].yaxis.set_major_locator(mpl.ticker.LogLocator(numticks=10))
+                axes[i].yaxis.set_major_locator(mpl.ticker.LogLocator(numticks=10))
+                ymax = datamax / auto_y_pad_log
+                ymin = datamin * auto_y_pad_log
             else:
+                ymax = datamax + datarange * auto_y_pad
+                ymin = datamin - datarange * auto_y_pad
                 axes[i].set_yscale("linear")
                 
-            axes[i].autoscale()
-            
-            axes[i].grid(which="both", alpha = 0.2)
+            axes[i].grid(which="both", alpha = 1)
+            axes[i].grid(which="minor", visible = True)
             axes[i].set_xlabel(xlabel, fontsize=9)
+            axes[i].set_title(f"{param}", fontsize = "x-large")
+            fig.suptitle(f"{region} profiles")
             
-            axes[i].set_title(f"{region}: {param}")
-                
+            # print(f"{param}, datamin = {datamin:.3f}, datamax = {datamax:.3f}, datarange = {datarange:.3f}")            
+            # print(f"       ymin: {ymin:.3f}, ymax: {ymax:.3f}")
+            
+            # if ymin < 0 and logscale is True:
+            #     print(f"Warning: {param} lower ylim below 0")
+            axes[i].set_ylim(ymin, ymax)
 
-            
         legend_items = []
         for j, name in enumerate(cases.keys()):
             legend_items.append(mpl.lines.Line2D([0], [0], color=colors[j], lw=2, ls = ls))
@@ -1228,7 +1278,13 @@ def plot2d(
     title = "",
     tight_layout = True,
     cmap = "Spectral_r",
-    save_path = ""):
+    dpi = 150,
+    scale = 1,
+    grid = True,
+    margins = (None, None),
+    save_path = "",
+    w_pad = -2,
+    **kwargs):
 
     """
     User friendly plot of a number of dataarrays in a row
@@ -1237,17 +1293,26 @@ def plot2d(
     """
 
     numplots = len(toplot)
-    fig, axes = plt.subplots(1, numplots, dpi = 150, figsize = (11/3*numplots,4))
+    fig, axes = plt.subplots(1, numplots, dpi = dpi/scale, figsize = (11/3*numplots*scale,4*scale))
     if len(toplot) == 1: axes = [axes]
 
-    kwargs = {
+    default_kwargs = {
         "targets" : False, "cmap" : cmap, "antialias": True, 
         "separatrix_kwargs" : dict(linewidth = 1, color = "white", linestyle = "-")}
+    
+    kwargs = {**default_kwargs, **kwargs}
 
     for i, inputs in enumerate(toplot):
         defaults = {"vmin" : None, "vmax" : None, "logscale" : True}
         data = inputs.pop("data")
-        figtitle = inputs.pop("title") if "title" in inputs else data.name
+        
+        if "title" in inputs:
+            figtitle = inputs.pop("title")
+        elif "name" in data.attrs:
+            figtitle = data.name
+        else:
+            figtitle = ""
+            print("WARNING: Passed dataarray with no name or title")
         settings = {**defaults, **inputs, **kwargs}    
         if clean_guards == True: data = data.hermesm.clean_guards() 
 
@@ -1258,10 +1323,123 @@ def plot2d(
 
         if ylim != (None, None): ax.set_ylim(ylim)
         if xlim != (None, None): ax.set_xlim(xlim)
+        ax.grid(which="both", visible = grid)
+        if margins != (None, None): ax.margins(x=margins[0], y = margins[1])
 
     fig.suptitle(title)
-    if tight_layout is True: fig.tight_layout(w_pad = -2)
+    if tight_layout is True: fig.tight_layout(w_pad = w_pad)
 
     if save_path != "":
         plt.savefig(save_path)
     
+    
+def plot_cvode_performance(dict_ds, logscale = True):
+    """
+    Compare CVODE performance of multiple cases
+    """
+    
+    for name in dict_ds:
+        if "ms_per_24hrs" not in dict_ds[name]:
+            dict_ds[name].hermesm.get_cvode_metrics()
+        
+    for param in ["ms_per_24hrs", "nonlin_fails", "lin_per_nonlin", "precon_per_function", "cvode_last_step"]:
+        scale = "log"
+        fig, ax = plt.subplots(figsize=(5,4), dpi = 150)
+        
+        style = dict(lw = 1)
+
+        for name in dict_ds:
+            ds = dict_ds[name]
+            if param in ds:
+                ax.plot((ds["t"] - ds["t"][0])[1:], ds[param][1:], label = name, **style)
+            else:
+                print(f"{param} not found in {name}")
+        ax.legend(loc = "upper center", bbox_to_anchor=(0.5, -0.15), ncols = 2)
+        ax.set_title(param)
+        # ax.set_ylabel("ms plasma time / 24hr wall time")
+        ax.set_xlabel("Sim time [s]")    
+        if logscale is True:
+            ax.set_yscale("symlog")
+            
+        ax.set_xscale("log")
+
+def plot_cvode_performance_single(ds):
+    """
+    Print useful CVODE stats
+    """
+
+    nx = 4
+    ny = 2
+    fig, axes = plt.subplots(ny, nx, figsize = (3*nx, 3*ny))
+
+    def get_noncum_cvode(data):
+        data = np.diff(data.values, prepend = data.values[0])
+        for i, x in enumerate(data):
+            if x < 0:
+                data[i] = data[i+1]
+        return data
+
+    toplot = {}
+    t = ds["t"].values * 1e3
+
+    d = {}
+    laststep = ds["cvode_last_step"]
+    nfevals = get_noncum_cvode(ds["cvode_nfevals"])
+    npevals = get_noncum_cvode(ds["cvode_npevals"])
+    nliters = get_noncum_cvode(ds["cvode_nliters"])
+    nniters = get_noncum_cvode(ds["cvode_nniters"])
+    nnfails = get_noncum_cvode(ds["cvode_nonlin_fails"])
+    nfails = get_noncum_cvode(ds["cvode_num_fails"])
+    slims = get_noncum_cvode(ds["cvode_stab_lims"])
+    lorder = ds["cvode_last_order"]
+
+    if "wtime" in ds:
+        wtime = ds["wtime"]
+        stime = np.diff(t, prepend = t[0]*0.99)
+        ms_per_24hrs = (stime) / (wtime/(60*60*24))  # ms simulated per 24 hours
+    else:
+        print("WARNING: wtime not found in dataset, ensure you use the right xBOUT version")
+        ms_per_24hrs = 0
+
+    ax = axes[0,0 ]
+    ax.plot(t, laststep)
+    ax.set_yscale("log")
+    ax.set_title("Last timestep")
+
+    ax = axes[0,1]
+    ax.plot(t[1:], lorder[1:])
+    ax.set_title("Last order")
+
+    ax = axes[0,2]
+    ax.plot(t, nfevals)
+    ax.set_title("Function evals")
+
+    ax = axes[0,3]
+    ax.plot(t, npevals/nfevals)
+    ax.set_title("Precon / function evals")
+
+    ax = axes[1,0]
+    ax.plot(t[1:], ms_per_24hrs[1:])
+    ax.set_title("ms stime / 24hrs wtime")
+
+    ax = axes[1,1]
+    ax.plot(t, nniters, label = "Nonlinear")
+    ax.plot(t, nliters, label = "Linear")
+    ax.set_title("Iterations")
+    ax.legend()
+
+    ax = axes[1,2]
+    ax.plot(t, nliters/nniters)
+    ax.set_title("Linear/nonlinear ratio")
+
+    ax = axes[1,3]
+    ax.plot(t, nnfails, label = "Nonlinear")
+    ax.plot(t, nfails, label = "Local error")
+    ax.set_title("Fails")
+    ax.legend()
+
+    for ax in axes.flatten():
+        ax.set_xlabel("t")
+
+
+    fig.tight_layout()

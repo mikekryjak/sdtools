@@ -1,9 +1,11 @@
-import pickle as pkl
+# import pickle as pkl
+import dill
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import os, sys
 import pandas as pd
+import xarray
 
 
 class HiddenPrints:
@@ -54,7 +56,7 @@ def read_file(filename, quiet = False):
 
     with open(filename, "rb") as f:
     # Open file in read binary mode, dump file to result.
-        data = pkl.load(f)
+        data = dill.load(f)
         if not quiet:
             print("{} loaded".format(filename))
         
@@ -65,7 +67,7 @@ def write_file(data, filename, quiet = False):
     
     with open(filename, "wb") as file:
     # Open file in write binary mode, dump result to file
-        pkl.dump(data, file)
+        dill.dump(data, file)
         if not quiet:
             print("{} written".format(filename))
 
@@ -105,7 +107,7 @@ def make_cmap(cmap, N):
     """
     return plt.cm.get_cmap(cmap)(np.linspace(0, 1, N))
 
-def display_dataframe(df, format = "{:.2e}"):
+def display_dataframe(df, format = "{:.2e}", greyout = True):
 
     def styler(s):
             if abs(s) < 0.01 or pd.isna(s):
@@ -115,9 +117,48 @@ def display_dataframe(df, format = "{:.2e}"):
 
             return c
             
-    ts = df.style.format("{:.2e}")
-    ts = ts.applymap(styler)
+    ts = df.style.format(format)
+    
+    if greyout is True:
+        ts = ts.applymap(styler)
     display(ts)
+    
+def guard_replace_1d(da):
+    """
+    Replace the inner guard cells with the values of their respective
+    cell edges, i.e. the values at the model inlet and at the target.
+    This is done by interpolating the value between the two neighbouring
+    cell centres.
+
+    Cell order at target:
+    ... | last | guard | second guard (unused)
+                ^target      
+        |  -3  |  -2   |      -1
+        
+    Parameters
+    ----------
+    - da: Numpy array or Xarray DataArray with guard cells
+        
+    Returns
+    ----------
+    - Numpy array with guard replacement
+
+    """
+
+    da = da.copy()
+    
+    if type(da) == xarray.core.dataarray.DataArray:
+        da[{"pos" : -2}] = (da[{"pos" : -2}] + da[{"pos" : -3}])/2
+        da[{"pos" : 1}] = (da[{"pos" : 1}] + da[{"pos" : 2}])/2
+        
+        da = da.isel(pos = slice(1, -1))
+        
+    else:
+        da[-2] = (da[-2] + da[-3])/2
+        da[1] = (da[1] + da[2])/2
+        da = da[1:-1]
+
+    return da
     
 
 

@@ -34,7 +34,8 @@ class Load:
                 use_xhermes = True, 
                 use_squash = False,
                 force_squash = False,
-                verbose = True):
+                verbose = True,
+                unnormalise = True):
         
         loadfilepath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
@@ -50,7 +51,8 @@ class Load:
                 inputfilepath = inputfilepath, 
                 info = False,
                 keep_yboundaries=True,
-                cache = False
+                cache = False,
+                unnormalise = unnormalise
                 )
         else:
 
@@ -64,7 +66,13 @@ class Load:
 
         if squeeze is True: ds = ds.squeeze(drop = True)
 
-        return Case(ds, casepath, unnormalise_geom = True, guard_replace = guard_replace, use_xhermes = use_xhermes)
+        if use_xhermes:
+            unnormalise_in_sdtools = False
+        else:
+            unnormalise_in_sdtools = unnormalise
+            
+        return Case(ds, casepath, unnormalise_geom = True, unnormalise = unnormalise_in_sdtools,
+                    guard_replace = guard_replace, use_xhermes = use_xhermes)
 
     def case_2D(
                 casepath,
@@ -75,7 +83,18 @@ class Load:
                 unnormalise = True,
                 use_squash = False,
                 force_squash = False,
-                use_xhermes = True):
+                use_xhermes = True,
+                
+                **xbout_kwargs):
+        
+        default_xbout_kwargs = dict(
+            keep_xboundaries = True,
+            keep_yboundaries = True,
+            info = False,
+            cache = False)
+        
+        xbout_kwargs = {**default_xbout_kwargs, **xbout_kwargs}
+
 
         if verbose:
             print(f"- Reading case {os.path.split(casepath)[-1]}")
@@ -94,26 +113,22 @@ class Load:
                         datapath = loadfilepath, 
                         inputfilepath = inputfilepath, 
                         gridfilepath = gridfilepath,
-                        info = False,
-                        cache = True,
                         geometry = "toroidal",
-                        keep_xboundaries=True,
-                        keep_yboundaries=True,
+                        **xbout_kwargs
                         )
         else:
             ds = xbout.load.open_boutdataset(
                             datapath = loadfilepath, 
                             inputfilepath = inputfilepath, 
                             gridfilepath = gridfilepath,
-                            info = False,
-                            cache = True,
                             geometry = "toroidal",
-                            keep_xboundaries=True,
-                            keep_yboundaries=True,
+                            **xbout_kwargs
                             )
         
         if squeeze:
             ds = ds.squeeze(drop = False)
+            
+        ds["M"] = ds["Vd+"] / np.sqrt(constants("q_e")*(ds["Td+"] + ds["Te"])/(constants("mass_p")*2))  # NOTE: will break for multiple ions
             
         print("")
             
@@ -147,20 +162,21 @@ class Case:
 
         if unnormalise is True and use_xhermes is False:
             self.unnormalise(unnormalise_geom)
-        elif use_xhermes is False:
+        elif use_xhermes is False or unnormalise is False:
             print("Skipping unnormalisation")
-        elif use_xhermes is True:
+        elif use_xhermes is True and unnormalise is True:
             print("Unnormalising with xHermes")
             
-        self.derive_vars()
+        # xhermes now does the derivations
+        if use_xhermes is False:
+            self.derive_vars()
         
         if self.is_2d is True:
-            self.extract_2d_tokamak_geometry()
-            vol = self.ds.dv.values.sum()
-            # print(f"CHECK: Total domain volume is {vol:.3E} [m3]")
+            self.ds = self.ds.hermes.extract_2d_tokamak_geometry()
         else:
             self.ds = self.ds.hermes.extract_1d_tokamak_geometry()
             if guard_replace:
+                print("Replacing guard cells")
                 self.ds = self.ds.hermes.guard_replace_1d()
             # self.clean_guards()
             
@@ -189,69 +205,74 @@ class Case:
                     self.ds[data_var] = self.ds[data_var] * self.norms[data_var]["conversion"]
                     self.normalised_vars.append(data_var)
                 self.ds[data_var].attrs.update(self.norms[data_var])
-
-    def derive_vars(self):
-        ds = self.ds
-        m = ds.metadata
-        q_e = constants("q_e")
+    
+    
+    ## DEPRECATED, NOW IN XHERMES
+    # def derive_vars(self):
+    #     ds = self.ds
+    #     m = ds.metadata
+    #     q_e = constants("q_e")
         
-        m["Pnorm"] = m["Nnorm"] * m["Tnorm"] * q_e
+    #     m["Pnorm"] = m["Nnorm"] * m["Tnorm"] * q_e
         
-        # From Hypnotoad trim_yboundaries() in compare_grid_files
-        if ds.metadata["jyseps2_1"] != ds.metadata["jyseps1_2"]:
-            ds.metadata["null_config"] = "cdn"
-        else:
-            ds.metadata["null_config"] = "sn"
+    #     # From Hypnotoad trim_yboundaries() in compare_grid_files
+    #     if ds.metadata["jyseps2_1"] != ds.metadata["jyseps1_2"]:
+    #         ds.metadata["null_config"] = "cdn"
+    #     else:
+    #         ds.metadata["null_config"] = "sn"
             
-        ds.metadata["species"] = [x.split("P")[1] for x in self.ds.data_vars if x.startswith("P") and len(x) < 4]
-        ds.metadata["charged_species"] = [x for x in ds.metadata["species"] if "e" in x or "+" in x]
-        ds.metadata["ion_species"] = [x for x in ds.metadata["species"] if "+" in x]
-        ds.metadata["neutral_species"] = list(set(ds.metadata["species"]).difference(set(ds.metadata["charged_species"])))
+    #     ds.metadata["species"] = [x.split("P")[1] for x in self.ds.data_vars if x.startswith("P") and len(x) < 4]
+    #     ds.metadata["charged_species"] = [x for x in ds.metadata["species"] if "e" in x or "+" in x]
+    #     ds.metadata["ion_species"] = [x for x in ds.metadata["species"] if "+" in x]
+    #     ds.metadata["neutral_species"] = list(set(ds.metadata["species"]).difference(set(ds.metadata["charged_species"])))
         
-        ds.metadata["recycle_pair"] = dict()
-        for ion in ds.metadata["ion_species"]:
-            if "recycle_as" in ds.options[ion].keys():
-                ds.metadata["recycle_pair"][ion] = ds.options[ion]["recycle_as"]
-            else:
-                print(f"No recycling partner found for {ion}")
+    #     ds.metadata["recycle_pair"] = dict()
+    #     for ion in ds.metadata["ion_species"]:
+    #         if "recycle_as" in ds.options[ion].keys():
+    #             ds.metadata["recycle_pair"][ion] = ds.options[ion]["recycle_as"]
+    #         else:
+    #             print(f"No recycling partner found for {ion}")
         
         
 
-        if "Ph+" in ds.data_vars:
-            ds["Th+"] = ds["Ph+"] / (ds["Nh+"] * q_e)
-            ds["Th+"].attrs.update(
-                {
-                "units": "eV",
-                "standard_name": "ion temperature (h+)",
-                "long_name": "Ion temperature (h+)",
-                })
+    #     if "Ph+" in ds.data_vars:
+    #         ds["Th+"] = ds["Ph+"] / (ds["Nh+"] * q_e)
+    #         ds["Th+"].attrs.update(
+    #             {
+    #             "units": "eV",
+    #             "standard_name": "ion temperature (h+)",
+    #             "long_name": "Ion temperature (h+)",
+    #             })
 
-        if "Ph" in ds.data_vars:
-            ds["Th"] = ds["Ph"] / (ds["Nh"] * q_e)
-            ds["Th"].attrs.update(
-                {
-                "units": "eV",
-                "standard_name": "neutra; temperature (h)",
-                "long_name": "Neutral temperature (h)",
-                })
+    #     if "Ph" in ds.data_vars:
+    #         ds["Th"] = ds["Ph"] / (ds["Nh"] * q_e)
+    #         ds["Th"].attrs.update(
+    #             {
+    #             "units": "eV",
+    #             "standard_name": "neutra; temperature (h)",
+    #             "long_name": "Neutral temperature (h)",
+    #             })
 
-        # if "Pd" in ds.data_vars:
-        #     ds["Td"] = ds["Pd"] / (ds["Nd"] * q_e)
-        #     ds["Td"].attrs.update(
-        #         {
-        #         "units": "eV",
-        #         "standard_name": "neutral temperature (d)",
-        #         "long_name": "Neutral temperature (d)",
-        #         })
+    #     # if "Pd" in ds.data_vars:
+    #     #     ds["Td"] = ds["Pd"] / (ds["Nd"] * q_e)
+    #     #     ds["Td"].attrs.update(
+    #     #         {
+    #     #         "units": "eV",
+    #     #         "standard_name": "neutral temperature (d)",
+    #     #         "long_name": "Neutral temperature (d)",
+    #     #         })
 
-        if "Pd+" in ds.data_vars:
-            ds["Td+"] = ds["Pd+"] / (ds["Nd+"] * q_e)
-            ds["Td+"].attrs.update(
-               {
-                "units": "eV",
-                "standard_name": "ion temperature (d+)",
-                "long_name": "Ion temperature (d+)",
-                })
+    #     if "Pd+" in ds.data_vars and ds["Td+"] not in ds.data_vars:
+    #         ds["Td+"] = ds["Pd+"] / (ds["Nd+"] * q_e)
+    #         ds["Td+"].attrs.update(
+    #            {
+    #             "units": "eV",
+    #             "standard_name": "ion temperature (d+)",
+    #             "long_name": "Ion temperature (d+)",
+    #             })
+            
+        # Mach number
+        
 
     def clean_guards(self):
         
@@ -1129,6 +1150,7 @@ class Case:
         
     
     def extract_1d_tokamak_geometry(self):
+        print("Extracting 1D geometry with sdtools")
         ds = self.ds
         meta = self.ds.metadata
 
@@ -1220,16 +1242,22 @@ class Case:
         m["j2_1"] = m["jyseps2_1"]
         m["j2_2"] = m["jyseps2_2"]
         
+        # Jyseps accounting for guard cells
         m["j1_1g"] = m["j1_1"] + m["MYG"]
         m["j1_2g"] = m["j1_2"] + m["MYG"] * (num_targets - 1)
         m["j2_1g"] = m["j2_1"] + m["MYG"]
         m["j2_2g"] = m["j2_2"] + m["MYG"] * (num_targets - 1)
         
+        # Separatrix index accounting for guard cells
+        m["ixseps1g"] = m["ixseps1"] - m["MXG"]
+        m["ixseps2g"] = m["ixseps2"] - m["MXG"]
         
+        # Poloidal midplane indices
+        m["omp_a"] = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"]
+        m["omp_b"] = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"] + 1
+        m["imp_a"] = int((m["j2_1g"] - m["j1_1g"]) / 2) + m["j1_1g"] + 1
+        m["imp_b"] = int((m["j2_1g"] - m["j1_1g"]) / 2) + m["j1_1g"]
         
-        
-        # print(m["nxg"])
-        # print(m["nx"])
             
         # Array of radial (x) indices and of poloidal (y) indices for each cell
         ds["x_idx"] = (["x", "theta"], np.array([np.array(range(m["nxg"]))] * int(m["nyg"])).transpose())
@@ -1283,7 +1311,7 @@ class Case:
             "long_name" : "Toroidal length",
             "source" : "xHermes"})
         
-        ds["dpol"] = (["x", "theta"], ds["dz"].data * 1/np.sqrt(ds["g_22"].data))   # Poloidal length
+        ds["dpol"] = (["x", "theta"], ds["dy"].data * ds["hthe"].data)   # Poloidal length
         ds["dpol"].attrs.update({
             "conversion" : 1,
             "units" : "m",
@@ -1291,100 +1319,6 @@ class Case:
             "long_name" : "Poloidal length",
             "source" : "xHermes"})
 
-
-    # def extract_2d_tokamak_geometry(self):
-    #     """
-    #     Perpare geometry variables
-    #     """
-    #     data = self.ds
-    #     meta = self.ds.metadata
-
-    #     # self.Rxy = meta["Rxy"]    # R coordinate array
-    #     # self.Zxy = meta["Zxy"]    # Z coordinate array
-        
-        
-    #     if meta["keep_xboundaries"] == 1:
-    #         self.MXG = meta["MXG"]
-    #     else:
-    #         self.MXG = 0
-            
-    #     if meta["keep_yboundaries"] == 1:
-    #         self.MYG = meta["MYG"]
-    #     else:
-    #         self.MYG = 0
-            
-    #     self.ixseps1 = meta["ixseps1"]
-    #     self.ny_inner = meta["ny_inner"]
-    #     self.ny = meta["ny"]
-    #     self.nyg = self.ny + self.MYG * 4 # with guard cells
-    #     self.nx = meta["nx"]
-        
-    #     # Array of radial (x) indices and of poloidal (y) indices in the style of Rxy, Zxy
-    #     self.x_idx = np.array([np.array(range(self.nx))] * int(self.nyg)).transpose()
-    #     self.y_idx = np.array([np.array(range(self.nyg))] * int(self.nx))
-        
-    #     self.yflat = self.y_idx.flatten()
-    #     self.xflat = self.x_idx.flatten()
-    #     self.rflat = self.ds.coords["R"].values.flatten()
-    #     self.zflat = self.ds.coords["Z"].values.flatten()
-
-    #     self.j1_1 = meta["jyseps1_1"]
-    #     self.j1_2 = meta["jyseps1_2"]
-    #     self.j2_1 = meta["jyseps2_1"]
-    #     self.j2_2 = meta["jyseps2_2"]
-    #     self.ixseps2 = meta["ixseps2"]
-    #     self.ixseps1 = meta["ixseps1"]
-    #     self.Rxy = self.ds.coords["R"]
-    #     self.Zxy = self.ds.coords["Z"]
-
-    #     self.j1_1g = self.j1_1 + self.MYG
-    #     self.j1_2g = self.j1_2 + self.MYG * 3
-    #     self.j2_1g = self.j2_1 + self.MYG
-    #     self.j2_2g = self.j2_2 + self.MYG * 3
-        
-    #     # Cell areas in flux space
-    #     # dV = dx * dy * dz * J where dz is assumed to be 2pi in 2D
-    #     self.dx = data["dx"]
-    #     self.dy = data["dy"]
-    #     self.dydx = data["dy"] * data["dx"]    # Poloidal surface area
-    #     self.J = data["J"]
-    #     dz = 2*np.pi    # Axisymmetric
-    #     self.dv = self.dydx * dz * data["J"]    # Cell volume
-        
-    #     # Cell areas in real space
-    #     # TODO: Check these against dx/dy to ensure volume is the same
-    #     # dV = (hthe/Bpol) * (R*Bpol*dr) * dy*2pi = hthe * dy * dr * 2pi * R
-    #     self.dr = self.dx / (self.ds.R * self.ds.Bpxy)    # Length of cell in radial direction
-    #     self.hthe = self.J * self.ds["Bpxy"]    # poloidal arc length per radian
-    #     self.dl = self.dy * self.hthe    # poloidal arc length
-        
-    #     self.ds["dr"] = self.ds.dx / (self.ds.R * self.ds.Bpxy)
-    #     self.ds["dr"].attrs.update({
-    #         "conversion" : 1,
-    #         "units" : "m",
-    #         "standard_name" : "radial length",
-    #         "long_name" : "Length of cell in the radial direction"})
-        
-    #     self.ds["hthe"] = self.ds.J * self.ds["Bpxy"]    # h_theta
-    #     self.ds["hthe"].attrs.update({
-    #         "conversion" : 1,
-    #         "units" : "m/radian",
-    #         "standard_name" : "h_theta: poloidal arc length per radian",
-    #         "long_name" : "h_theta: poloidal arc length per radian"})
-        
-    #     self.ds["dl"] = self.ds.dy * self.ds["hthe"]    # poloidal arc length
-    #     self.ds["dl"].attrs.update({
-    #         "conversion" : 1,
-    #         "units" : "m",
-    #         "standard_name" : "poloidal arc length",
-    #         "long_name" : "Poloidal arc length"})
-        
-    #     self.ds["dv"] = self.dydx * dz * data["J"]    # Cell volume
-    #     self.ds["dv"].attrs.update({
-    #         "conversion" : 1,
-    #         "units" : "m3",
-    #         "standard_name" : "cell volume",
-    #         "long_name" : "Cell volume"})
         
     def collect_boundaries(self):
         self.boundaries = dict()

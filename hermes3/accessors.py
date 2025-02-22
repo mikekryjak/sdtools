@@ -1,6 +1,8 @@
 from xarray import register_dataset_accessor, register_dataarray_accessor
 from xbout import BoutDatasetAccessor, BoutDataArrayAccessor
 from hermes3.plotting import *
+from hermes3.front_tracking import _get_front_position
+from hermes3.selectors import get_1d_radial_data
 import numpy as np
 
 
@@ -13,9 +15,9 @@ class HermesDataArrayAccessor(BoutDataArrayAccessor):
     def __init__(self, da):
         super().__init__(da)
 
-    def select_region(self, name):
+    def select_region(self, name, squeeze = True):
         selection = _select_region(self.data, name)
-        return self.data.isel(x=selection[0], theta=selection[1])
+        return self.data.isel(x=selection[0], theta=selection[1]).squeeze()
 
     def select_custom_core_ring(self, i):
         return _select_custom_core_ring(self.data, i)
@@ -36,7 +38,8 @@ class HermesDataArrayAccessor(BoutDataArrayAccessor):
                 ds[{"x": yguards[0], "theta": yguards[1]}] = np.nan
             
         return ds
-
+    def guard_replace_1d(self):
+        return _guard_replace_1d(self.data)
     def plot_omp(self):
         plot_omp([self.data], legend = False, title = False)
         
@@ -57,8 +60,11 @@ class HermesDatasetAccessor(BoutDatasetAccessor):
     def select_custom_core_ring(self, i):
         return _select_custom_core_ring(self.data, i)
     
-    def select_custom_sol_ring(self, i, region):
-        return _select_custom_sol_ring(self.data, i, region)
+    def select_custom_sol_ring(self, region, **kwargs):
+        return _select_custom_sol_ring(self.data, region, **kwargs)
+    
+    def get_cvode_metrics(self):
+        self.data = _get_cvode_metrics(self.data)
 
     def get_floors(self):
         """
@@ -86,6 +92,40 @@ class HermesDatasetAccessor(BoutDatasetAccessor):
         pn_floor_si = pn_floor * Pnorm
             
         return {"nn_floor" : nn_floor, "pn_floor" : pn_floor, "nn_floor_si" : nn_floor_si, "pn_floor_si" : pn_floor_si}    
+    
+    def get_front_position(self, **kwargs):
+        self.data = _get_front_position(self.data, **kwargs)
+    
+    
+def _guard_replace_1d(da):
+        """
+        Replace the inner guard cells with the values of their respective
+        cell edges, i.e. the values at the model inlet and at the target.
+        This is done by interpolating the value between the two neighbouring
+        cell centres.
+
+        Cell order at target:
+        ... | last | guard | second guard (unused)
+                   ^target      
+            |  -3  |  -2   |      -1
+          
+        Returns
+        ----------
+        - Guard replaced dataarray
+
+        """
+
+
+        # da[{"pos" : -2}] = (da[{"pos" : -2}] + da[{"pos" : -3}])/2
+        # da[{"pos" : 1}] = (da[{"pos" : 1}] + da[{"pos" : 2}])/2
+        
+        da[-2] = (da[-2] + da[-3])/2
+        da[1] = (da[1] + da[2])/2
+
+        return da
+
+
+
 
 def _select_region(ds, name):
     """
@@ -138,6 +178,7 @@ def _select_region(ds, name):
     j2_1g = j2_1 + MYG
     j2_2g = j2_2 + MYG * 3
     
+    
     if all([x in name for x in ["target", "guard"]]) and MYG == 0:
         raise Exception("Trying to select yguards on a dataset without any")
     
@@ -170,13 +211,27 @@ def _select_region(ds, name):
         slice(ixseps1, -MYG),
         np.r_[slice(MYG, ny_inner + MYG), slice(ny_inner + MYG * 3, nyg - MYG)],
     )
-    slices["sol_outer_noguards"] = (
+    slices["outer_sol"] = (
         slice(ixseps1, -MYG),
         np.r_[slice(ny_inner + MYG * 3, nyg - MYG)],
+        
     )
-    slices["sol_outer_lower_noguards"] = (
+    slices["outer_sol_guards"] = (
+        slice(ixseps1, -1),
+        np.r_[slice(ny_inner + MYG * 3, nyg - MYG)]
+    )
+    slices["outer_sol_lower_noguards"] = (
         slice(ixseps1, -MYG),
         np.r_[slice(int((j2_2g - j1_2g) / 2) + j1_2g + 1, nyg - MYG)],
+    )
+    
+    slices["inner_sol"] = (
+        slice(ixseps1, -MYG),
+        np.r_[slice(MYG, ny_inner + MYG )],
+    )
+    slices["inner_sol_guards"] = (
+        slice(ixseps1, -MYG),
+        np.r_[slice(0, ny_inner + MYG *2)],
     )
     
     # slices["pfr"] = (
@@ -229,67 +284,73 @@ def _select_region(ds, name):
             -MXG,
             np.r_[slice(MYG, ny_inner + MYG * 1 ), slice(ny_inner + MYG * 3, nyg - MYG)],
         )
+    
+    if MXG == 0:
+        target_xslice = slice(None, None)
+    else:
+        target_xslice = slice(MXG, -MXG)
 
-    slices["inner_lower_target"] = (slice(MXG, -MXG), slice(MYG, MYG + 1))
+    slices["inner_lower_target"] = (target_xslice, slice(MYG, MYG + 1))
+    
     slices["inner_upper_target"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG - 1, ny_inner + MYG),
     )
     slices["outer_upper_target"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG * 3, ny_inner + MYG * 3 + 1),
     )
-    slices["outer_lower_target"] = (slice(MXG, -MXG), slice(nyg - MYG - 1, nyg - MYG))
+    slices["outer_lower_target"] = (target_xslice, slice(nyg - MYG - 1, nyg - MYG))
 
-    slices["inner_lower_target_inner_guards"] = (slice(MXG, -MXG), slice(MYG - 1, MYG))
+    slices["inner_lower_target_inner_guards"] = (target_xslice, slice(MYG - 1, MYG))
     slices["inner_upper_target_inner_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG, ny_inner + MYG + 1),
     )
     slices["outer_upper_target_inner_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG * 3 - 1, ny_inner + MYG * 3),
     )
     slices["outer_lower_target_inner_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(nyg - MYG, nyg - MYG + 1),
     )
     
-    slices["inner_lower_target_guards"] = (slice(MXG, -MXG), slice(0, MYG))
+    slices["inner_lower_target_guards"] = (target_xslice, slice(0, MYG))
     slices["inner_upper_target_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG, ny_inner + MYG * 2),
     )
     slices["outer_upper_target_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG * 2, ny_inner + MYG * 3),
     )
     slices["outer_lower_target_guards"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(nyg - MYG, nyg),
     )
     
-    slices["inner_lower"] = (slice(MXG, -MXG), slice(MYG, j1_1g+1))
+    slices["inner_lower"] = (target_xslice, slice(MYG, j1_1g+1))
     slices["inner_upper"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(j2_1g + 1, ny_inner + MYG),
     )
     slices["outer_upper"] = (
-        slice(MXG, -MXG),
+        target_xslice,
         slice(ny_inner + MYG * 3, j1_2g+1),
     )
-    slices["outer_lower"] = (slice(MXG, -MXG), slice(j2_2g+1, nyg - MYG))
+    slices["outer_lower"] = (target_xslice, slice(j2_2g+1, nyg - MYG))
     
-    slices["inner_lower_noguards"] = (slice(MYG, -MYG), slice(MYG, j1_1g+1))
+    slices["inner_lower_noguards"] = (target_xslice, slice(MYG, j1_1g+1))
     slices["inner_upper_noguards"] = (
-        slice(MYG, -MYG),
+        target_xslice,
         slice(j2_1g + 1, ny_inner + MYG),
     )
     slices["outer_upper_noguards"] = (
-        slice(MYG, -MYG),
+        target_xslice,
         slice(ny_inner + MYG * 3, j1_2g+1),
     )
-    slices["outer_lower_noguards"] = (slice(MYG, -MYG), slice(j2_2g+1, nyg - MYG))
+    slices["outer_lower_noguards"] = (target_xslice, slice(j2_2g+1, nyg - MYG))
 
     slices["inner_lower_pfr"] = (slice(0, ixseps1), slice(None, j1_1g))
     slices["outer_lower_pfr"] = (slice(0, ixseps1), slice(j2_2g + 1, nyg))
@@ -349,17 +410,39 @@ def _select_region(ds, name):
         ],
     )
 
-    slices["outer_midplane_a"] = (slice(None, None), int((j2_2g - j1_2g) / 2) + j1_2g)
-    slices["outer_midplane_b"] = (
+    slices["outer_midplane_a_guards"] = (
+        slice(None, None), int((j2_2g - j1_2g) / 2) + j1_2g
+    )
+    slices["outer_midplane_b_guards"] = (
         slice(None, None),
         int((j2_2g - j1_2g) / 2) + j1_2g + 1,
     )
-
-    slices["inner_midplane_a"] = (
+    slices["inner_midplane_a_guards"] = (
         slice(None, None),
         int((j2_1g - j1_1g) / 2) + j1_1g + 1,
     )
-    slices["inner_midplane_b"] = (slice(None, None), int((j2_1g - j1_1g) / 2) + j1_1g)
+    slices["inner_midplane_b_guards"] = (
+        slice(None, None), int((j2_1g - j1_1g) / 2) + j1_1g
+    )
+    
+    slices["outer_midplane_a"] = (
+        slice(MXG, -MXG), int((j2_2g - j1_2g) / 2) + j1_2g
+    )
+    slices["outer_midplane_b"] = (
+        slice(MXG, -MXG),
+        int((j2_2g - j1_2g) / 2) + j1_2g + 1,
+    )
+    slices["inner_midplane_a"] = (
+        slice(MXG, -MXG),
+        int((j2_1g - j1_1g) / 2) + j1_1g + 1,
+    )
+    slices["inner_midplane_b"] = (
+        slice(MXG, -MXG), int((j2_1g - j1_1g) / 2) + j1_1g
+    )
+    
+    slices["outer_midplane_a_sep"] = (
+        ixseps1, int((j2_2g - j1_2g) / 2) + j1_2g
+    )
 
     selection = slices[name]
 
@@ -388,50 +471,57 @@ def _select_custom_core_ring(ds, i):
     return ds.isel(x=selection[0], theta=selection[1])
 
 
-def _select_custom_sol_ring(ds, i, region):
+def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None):
     """
-    Creates custom SOL ring slice beyond the separatrix.
-    args[0] = i = index of SOL ring (0 is separatrix, 1 is first SOL ring)
-    args[1] = region = all, inner, inner_lower, inner_upper, outer, outer_lower, outer_upper
-    
-    NOTE: INDEX HERE IS THE ACTUAL INDEX AS OPPOSED TO THE CUSTOM CORE RING
-    
-    TODO: CHECK THE OFFSETS ON X AXIS, THEY ARE POTENTIALLY WRONG
+    Creates custom SOL ring slice beyond the separatrix. 
+    Can use SOL ring index sepadd OR radial distance from the separatrix sepdist.
+    Sepadd is the number of cells beyond the first cell centre outside of separatrix.
+    Returns an Xarray dataset.
+    Parameters:
+        i : radial index
+        sepdist : radial distance from the separatrix
+        region : inner, inner_lower, inner_upper, outer, outer_lower, outer_upper
     """
     
     m = ds.metadata
     
-    # if i < self.ixseps1 - self.MXG*2 :
-    #     raise Exception("i is too small!")
-    if i > m["nx"] - m["MXG"]*2 :
-        raise Exception("i is too large!")
+    if sepadd == None and sepdist == None:
+        raise ValueError("Must use either index i or separatrix distance sepdist")
+    
+    elif sepadd != None and sepdist != None:
+        raise ValueError("Must use either index i or separatrix distance sepdist, not both")
+    
+    elif sepdist != None:
+        df = get_1d_radial_data(ds, [], "outer_midplane")
+        sepind = df[df["sep"] == 1].index[0]
+        sepadd = df.loc[(df["Srad"] - sepdist).abs().idxmin()].name - sepind
+        
+    radial_index = sepadd + m["ixseps1"]
+
     
     if m["topology"] == "connected-double-null":
-        
-        outer_midplane_a = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"]
-        outer_midplane_b = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"] + 1     
-        # inner_midplane_a = int((m.j2_1g - m.j1_1g) / 2) + m.j1_1g 
-        # inner_midplane_b = int((m.j2_1g - m.j1_1g) / 2) + m.j1_1g + 1               
-        
+         
         ny_inner = m["ny_inner"]
         MYG = m["MYG"]
         nyg = m["nyg"]
+        omp_a = m["omp_a"]
+        omp_b = m["omp_b"]
+        imp_a = m["imp_a"]
+        imp_b = m["imp_b"]
         
-        # if region == "all":
-        #     selection = (slice(i+1,i+2), np.r_[slice(0+.MYG, .j2_2g + 1), slice(.j1_1g + 1, self.nyg - self.MYG)])
-        
+
         if region == "inner":
-            selection = (slice(i+1,i+2), slice(0+MYG, ny_inner + MYG))
-        # if region == "inner_lower":
-        #     selection = (slice(i+1,i+2), slice(0+.MYG, inner_midplane_a +1))
-        # if region == "inner_upper":
-        #     selection = (slice(i+1,i+2), slice(inner_midplane_b, .ny_inner + .MYG))
+            selection = (radial_index, slice(0+MYG, ny_inner + MYG))
+        elif region == "inner_lower":
+            selection = (radial_index, slice(0+MYG, imp_a +1))
+        elif region == "inner_upper":
+            selection = (radial_index, slice(imp_b, ny_inner + MYG))
         elif region == "outer":
-            selection = (slice(i+1,i+2), slice(ny_inner + MYG*3, nyg - MYG))
+            selection = (radial_index, slice(ny_inner + MYG*3, nyg - MYG))
         elif region == "outer_lower":
-            selection = (slice(i+1,i+2), slice(outer_midplane_b, m["nyg"] - m["MYG"]))
+            selection = (radial_index, slice(omp_b-1, nyg - MYG))
         elif region == "outer_upper":
-            selection = (slice(i+1,i+2), slice(ny_inner + MYG*3, outer_midplane_a+1))
+            selection = (radial_index, slice(ny_inner + MYG*3, omp_b+1))
         else:
             raise Exception(f"Region {region} not implemented")
             
@@ -442,5 +532,48 @@ def _select_custom_sol_ring(ds, i, region):
             
         else:
             raise Exception(f"Region {region} not implemented")
+        
+    else:
+        raise Exception(f"Topology {m['topology']} not implemented")
     
     return ds.isel(x = selection[0], theta = selection[1])
+
+
+def _get_cvode_metrics(ds):
+    """
+    Calculate CVODE performance metrics in a more useful format  
+    - ms_per_24hrs : ms plasma time per 24hrs wall clock time
+    - nonlin_fails : number of nonlinear solver failures per timestep
+    - lin_per_nonlin : number of linear solver iterations per nonlinear solver iteration
+    - precon_per_function : number of preconditioner evaluations per function evaluation  
+    """
+    
+    def get_noncum_cvode(data):
+        data = np.diff(data.values, prepend = data.values[0])
+        for i, x in enumerate(data):
+            if x < 0:
+                data[i] = data[i+1]
+        return data
+
+    m = ds.metadata
+    # data = ds.hermesm.select_region("outer_midplane_a")["Ne"].isel(x=10)
+    wtime = ds["wtime"].values
+    t = ds["t"].values
+    stime = np.diff(t, prepend = t[0])
+    ds["ms_per_24hrs"] = ("t", (stime * 1000) / (wtime/(60*60*24)))  # ms simulated per 24 hours
+    ds["ms_per_24hrs"].attrs["units"] = "ms plasma time / 24hr wall time"
+    
+    if "cvode_nonlin_fails" in ds:
+        ds["nonlin_fails"] = ("t", get_noncum_cvode(ds["cvode_nonlin_fails"]))
+        ds["lin_per_nonlin"] = ("t", get_noncum_cvode(ds["cvode_nliters"]) / get_noncum_cvode(ds["cvode_nniters"]))
+        ds["precon_per_function"] = ("t", get_noncum_cvode(ds["cvode_npevals"]) / get_noncum_cvode(ds["cvode_nfevals"]))
+        ds["nonlin_fails"].attrs["units"] = "nonlinear fails per step"
+        ds["lin_per_nonlin"].attrs["units"] = "linear its / nonlinear it"
+        ds["precon_per_function"].attrs["units"] = "precon evals / function evals"
+    else:
+        print("CVODE diagnostic variables not found in the dataset! Computing runtime speed only")
+            
+    
+
+    
+    return ds
