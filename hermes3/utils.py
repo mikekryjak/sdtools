@@ -1,4 +1,5 @@
-import pickle as pkl
+# import pickle as pkl
+import dill
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -55,7 +56,7 @@ def read_file(filename, quiet = False):
 
     with open(filename, "rb") as f:
     # Open file in read binary mode, dump file to result.
-        data = pkl.load(f)
+        data = dill.load(f)
         if not quiet:
             print("{} loaded".format(filename))
         
@@ -66,7 +67,7 @@ def write_file(data, filename, quiet = False):
     
     with open(filename, "wb") as file:
     # Open file in write binary mode, dump result to file
-        pkl.dump(data, file)
+        dill.dump(data, file)
         if not quiet:
             print("{} written".format(filename))
 
@@ -134,21 +135,19 @@ def guard_replace_1d(da):
                 ^target      
         |  -3  |  -2   |      -1
         
+    Parameters
+    ----------
+    - da: Numpy array or Xarray DataArray with guard cells
+        
     Returns
     ----------
     - Numpy array with guard replacement
 
     """
 
-
-    # da[{"pos" : -2}] = (da[{"pos" : -2}] + da[{"pos" : -3}])/2
-    # da[{"pos" : 1}] = (da[{"pos" : 1}] + da[{"pos" : 2}])/2
-    
     da = da.copy()
     
     if type(da) == xarray.core.dataarray.DataArray:
-    
-    
         da[{"pos" : -2}] = (da[{"pos" : -2}] + da[{"pos" : -3}])/2
         da[{"pos" : 1}] = (da[{"pos" : 1}] + da[{"pos" : 2}])/2
         

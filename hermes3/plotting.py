@@ -782,7 +782,7 @@ def lineplot(
                 region_ds[name] = ds.hermesm.select_region("outer_lower_target")
                 xlabel = "dist from sep [m]"
             elif region == "field_line":
-                region_ds[name] = ds.hermesm.select_custom_sol_ring(ds.metadata["ixseps1"], "outer_lower").squeeze()
+                region_ds[name] = ds.hermesm.select_custom_sol_ring("outer_lower", sepadd = 0).squeeze()
                 xlabel = "Distance from midplane [m]"
             elif region == "1d":
                 region_ds[name] = ds.squeeze()
@@ -900,7 +900,7 @@ def lineplot(
             
         fig.legend(legend_items, cases.keys(), ncol = len(cases), loc = "upper center", bbox_to_anchor=(0.5,0.15))
         if save_name != "":
-            fig.savefig(f"{save_name}.png", bbox_inches="tight", pad_inches=0.2)
+            fig.savefig(f"{save_name}_{region}.png", bbox_inches="tight", pad_inches=0.2)
         # fig.tight_layout()
         
 def create_norm(logscale, norm, vmin, vmax):

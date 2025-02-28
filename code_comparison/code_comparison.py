@@ -19,9 +19,13 @@ try:
 except:
     print("Gridtools not found")
 
-from soledge.wrapper_class import *
+try:
+    from soledge.wrapper_class import *
+except:
+    print("SOLEDGE could not be imported")
 
 from hermes3.utils import *
+from hermes3.selectors import get_1d_radial_data, get_1d_poloidal_data
 from code_comparison.solps_pp import SOLPScase
 
 def save_last10s_subset(solps_path, destination_path):
@@ -97,28 +101,56 @@ class SOLEDGEdata:
             self.case = SOLEDGEcase(path)
             
         ### Get poloidal data
-        df = self.case.get_1d_poloidal_data(params = self.case.params, d_from_sep=0.002)
-        df = df.rename(columns = {
-                            'Dense' : "Ne", 
-                            'Tempe':"Te", 
-                            'Densi':"Nd+", 
-                            'Tempi':"Td+",
-                            'velocityi':"Vd+",
-                            'Ppi':"Pd+",
-                            'Ppe':"Pe",
-                            'IRadi':"Rd+_ex",
-                            "Nni":"Na",
-                            "Nmi":"Nm",
-                            "Tni":"Ta",
-                            "Tmi":"Tm",
-                            "Pni":"Pa",
-                            "vyni":"Vyd",
-                            "DIST":"x"})
+        self.regions["outer_fieldline"] = self.case.get_1d_poloidal_data(params = self.case.params, d_from_sep=0.0009)
+        self.regions["outer_fieldline_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, d_from_sep=0.0009, parallel_length = True)
         
-        df.index = df["dist"]
-        df.index.name = "pos"
-        df = df.query("index > 0")
-        self.regions["outer_fieldline"] = df
+        
+        self.regions["inner_fieldline_0.001_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_lower", d_from_sep = 0.001, parallel_length = True)
+        self.regions["outer_fieldline_0.001_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_upper", d_from_sep = 0.001, parallel_length = True)
+        self.regions["outer_fieldline_0.003_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_upper", d_from_sep = 0.003, parallel_length = True)
+        self.regions["outer_fieldline_0.015_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_upper", d_from_sep = 0.015, parallel_length = True)
+        self.regions["outer_fieldline_0.030_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_upper", d_from_sep = 0.030, parallel_length = True)
+        for region in self.regions.keys():
+            if "fieldline" in region:
+                
+                
+                df = self.regions[region]
+                
+                df = df.rename(columns = {
+                                    'Dense' : "Ne", 
+                                    'Tempe':"Te", 
+                                    'Densi':"Nd+", 
+                                    'Tempi':"Td+",
+                                    'velocityi':"Vd+",
+                                    'Ppi':"Pd+",
+                                    'Ppe':"Pe",
+                                    'IRadi':"Rd+_ex",
+                                    "Nni":"Na",
+                                    "Nmi":"Nm",
+                                    "Tni":"Ta",
+                                    "Tmi":"Tm",
+                                    "Pni":"Pa",
+                                    "vyni":"Vyd",
+                                    "DIST":"x"})
+                
+                
+                cs = np.sqrt((df["Te"] + df["Td+"]) * constants("q_e") / (constants("mass_p")*2))
+                
+                df["M"] = df["Mi"]  # Somehow M not available anymore but Vd+ is 
+                df["Vd+"] = df["M"] * cs
+                df["NVd+"] = df["Vd+"] * df["Ne"] * constants("mass_p") * 2
+
+                df["dist"] = df["dist"][0] - df["dist"]
+                
+                df.index = df["dist"]
+                df.index.name = "pos"
+                # df = df.query("index > 0")
+                self.regions[region] = df
+                
+            if "inner" in region or "outer" in region:
+                self.regions[region]["M"] = np.abs(self.regions[region]["M"])
+                self.regions[region]["Vd+"] = np.abs(self.regions[region]["Vd+"])
+                self.regions[region]["NVd+"] = np.abs(self.regions[region]["NVd+"])
     
     def read_csv(self, path, mode):
         
@@ -188,13 +220,16 @@ class SOLEDGEdata:
                             ' ni (*10^19 m-3)': "Nd+", 
                             ' Ti (eV)' : "Td+",
                             ' Jsat_i (kA/m^2)': "Jsat_d+", 
-                            ' Mach_i': "Md+,",
+                            ' Mach_i': "Md+",
                             ' Ioniz_H' : "Ioniz_H",
                             'l (m)' : "l"
                             })
         
         self.wallring["Ne"] *= 10**19
         self.wallring["Nd+"] *= 10**19
+        self.wallring["M"] = np.abs(self.wallring["Md+"])
+        self.wallring["NVd+"] = np.abs(self.wallring["Jsat_d+"] * 1e6) / constants("q_e") * constants("mass_p") * 2
+        self.wallring["Vd+"] = self.wallring["NVd+"] / ((constants("mass_p")*2) * self.wallring["Ne"])
         self.wallring = self.wallring.set_index("l")
         self.wallring.index.name = "pos"
         
@@ -243,6 +278,8 @@ class SOLEDGEdata:
                 self.regions[region]["Pa"] = self.regions[region]["Na"] * self.regions[region]["Ta"] * constants("q_e")
             if "Tm" in self.regions[region].keys():
                 self.regions[region]["Pm"] = self.regions[region]["Nm"] * self.regions[region]["Tm"] * constants("q_e")
+            if "Vd+" in self.regions[region].keys():
+                self.regions[region]["NVd+"] = self.regions[region]["Vd+"] * self.regions[region]["Ne"] * constants("mass_p") * 2
             
 
 class SOLPSdata:
@@ -259,73 +296,73 @@ class SOLPSdata:
         spc.derive_data()
         data = spc.bal
         
-        
         regions = {}
 
         # index = np.cumsum(self.g["hx"][selector])
-        list_params = ["Td+", "Te", "Ne", "Pe", "Pd+", "Na", "Nn", "Nm", "Ta", "Tn", "Tm", "Pa", "Pm", "Pn"]
+        list_params = ["Td+", "Te", "Ne", "Pe", "Pd+", "Na", "Nn", "Nm", "Ta", "Tn", "Tm", "Pa", "Pm", "Pn", "NVd+", "Vd+", "M"]
 
         ### ALL WITH NO GUARDS
 
         # OMP
         
         for name in ["omp", "imp", "outer_lower_target", "inner_lower_target"]:
-            selector = spc.s[name]
-            dist = np.cumsum(spc.g["hy"][selector])   # hy is radial length
-            dist = dist - dist[spc.g["sep"] - 1]
-            df = pd.DataFrame(index = dist[1:-1])
-            for param in list_params:
-                df[param] = data[param][selector][1:-1] 
-                if any([x in param for x in ["Pe", "Pd+"]]):
-                    df[param] /= constants("q_e")
-                
+            ## OLD
+            # selector = spc.s[name]
+            # dist = np.cumsum(spc.g["hy"][selector])   # hy is radial length
+            # dist = dist - dist[spc.g["sep"] - 1]
+            # df = pd.DataFrame(index = dist[1:-1])
+            # for param in list_params:
+            #     df[param] = data[param][selector][1:-1] 
+            #     if any([x in param for x in ["Pe", "Pd+"]]):
+            #         df[param] /= constants("q_e")
+            
+            df = spc.get_1d_radial_data(list_params, region = name)
+            df.index = df.pop("dist")
+         
             translate = dict(omp="omp", imp="imp", outer_lower_target="outer_lower", inner_lower_target="inner_lower")
             
             regions[translate[name]] = df.copy()
 
-        # # IMP
-        # selector = spc.s["imp"]
-        # df = pd.DataFrame(index = spc.g["radial_dist"][1:-1])
-        # for param in list_params:
-        #     df[param] = data[param][selector][1:-1] 
-        # regions["imp"] = df.copy()
-
-        # # Outer lower target
-        # selector = spc.s["outer_lower_target"]
-        # df = pd.DataFrame(index = spc.g["radial_dist"][1:-1])
-        # for param in list_params:
-        #     df[param] = data[param][selector][1:-1] 
-        # regions["outer_lower"] = df.copy()
-
-        # # Inner lower target
-        # selector = spc.s["inner_lower_target"]
-        # df = pd.DataFrame(index = spc.g["radial_dist"][1:-1])
-        # for param in list_params:
-        #     df[param] = data[param][selector][1:-1] 
-        # regions["inner_lower"] = df.copy()
-
-        # outer_fieldline
-        
-        for name in ["outer_lower", "inner_lower"]:
-            selector = spc.make_custom_sol_ring("outer_lower", i = 0)
-            index = np.cumsum(spc.g["hx"][selector])[:-1]
-            df = pd.DataFrame(index = index)
-            for param in list_params:
-                df[param] = data[param][selector][:-1]
-                if any([x in param for x in ["Pe", "Pd+"]]):
-                    df[param] /= constants("q_e")
+        ## OLD
+        # for name in ["outer_lower", "inner_lower"]:
+        #     selector = spc.make_custom_sol_ring("outer_lower", i = 0)
+        #     index = np.cumsum(spc.g["hx"][selector])[:-1]
+        #     df = pd.DataFrame(index = index)
+        #     for param in list_params:
+        #         df[param] = data[param][selector][:-1]
+        #         if any([x in param for x in ["Pe", "Pd+"]]):
+        #             df[param] /= constants("q_e")
                 
-            translate = dict(outer_lower="outer_fieldline", inner_lower="inner_fieldline")
-            regions[translate[name]] = df.copy()
-
-        # # inner_fieldline
-        # selector = spc.make_custom_sol_ring("inner_lower", i = 0)
-        # index = np.cumsum(spc.g["hx"][selector])[:-1]
-        # df = pd.DataFrame(index = index)
-        # for param in list_params:
-        #     df[param] = data[param][selector][::-1][:-1]
-        # regions["inner_fieldline"] = df.copy()
-
+        #     translate = dict(outer_lower="outer_fieldline", inner_lower="inner_fieldline")
+        #     regions[translate[name]] = df.copy()
+            
+        regions["inner_fieldline_0.001"] = spc.get_1d_poloidal_data(list_params, region =  "inner_lower", sepdist = 0.001)
+        regions["outer_fieldline"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower", sepdist = 0.001)
+        regions["outer_fieldline_0.001"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower", sepdist = 0.001)
+        regions["outer_fieldline_0.003"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower", sepdist = 0.003)
+        regions["outer_fieldline_0.015"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower", sepdist = 0.015)
+        regions["outer_fieldline_0.030"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower", sepdist = 0.030)
+        
+        regions["inner_fieldline"] = spc.get_1d_poloidal_data(list_params, region =  "inner_lower", sepdist = 0.0014)
+        
+        for region in list(regions.keys()):
+            if "fieldline" in region:
+                regions[region+"_parallel"] = regions[region].copy()
+            
+        for region in regions.keys():
+            if "fieldline" in region:
+                if "parallel" in region:
+                    regions[region].index = regions[region]["Spar"]
+                else:
+                    regions[region].index = regions[region]["Spol"] 
+                    
+                for param in ["Vd+", "NVd+"]:
+                    regions[region][param] = regions[region][param] * -1
+                    
+            if "outer_lower" in region or "inner_lower" in region:
+                for param in ["Vd+", "NVd+", "M"]:
+                    regions[region][param] = np.abs(regions[region][param])
+        
         self.regions = regions
         
         
@@ -447,7 +484,7 @@ class Hermesdata:
     def __init__(self):
         self.code = "Hermes-3"
         self.params =  [
-            "Td+", "Td", "Te", "Ne", "Pe", "Pd+", "Pd", "Nd",  "Pd*", "Nd*", "Td*",
+            "Td+", "Td", "Te", "Ne", "Pe", "Pd+", "Pd", "Nd", "NVd+", "Vd+", "M",
             "Sd+_iz", "Rd+_ex", "Rd+_rec"]
         pass
     
@@ -457,14 +494,44 @@ class Hermesdata:
 
         self.ds = ds
         self.regions = dict()
-        self.regions["omp"] = self.get_radial_data(ds.hermesm.select_region("outer_midplane_a").isel(x = slice(2,-2)))
-        self.regions["imp"] = self.get_radial_data(ds.hermesm.select_region("inner_midplane_a").isel(x = slice(2,-2)))
-        self.regions["outer_lower"] = self.get_radial_data(ds.hermesm.select_region("outer_lower_target"))
-        self.regions["outer_upper"] = self.get_radial_data(ds.hermesm.select_region("outer_upper_target"))
-        self.regions["inner_lower"] = self.get_radial_data(ds.hermesm.select_region("inner_lower_target"))
-        self.regions["outer_fieldline"] = self.get_poloidal_data()
         
-        # self.regions["imp"].index *= -1    # Ensure core is on the LHS
+        ## OLD
+        # self.regions["omp"] = self.get_radial_data(ds.hermesm.select_region("outer_midplane_a").isel(x = slice(2,-2)))
+        # self.regions["imp"] = self.get_radial_data(ds.hermesm.select_region("inner_midplane_a").isel(x = slice(2,-2)))
+        # self.regions["outer_lower"] = self.get_radial_data(ds.hermesm.select_region("outer_lower_target"))
+        # self.regions["outer_upper"] = self.get_radial_data(ds.hermesm.select_region("outer_upper_target"))
+        # self.regions["inner_lower"] = self.get_radial_data(ds.hermesm.select_region("inner_lower_target"))
+        # self.regions["outer_fieldline"] = self.get_poloidal_data()
+        
+        self.regions["omp"] = get_1d_radial_data(ds, self.params, region = "outer_midplane")
+        self.regions["imp"] = get_1d_radial_data(ds, self.params, region = "inner_midplane")
+        self.regions["outer_lower"] = get_1d_radial_data(ds, self.params, region = "outer_lower_target")
+        self.regions["inner_lower"] = get_1d_radial_data(ds, self.params, region = "inner_lower_target")
+        
+        self.regions["inner_fieldline_0.001"] = get_1d_poloidal_data(ds, self.params, region =  "inner_lower", sepdist = 0.001)
+        self.regions["outer_fieldline_0.001"] = get_1d_poloidal_data(ds, self.params, region =  "outer_lower", sepdist = 0.001)
+        self.regions["outer_fieldline_0.003"] = get_1d_poloidal_data(ds, self.params, region =  "outer_lower", sepdist = 0.003)
+        self.regions["outer_fieldline_0.015"] = get_1d_poloidal_data(ds, self.params, region =  "outer_lower", sepdist = 0.015)
+        self.regions["outer_fieldline_0.030"] = get_1d_poloidal_data(ds, self.params, region =  "outer_lower", sepdist = 0.030)
+        
+        regions = list(self.regions.keys())
+        for region in regions:
+            if "fieldline" in region:
+                self.regions[region+"_parallel"] = self.regions[region].copy()
+            
+        for region in list(self.regions.keys()):
+            if "fieldline" in region:
+                if "parallel" in region:
+                    self.regions[region].index = self.regions[region]["Spar"]
+                else:
+                    self.regions[region].index = self.regions[region]["Spol"] 
+
+        
+        # Make distance the index
+        for region in self.regions.keys():
+            if "fieldline" not in region:
+                self.regions[region].index = self.regions[region].pop("Srad")
+            
         
         # Parse column names to fit with the other codes
         for region in self.regions.keys():
@@ -476,6 +543,9 @@ class Hermesdata:
 
         
     def get_radial_data(self, dataset):
+        """
+        Deprecated
+        """
         self.dataset = dataset
 
         x = []
@@ -504,6 +574,9 @@ class Hermesdata:
         return df
     
     def get_poloidal_data(self):
+        """
+        Deprecated
+        """
         ds = self.ds
         m = ds.metadata
     
@@ -549,8 +622,8 @@ def lineplot_compare(
     cases,
     mode = "log",
     colors = ["black", "red", "black", "red", "navy", "limegreen", "firebrick",  "limegreen", "magenta","cyan", "navy"],
-    params = ["Td+", "Te", "Td", "Ne", "Nd"],
-    regions = ["imp", "omp", "outer_lower", "outer_fieldline"],
+    params = ["Td+", "Te", "Ta", "Ne", "Nd"],
+    regions = ["imp", "omp", "outer_lower", "outer_fieldline_parallel"],
     ylims = (None,None),
     dpi = 120,
     lw = 1.5,
@@ -568,11 +641,22 @@ def lineplot_compare(
 
         
     set_yscales = {
-    "omp" : {"Td+": "log", "Te": "log", "Ne": "log", "Nd": "log", "Pe":"log", "Pd+":"log"},
-    "imp" : {"Td+": "log", "Te": "log", "Ne": "log", "Nd": "log", "Pe":"log", "Pd+":"log"},
+    "omp" : {
+        "Td+": "log", "Te": "log", "Ta" : "log", "Tm" : "log",
+        "Ne": "log", "Nd": "log", "Na": "log", "Nm": "log", 
+        "Pe":"log", "Pd+":"log"},
+    "imp" : {
+        "Td+": "log", "Te": "log", "Ta" : "log", "Tm" : "log",
+        "Ne": "log", "Nd": "log", "Na" : "log", "Nm": "log", 
+        "Pe":"log", "Pd+":"log"},
     "outer_lower" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "linear", "Nd": "log"},
     "outer_upper" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "linear", "Nd": "log"},
     "outer_fieldline" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "log", "Nd": "log"},
+    "outer_fieldline_parallel" : {
+        "Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", 
+        "Ne": "log", "Nd": "log", "Na":"log", "Nm":"log",
+        "Pe": "linear", "Pd+": "linear", "Pa": "log",
+        "M": "linear", "NVd+": "linear"},
     }
     set_yscales["inner_lower"] = set_yscales["outer_lower"]
     set_yscales["inner_upper"] = set_yscales["outer_upper"]
@@ -583,7 +667,9 @@ def lineplot_compare(
         "outer_lower" : (-0.018, 0.058),
         "outer_upper" : (-0.02, 0.05),
         "inner_lower" : (-0.04, 0.09),
-        "outer_fieldline" : (0, 2)
+        "outer_fieldline" : (0, 2),
+        "outer_fieldline_parallel" : (0, 7),
+        "inner_fieldline_parallel" : (0, 7)
     }
     
     xlims = (None, None)
@@ -595,10 +681,11 @@ def lineplot_compare(
         scale = 1.3
         fig, axes = plt.subplots(1,len(params), dpi = dpi*scale, figsize = (4.7*len(params)/scale,5/scale), sharex = True)
         fig.subplots_adjust(hspace = 0, wspace = 0.35, bottom = 0.25, left = 0.1, right = 0.9)
+        fig.suptitle(region, x = 0.1, y = 1.0, fontsize = "xx-large", ha = "left")
         
         linestyles = {"Hermes-3" : "-", "SOLEDGE2D" : ":", "SOLPS" : "--"}
         styles = {
-            "Hermes-3" : {"ls" : "-", "lw" : 3},
+            "Hermes-3" : {"ls" : "-", "lw" : lw},
             "SOLEDGE2D" : {"ls" : "-", "lw" : 0, "marker" : "x", "ms" : 5, "markerfacecolor":"auto", "markeredgewidth":1, "zorder":100},
             "SOLPS" : {"ls" : "-", "lw" : 0, "marker" : "o", "ms" : 3, "markeredgewidth":0}
         }
@@ -638,7 +725,8 @@ def lineplot_compare(
                         
                         # Crop SOLEDGE2D results to allow easier min/max finding
                         if code == "SOLEDGE2D":
-                            data = data.query(f"(index > {region_extents[region][0]}) & (index < {region_extents[region][1]})")
+                            if "fieldline" not in region:
+                                data = data.query(f"(index > {region_extents[region][0]}) & (index < {region_extents[region][1]})")
                             
                         ### Molecule combination
                         atom_override = {}
@@ -699,13 +787,17 @@ def lineplot_compare(
                     ## Some issue with parameter
                     else:
                         print(f"{parsed_param} not available in {name}, {region}")
+                else:
+                    print(f"{region} not available in {name}")
                     
             # Set yscales
-            if param in set_yscales[region].keys():
-                axes[i].set_yscale(set_yscales[region][param])
-            else:
-                if "T" in param or "N" in param and "outer_lower" not in region:
-                    axes[i].set_yscale("log")
+            if "fieldline" in region:
+                axes[i].set_yscale(set_yscales["outer_fieldline_parallel"][param])
+                
+            elif region in set_yscales.keys():
+                if param in set_yscales[region].keys():
+                    axes[i].set_yscale(set_yscales[region][param])
+
                     
             if mode == "linear":
                 axes[i].set_yscale("linear")
