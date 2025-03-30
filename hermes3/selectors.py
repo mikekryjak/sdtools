@@ -5,7 +5,7 @@ from hermes3.front_tracking import *
 import numpy as np
 import scipy
 
-def get_1d_radial_data(ds, params, region, average_midplanes = False):
+def get_1d_radial_data(ds, params, region, average_midplanes = False, guards = False):
     """
     Return a Pandas Dataframe with a radial slice of data in the given region
     The dataframe contains a radial distance normalised to the separatrix
@@ -17,18 +17,22 @@ def get_1d_radial_data(ds, params, region, average_midplanes = False):
             region = region + "_a"
         
     df = pd.DataFrame()
+    m = ds.metadata
+    
+    if guards:
+        xslice = slice(None, None)
+    else:
+        xslice = slice(m["MXG"], -m["MXG"])
     
     # Interpolate to Z = 0 for IMP or OMP
     if region == "omp" or region == "imp":
-        m = ds.metadata
+       
         
-        xguards = m["MXG"]
-        xguards = 0 
         
         if region == "omp":
-            reg = ds.isel(x = slice(None, None), theta = slice(m["omp_a"] - 2, m["omp_b"] + 2))
+            reg = ds.isel(x = xslice, theta = slice(m["omp_a"] - 2, m["omp_b"] + 2))
         else:
-            reg = ds.isel(x = slice(None, None),theta = slice(m["imp_a"] - 2, m["imp_b"] + 2))
+            reg = ds.isel(x = xslice,theta = slice(m["imp_a"] - 2, m["imp_b"] + 2))
         
         # For every parameter, collect the value interpolated at Z = 0 
         for i in reg.coords["x"].values:
@@ -97,7 +101,6 @@ def get_1d_poloidal_data(ds, params, region, sepdist = None, sepadd = None, targ
     target_first : bool, if True, reverse the dataframe so that 0 distance is at the target
 
     """
-    print(sepadd, sepdist)
     reg = ds.hermesm.select_custom_sol_ring(region, sepadd = sepadd, sepdist = sepdist).squeeze()
 
     df = pd.DataFrame()
