@@ -32,6 +32,7 @@ def impose_fields(source, destination,
                   D_sol  = 0,    # ms2s-1
                   chi_core = 0,   # m2s-1
                   chi_sol = 0,    # m2s-1
+                  plot = True,
                   
                   
                   
@@ -110,7 +111,8 @@ def impose_fields(source, destination,
         else:
             mesh.write_field(fields[field_name], dtype = "Field3D")
         
-        fields[field_name].plot()
+        if plot:
+            fields[field_name].plot()
         
     close_mesh(mesh)
         
@@ -581,13 +583,15 @@ class Field():
         
         
         
-    def plot(self, dpi = 80):
+    def plot(self, dpi = 80, cmap = "YlOrRd",
+             xlims = (None,None), ylims = (None,None),
+             legend = True):
 
         plt.style.use("default")
 
 
         field = self.data
-        cmap = plt.get_cmap("YlOrRd")
+        cmap = plt.get_cmap(cmap)
 
 
         fieldnorm = field / np.max(field) * 1
@@ -605,6 +609,11 @@ class Field():
         axes[1].scatter(self.mesh.rflat, self.mesh.zflat, c = colors, s = 4)
 
         cbar = mpl.colorbar.ColorbarBase(ax=axes[2], cmap = cmap, norm = norm)
+        
+        if xlims != (None,None):
+            axes[1].set_xlim(xlims)
+        if ylims != (None,None):
+            axes[1].set_ylim(ylims)
         
         
 def compare_grid(
