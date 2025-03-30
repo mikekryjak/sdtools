@@ -765,6 +765,9 @@ def lineplot(
         
         if type(axes) != np.ndarray:
             axes = [axes]
+            
+        if region == "1d":
+            print("Warning: 1D plot omitting target values")
         
         region_ds = dict()
         for name in cases.keys():
@@ -796,7 +799,7 @@ def lineplot(
                     if guard_replace is True:
                         raise Exception("Cannot guard replace and clean guards at the same time")
                     region_ds[name] = region_ds[name].isel(pos=slice(2,-2))
-                    print("Warning: 1D plot omitting target values")
+                    
                 else:
                     raise Exception(f"{region} guard cleaning not implemented")
                 

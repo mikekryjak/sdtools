@@ -14,7 +14,8 @@ class Balance1D():
         normalised = False, 
         verbose = True, 
         use_sheath_diagnostic = False,
-        override_vi = False
+        override_vi = False,
+        impurity_name = "Ar",
         ):
         """
         Prepare a 1D particle and heat balance.
@@ -39,6 +40,7 @@ class Balance1D():
         
         self.normalised = normalised
         self.ds = ds
+        self.impurity_name = impurity_name
         self.dom = ds.isel(pos = slice(2,-2))   # Domain
         self.terms_extracted = False
         self.tallies_extracted = False
@@ -59,6 +61,10 @@ class Balance1D():
             self.time = True
         else:
             self.time = False
+            
+        # Calculate the balance
+        # self.get_terms()
+        # self.get_tallies()
             
         
         
@@ -90,7 +96,7 @@ class Balance1D():
         ### Heat balance
         hbal = {}
         hbalsum = {}
-        for param in ["Pd+_src", "Pe_src", "Pd_src", "Rd+_ex", "Rd+_rec", "Rar", "Ed_target_recycle", "Ee_sheath", "Ed+_sheath"]:
+        for param in ["Pd+_src", "Pe_src", "Pd_src", "Rd+_ex", "Rd+_rec", f"R{self.impurity_name}", "Ed_target_recycle", "Ee_sheath", "Ed+_sheath"]:
             if param in ds:
                 hbal[param] = integral(dom[param])*1e-6   # MW
 
@@ -99,7 +105,7 @@ class Balance1D():
                     hbal[newname] = hbal[param] * 3/2    # Convert from pressure to energy
                     del hbal[param]
                     
-                if param == "Rar":
+                if param == f"R{self.impurity_name}":
                     hbal[param] = -1 * abs(hbal[param])   # Correct inconsistency in sign convention
             else:
                 if self.verbose:
@@ -149,7 +155,7 @@ class Balance1D():
                 hbalsum["sources_sum"] += hbal[param]
     
         hbalsum["R_hydr_sum"] = hbal["Rd+_ex"] + hbal["Rd+_rec"]
-        hbalsum["R_imp_sum"] = hbal["Rar"] if "Rar" in ds else np.zeros_like(hbal["Ed+_src"])
+        hbalsum["R_imp_sum"] = hbal[f"R{self.impurity_name}"] if f"R{self.impurity_name}" in ds else np.zeros_like(hbal["Ed+_src"])
         hbalsum["R_sum"] = hbalsum["R_hydr_sum"] + hbalsum["R_imp_sum"]
         hbalsum["R_and_sources_sum"] = hbalsum["sources_sum"] + hbalsum["R_sum"]
         hbalsum["sheath_sum"] = hbal["Ed+_sheath"] + hbal["Ee_sheath"]
@@ -422,29 +428,29 @@ class Balance1D():
         path = sys.argv[1]
 
         # These diagnostics describe parallel flows of energy
-        flows = [
-            ("KineticFlow_d+_ylow", "ion kinetic"),
-            ("KineticFlow_e_ylow", "electron kinetic"),
-            ("KineticFlow_d_ylow", "neutral kinetic"),
-            ("ConductionFlow_d+_ylow", "ion conduction"),
-            ("ConductionFlow_e_ylow", "electron conduction"),
-            ("ConductionFlow_d_ylow", "neutral conduction"),
-            ("EnergyFlow_d+_ylow", "ion total"),
-            ("EnergyFlow_e_ylow", "electron total"),
-            ("EnergyFlow_d_ylow", "neutral total"),
-        ]
-        
         # flows = [
-        #     ("efd+_kin_ylow", "ion kinetic"),
-        #     ("efe_kin_ylow", "electron kinetic"),
-        #     ("efd_kin_ylow", "neutral kinetic"),
-        #     ("efd+_cond_ylow", "ion conduction"),
-        #     ("efe_cond_ylow", "electron conduction"),
-        #     ("efd_cond_ylow", "neutral conduction"),
-        #     ("efd+_tot_ylow", "ion total"),
-        #     ("efe_tot_ylow", "electron total"),
-        #     ("efd_tot_ylow", "neutral total"),
+        #     ("KineticFlow_d+_ylow", "ion kinetic"),
+        #     ("KineticFlow_e_ylow", "electron kinetic"),
+        #     ("KineticFlow_d_ylow", "neutral kinetic"),
+        #     ("ConductionFlow_d+_ylow", "ion conduction"),
+        #     ("ConductionFlow_e_ylow", "electron conduction"),
+        #     ("ConductionFlow_d_ylow", "neutral conduction"),
+        #     ("EnergyFlow_d+_ylow", "ion total"),
+        #     ("EnergyFlow_e_ylow", "electron total"),
+        #     ("EnergyFlow_d_ylow", "neutral total"),
         # ]
+        
+        flows = [
+            ("efd+_kin_ylow", "ion kinetic"),
+            ("efe_kin_ylow", "electron kinetic"),
+            ("efd_kin_ylow", "neutral kinetic"),
+            ("efd+_cond_ylow", "ion conduction"),
+            ("efe_cond_ylow", "electron conduction"),
+            ("efd_cond_ylow", "neutral conduction"),
+            ("efd+_tot_ylow", "ion total"),
+            ("efe_tot_ylow", "electron total"),
+            ("efd_tot_ylow", "neutral total"),
+        ]
 
 
         # Sources of energy. To be summed along field line
@@ -466,7 +472,8 @@ class Balance1D():
             return var1D[2:-1]
 
         flow_data = {}
-        total_flow = 0
+        total_flow = np.zeros_like(remove_guards(ds["efd+_kin_ylow"].values * 1e-6))
+        
         for name, label in flows:
             if name in ds:
                 value = ds[name].values
@@ -477,10 +484,11 @@ class Balance1D():
             this_flow = remove_guards(value * 1e-6)
             flow_data[name] = (this_flow,
                             label)
-            # if name.startswith("ef"):
-            if name.startswith("E"):
+            if name.startswith("ef"):
+            # if name.startswith("E"):
                 # Energyflow
                 total_flow += this_flow
+        print(total_flow.shape)
 
         flow_data["total"] = (total_flow,
                             "Total flow")
@@ -504,14 +512,17 @@ class Balance1D():
                                 label)
             total_source += this_source
         source_data["total"] = (total_source,
-                                "Total source")
+                                "Total sources")
 
-        fig, ax = plt.subplots()
-        for _, value in flow_data.items():
-            ax.plot(ds["pos"].values[2:-1], value[0], label = value[1])
+        fig, ax = plt.subplots(dpi = 300)
+        total_style = dict(lw = 3, alpha = 0.5)
+        for name, value in flow_data.items():
+            style = total_style if "total" in name else {}
+            ax.plot(ds["pos"].values[2:-1], value[0], label = value[1], **style)
 
-        for _, value in source_data.items():
-            ax.plot(ds["pos"].values[2:-1], value[0], label = value[1], linestyle='--')
+        for name, value in source_data.items():
+            style = total_style if "total" in name else {}
+            ax.plot(ds["pos"].values[2:-1], value[0], label = value[1], linestyle='--', **style)
             
         ax.legend(loc = "upper left", bbox_to_anchor = (1,1))
         ax.set_ylabel('MW')
@@ -532,7 +543,7 @@ class Balance1D():
         dom = self.dom
         
         ## If more than one time slice, select final one
-        if len(pbal) > 0:
+        if self.time:
             for param in pbal:
                 pbal[param] = pbal[param][-1]
             for param in hbal:
@@ -603,36 +614,36 @@ class Balance1D():
         ion_heating = hbal["Ed+_src"]
         electron_heating = hbal["Ee_src"]
 
-        print(f"Total input power:     {(ion_heating + electron_heating) * 1e-6} MW")
-        print(f"  |- Ion heating:      {ion_heating * 1e-6} MW")
-        print(f"  |- Electron heating: {electron_heating * 1e-6} MW")
+        print(f"Total input power:     {(ion_heating + electron_heating)} MW")
+        print(f"  |- Ion heating:      {ion_heating} MW")
+        print(f"  |- Electron heating: {electron_heating} MW")
         print("")
         
         recycle_heating = hbal["Ed_target_recycle"]
         ion_energy_flux = hbal["Ed+_sheath"]
         electron_energy_flux = hbal["Ee_sheath"]
         
-        ion_convection = 2.5 * sheath["ni"] * sheath["ti"] * sheath["vi"] * sheath["da"]
+        ion_convection = 2.5 * sheath["ni"] * sheath["ti"] * sheath["vi"] * sheath["da"] * constants("q_e")
         ion_kinetic = 0.5 * sheath["vi"] * self.Mi * sheath["ni"] * sheath["da"]
         
-        electron_convection = 2.5 * sheath["ne"] * sheath["te"] * sheath["ve"] * sheath["da"]
+        electron_convection = 2.5 * sheath["ne"] * sheath["te"] * sheath["ve"] * sheath["da"] * constants("q_e")
         electron_kinetic = 0.5 * sheath["ve"] * self.Me * sheath["ne"] * sheath["da"]
         
         R_rec = hbal["Rd+_rec"]
         R_ex = hbal["Rd+_ex"]
 
-        print(f"Total power loss: {(ion_energy_flux + electron_energy_flux - recycle_heating - R_ex - R_rec) * 1e-6} MW")
-        print(f"  |- Ions:              {ion_energy_flux * 1e-6} MW")
-        print(f"      |- Convection          {ion_convection * 1e-6} MW")
-        print(f"      |- Kinetic energy      {ion_kinetic * 1e-6} MW")
-        print(f"      |- Conduction          {(ion_energy_flux - ion_kinetic - ion_convection) * 1e-6} MW")
-        print(f"  |- Electrons:         {electron_energy_flux * 1e-6} MW")
-        print(f"      |- Convection          {electron_convection * 1e-6} MW")
-        print(f"      |- Kinetic energy      {electron_kinetic * 1e-6} MW")
-        print(f"      |- Conduction          {(electron_energy_flux - electron_kinetic - electron_convection) * 1e-6} MW")
-        print(f"  |- Recycled neutrals: {-recycle_heating * 1e-6} MW")
-        print(f"  |- Ionization:        {-R_ex * 1e-6} MW")
-        print(f"  |- Recombination:     {-R_rec * 1e-6} MW")
+        print(f"Total power loss: {(ion_energy_flux + electron_energy_flux - recycle_heating - R_ex - R_rec)} MW")
+        print(f"  |- Ions:              {ion_energy_flux} MW")
+        # print(f"      |- Convection          {ion_convection} MW")
+        # print(f"      |- Kinetic energy      {ion_kinetic} MW")
+        # print(f"      |- Conduction          {(ion_energy_flux - ion_kinetic - ion_convection)} MW")
+        print(f"  |- Electrons:         {electron_energy_flux} MW")
+        # print(f"      |- Convection          {electron_convection} MW")
+        # print(f"      |- Kinetic energy      {electron_kinetic} MW")
+        # print(f"      |- Conduction          {(electron_energy_flux - electron_kinetic - electron_convection)} MW")
+        print(f"  |- Recycled neutrals: {-recycle_heating} MW")
+        print(f"  |- Ionization:        {-R_ex} MW")
+        print(f"  |- Recombination:     {-R_rec} MW")
         print("")
 
         

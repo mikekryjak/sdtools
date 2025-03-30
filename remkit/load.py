@@ -41,9 +41,11 @@ def load_remkit(hdf5Filepath, wrapperPickleFilename, numFiles):
 
     ld["Te"] *= n["eVTemperature"]
     ld["Ti"] *= n["eVTemperature"]
+    ld["Tn"] *= n["eVTemperature"]
     ld["Te_dual"] *= n["eVTemperature"]
     ld["Ti_dual"] *= n["eVTemperature"]
     ld["ne"] *= n["density"]
+    ld["nn"] *= n["density"]
     ld["ne_dual"] *= n["density"]
     ld["Wi"] *= n["eVTemperature"]*n["density"] * constants("q_e")
     ld["We"] *= n["eVTemperature"]*n["density"] * constants("q_e")
@@ -52,14 +54,23 @@ def load_remkit(hdf5Filepath, wrapperPickleFilename, numFiles):
     ld["Gi"] *= n["density"] * n["speed"]
     ld["qi"] *= n["heatFlux"] * 1e-6    # Conductive flux [MW/m2]
     ld["qe"] *= n["heatFlux"] * 1e-6    # Conductive flux [MW/m2]
+    ld["qn"] *= n["heatFlux"] * 1e-6    # Conductive flux [MW/m2]
+    ld["ui"] *= n["speed"]
+    ld["un"] *= n["speed"]
 
     ld["Ne"] = ld["ne"]
+    ld["Nd"] = ld["nn"]
     ld["Td+"] = ld["Ti"]
     ld["Te"] = ld["Te"]
+    ld["Td"] = ld["Tn"]
     ld["Vd+"] = ld["ui"]
+    ld["Vd"] = ld["un"]
     ld["Pd+"] = ld["Ne"] * ld["Td+"] * constants("q_e")
     ld["Pe"] = ld["Ne"] * ld["Te"] * constants("q_e")
+    ld["Pd"] = ld["Nd"] * ld["Td"] * constants("q_e")
     ld["P"] = ld["Pd+"] + ld["Pe"]
+    ld["NVd+"] = ld["Vd+"] * ld["Ne"] * constants("mass_p") * 2
+    ld["NVd"] = ld["Vd"] * ld["Nd"] * constants("mass_p") * 2
     
     ld["Ne"] = ld["ne"]
     ld["Ne_dual"] = ld["ne_dual"]
@@ -70,6 +81,9 @@ def load_remkit(hdf5Filepath, wrapperPickleFilename, numFiles):
     ld["Vd+"] = ld["ui"]
     ld["Vd+_dual"] = ld["ui_dual"]
     
+    ld["heating_ei_e"] *= n["eVTemperature"] * n["density"] / n["time"]
+    ld["heating_ei_i"] *= n["eVTemperature"] * n["density"] / n["time"]
+    
     for param in ld:
     
         # Unnormalise heat fluxes in domain and on boundary
@@ -78,6 +92,9 @@ def load_remkit(hdf5Filepath, wrapperPickleFilename, numFiles):
             
             ld[param] *= n["density"] * n["eVTemperature"] * constants("q_e") / n["time"] * 1e-6 
             
+    ld = ld.assign_coords(pos=("pos", ld["x"].values))
+    ld = ld.assign_coords(t=("t", ld["time"].values))
+    
     return wrapper, ld
 
 # def hbalance_comparison(ds, rkds):
