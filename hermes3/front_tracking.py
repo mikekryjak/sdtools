@@ -1,8 +1,7 @@
-from xarray import register_dataset_accessor, register_dataarray_accessor
-from xbout import BoutDatasetAccessor, BoutDataArrayAccessor
-from hermes3.plotting import *
+# from hermes3.plotting import *
 import numpy as np
 import xarray as xr
+import pandas as pd
 
 
 def _get_front_position(ds, more_fronts = False):
