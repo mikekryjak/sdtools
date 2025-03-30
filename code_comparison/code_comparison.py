@@ -28,6 +28,7 @@ from hermes3.utils import *
 from hermes3.selectors import get_1d_radial_data, get_1d_poloidal_data
 from code_comparison.solps_pp import SOLPScase
 
+
 def save_last10s_subset(solps_path, destination_path):
     solps = file_read(solps_path)
 
@@ -306,35 +307,13 @@ class SOLPSdata:
         # OMP
         
         for name in ["omp", "imp", "outer_lower_target", "inner_lower_target"]:
-            ## OLD
-            # selector = spc.s[name]
-            # dist = np.cumsum(spc.g["hy"][selector])   # hy is radial length
-            # dist = dist - dist[spc.g["sep"] - 1]
-            # df = pd.DataFrame(index = dist[1:-1])
-            # for param in list_params:
-            #     df[param] = data[param][selector][1:-1] 
-            #     if any([x in param for x in ["Pe", "Pd+"]]):
-            #         df[param] /= constants("q_e")
             
             df = spc.get_1d_radial_data(list_params, region = name)
             df.index = df.pop("dist")
-         
             translate = dict(omp="omp", imp="imp", outer_lower_target="outer_lower", inner_lower_target="inner_lower")
             
             regions[translate[name]] = df.copy()
 
-        ## OLD
-        # for name in ["outer_lower", "inner_lower"]:
-        #     selector = spc.make_custom_sol_ring("outer_lower", i = 0)
-        #     index = np.cumsum(spc.g["hx"][selector])[:-1]
-        #     df = pd.DataFrame(index = index)
-        #     for param in list_params:
-        #         df[param] = data[param][selector][:-1]
-        #         if any([x in param for x in ["Pe", "Pd+"]]):
-        #             df[param] /= constants("q_e")
-                
-        #     translate = dict(outer_lower="outer_fieldline", inner_lower="inner_fieldline")
-        #     regions[translate[name]] = df.copy()
             
         regions["inner_fieldline_0.001"] = spc.get_1d_poloidal_data(list_params, region =  "inner_lower", sepdist = 0.001)
         regions["outer_fieldline"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower", sepdist = 0.001)
@@ -359,9 +338,15 @@ class SOLPSdata:
                 for param in ["Vd+", "NVd+"]:
                     regions[region][param] = regions[region][param] * -1
                     
+            ## ABSOLUTE MOMENTUM AT RADIAL SURFACES
             if "outer_lower" in region or "inner_lower" in region:
                 for param in ["Vd+", "NVd+", "M"]:
                     regions[region][param] = np.abs(regions[region][param])
+                    
+            ## MULTIPLY BY -1 FOR OUTER LEG
+            if "outer_fieldline" in region:
+                for param in ["Vd+", "NVd+", "M"]:
+                    regions[region][param] = regions[region][param] * -1
         
         self.regions = regions
         
@@ -690,7 +675,7 @@ def lineplot_compare(
             "SOLPS" : {"ls" : "-", "lw" : 0, "marker" : "o", "ms" : 3, "markeredgewidth":0}
         }
         
-        xmult = 100
+        
 
 
         ### For each parameter
@@ -707,6 +692,11 @@ def lineplot_compare(
                 
                 ## Find region
                 if region in case.regions.keys():   # Is region available?
+                    
+                    if "fieldline" not in region:
+                        xmult = 100
+                    else:
+                        xmult = 1
                     
                     data = case.regions[region]
                     
@@ -728,6 +718,7 @@ def lineplot_compare(
                             if "fieldline" not in region:
                                 data = data.query(f"(index > {region_extents[region][0]}) & (index < {region_extents[region][1]})")
                             
+                        
                         ### Molecule combination
                         atom_override = {}
                         
@@ -858,8 +849,11 @@ def lineplot_compare(
                               label = f"{title}", fontsize = title_fontsize, fontweight = "normal",
                               alpha = 1.0, color = "black")
             
-            if "field" in region:
-                xlabel = "$Y-Y_{omp} [cm]$"
+            if "fieldline" in region:
+                if "parallel" in region:
+                    xlabel = r"$S_{\parallel} [m]$"
+                else:
+                    xlabel = r"$S_{\theta} [m]$"
             else:
                 xlabel = "$X-X_{sep}$ [cm]"
             
