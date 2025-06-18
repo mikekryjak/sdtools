@@ -1258,6 +1258,8 @@ class Case:
         m["imp_a"] = int((m["j2_1g"] - m["j1_1g"]) / 2) + m["j1_1g"] + 1
         m["imp_b"] = int((m["j2_1g"] - m["j1_1g"]) / 2) + m["j1_1g"]
         
+        ds.metadata.update(m)  # Update metadata with new values
+        
             
         # Array of radial (x) indices and of poloidal (y) indices for each cell
         ds["x_idx"] = (["x", "theta"], np.array([np.array(range(m["nxg"]))] * int(m["nyg"])).transpose())
@@ -1318,6 +1320,8 @@ class Case:
             "standard_name" : "Poloidal length",
             "long_name" : "Poloidal length",
             "source" : "xHermes"})
+        
+        
 
         
     def collect_boundaries(self):
