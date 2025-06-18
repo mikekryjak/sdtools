@@ -35,21 +35,23 @@ def heavyplot(casename, save = True):
     case.extract_2d_tokamak_geometry()
     ds = case.ds
         
-    # ds = ds2
-    tlen = ds.dims["t"]
+    tlen = ds.sizes["t"]
     if tlen > 10:
         tres = 10
     else:
         tres = tlen
+        
     ts = np.linspace(0, tlen-1, tres, dtype = int)
+
     colors = [plt.cm.get_cmap("Spectral_r", tres)(x) for x in range(tres)]
 
     toplot = {}
     for t in ts:
-        toplot[f"t={t*1e-3}ms"] = ds.isel(t=t, x = slice(2,-2))
+        time_ms = ds.isel(t=t)["t"].values * 1e3
+        toplot[f"t={time_ms:.3f}ms"] = ds.isel(t=t, x = slice(2,-2))
 
     if save is True:
-        save_name = f"hmon_{casename}"
+        save_name = f"mon_{casename}"
     else:
         save_name = ""
 
