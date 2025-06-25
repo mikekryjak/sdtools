@@ -44,7 +44,7 @@ class Balance1D():
         self.dom = ds.isel(pos = slice(2,-2))   # Domain
         self.terms_extracted = False
         self.tallies_extracted = False
-        self.sheath_diagnostics = True
+        
         self.use_sheath_diagnostic = use_sheath_diagnostic
         self.override_vi = override_vi
         self.verbose = verbose
@@ -52,6 +52,7 @@ class Balance1D():
         self.reconstruct_sheath_fluxes()  # Now have .sheath dict with properties
         
         # Check for sheath diagnostic variables
+        self.sheath_diagnostics = True
         sheath_flux_candidates = [var for var in ds.data_vars if re.search("S.*\+_sheath", var)]
         if len(sheath_flux_candidates) == 0:
             self.sheath_diagnostics = False
@@ -117,7 +118,6 @@ class Balance1D():
             hbal["Ee_sheath"] = self.sheath["hfe"]
             hbal["Ed+_sheath"] = self.sheath["hfi"]
             pbal["Sd+_sheath"] = self.sheath["pfi"]
-        
         self.pbal = pbal
         self.hbal = hbal
         
@@ -143,7 +143,7 @@ class Balance1D():
         pbalsum["recycle_frac"] = abs(pbal["Sd_target_recycle"] / pbal["Sd+_sheath"])
         
         pbalerror = {}
-        pbalerror["imbalance"] = pbalsum["sources_sum"] + pbalsum["sheath_sum"]
+        pbalerror["imbalance"] = (pbalsum["sources_sum"] - pbal["Sd_target_recycle"]) / pbalsum["sources_sum"]
         
         ## Heat balance
         hbal = self.hbal
@@ -159,6 +159,8 @@ class Balance1D():
         hbalsum["R_sum"] = hbalsum["R_hydr_sum"] + hbalsum["R_imp_sum"]
         hbalsum["R_and_sources_sum"] = hbalsum["sources_sum"] + hbalsum["R_sum"]
         hbalsum["sheath_sum"] = hbal["Ed+_sheath"] + hbal["Ee_sheath"]
+        hbalsum["power_in"] = hbalsum["sources_sum"]
+        hbalsum["power_out"] = hbalsum["R_sum"] + hbalsum["sheath_sum"]
         
         hbalerror = {}
         hbalerror["error"] = (hbalsum["R_and_sources_sum"] + hbalsum["sheath_sum"]) / hbalsum["sources_sum"]
@@ -173,7 +175,7 @@ class Balance1D():
         ds = self.ds
         if ds.metadata["MYG"] == 0:
             raise Exception("Dataset must be read in with all guard cells")
-        return (data.isel(pos=-3) + data.isel(pos=-2))/2
+        return ((data.isel(pos=-3) + data.isel(pos=-2))/2)
     
     def get_properties(self):
         """
@@ -417,6 +419,8 @@ class Balance1D():
         """
         This comes from Ben
         """
+        
+        print("SOME OF THESE ARE INCORRECT")
         ds = self.ds
         if "t" in ds.dims: ds = ds.isel(t=-1)
         
@@ -537,27 +541,29 @@ class Balance1D():
         """
         Print in a way to compare Ben's balance script
         """
-        pbal = self.pbal
-        hbal = self.hbal
-        sheath = self.sheath
+        pbal = self.pbal.copy()
+        hbal = self.hbal.copy()
+        sheath = self.sheath.copy()
         dom = self.dom
+        if "t" in dom.dims: dom = dom.isel(t=-1)
+                
         
-        ## If more than one time slice, select final one
+        # If more than one time slice, select final one
         if self.time:
             for param in pbal:
                 pbal[param] = pbal[param][-1]
             for param in hbal:
                 hbal[param] = hbal[param][-1]
             for param in sheath:
-                if param not in ["da"]:
-                    sheath[param] = sheath[param][-1]
+                # if param not in ["da"]:
+                sheath[param] = sheath[param][-1]
 
         def integral(data):
             return (data * self.dom["dv"]).sum("pos").values
         
-        if "t" in dom.dims: dom = dom.isel(t=-1)
-        total_volume = dom['dv'].sum()
-        area_sheath = self.get_target_value(dom['da'])
+        
+        total_volume = dom['dv'].sum().values
+        area_sheath = self.get_target_value(dom['da']).values
         
         print("\n\n")
         
@@ -572,17 +578,17 @@ class Balance1D():
         # Particle balance
         
         
-        particle_source = self.pbal["Sd+_src"]
-        ionization = self.pbal["Sd+_iz"]
-        recombination = self.pbal["Sd+_rec"]
+        particle_source = pbal["Sd+_src"]
+        ionization = pbal["Sd+_iz"]
+        recombination = pbal["Sd+_rec"]
         total_ion_source = integral(dom["SNd+"])
-        feedback_source = self.pbal["Sd+_feedback"]
+        feedback_source = pbal["Sd+_feedback"]
 
-        print(f"Total ion particle source:  {total_ion_source}  (check: {particle_source + ionization + recombination + feedback_source}")
-        print(f"  |- External ion source:   {particle_source}")
-        print(f"  |- Feedback source:       {feedback_source}")
-        print(f"  |- Ionization source:     {ionization}")
-        print(f"  |- Recombination source:  {recombination}")
+        print(f"Total ion particle source:  {total_ion_source:.3e}  (check: {particle_source + ionization + recombination + feedback_source:.3e})")
+        print(f"  |- External ion source:   {particle_source:.3e}")
+        print(f"  |- Feedback source:       {feedback_source:.3e}")
+        print(f"  |- Ionization source:     {ionization:.3e}")
+        print(f"  |- Recombination source:  {recombination:.3e}")
         print("")
         
         
@@ -591,20 +597,20 @@ class Balance1D():
         neutral_recycle = integral(dom["Sd_target_recycle"])
         neutral_source = integral(dom["Sd_src"])
 
-        print(f"Total neutral particle source: {total_neutral_source} (check: {neutral_source - ionization - recombination + neutral_recycle})")
-        print(f"  |- External neutral source:  {neutral_source}")
-        print(f"  |- Target recycling:         {neutral_recycle}")
-        print(f"  |- Ionization source:        {-ionization}")
-        print(f"  |- Recombination source:     {-recombination}")
+        print(f"Total neutral particle source: {total_neutral_source:.3e} (check: {neutral_source - ionization - recombination + neutral_recycle:.3e})")
+        print(f"  |- External neutral source:  {neutral_source:.3e}")
+        print(f"  |- Target recycling:         {neutral_recycle:.3e}")
+        print(f"  |- Ionization source:        {-ionization:.3e}")
+        print(f"  |- Recombination source:     {-recombination:.3e}")
         print("")
         
         
         print(f"Sheath")
-        print(f"  Density:     {sheath['ni']} m^-3")
-        print(f"  Sound speed: {sheath['cs']} m/s")
-        print(f"  Flow speed:  {sheath['vi']} m/s")
-        print(f"  Ion sink:    {pbal['Sd+_sheath']} s^-1")
-        print(f"  Neutral recycling: {neutral_recycle} s^-1")
+        print(f"  Density:     {sheath['ni']:.3e} m^-3")
+        print(f"  Sound speed: {sheath['cs']:.3e} m/s")
+        print(f"  Flow speed:  {sheath['vi']:.3e} m/s")
+        print(f"  Ion sink:    {pbal['Sd+_sheath']:.3e} s^-1")
+        print(f"  Neutral recycling: {neutral_recycle:.3e} s^-1")
         print("")
         
         
@@ -614,9 +620,9 @@ class Balance1D():
         ion_heating = hbal["Ed+_src"]
         electron_heating = hbal["Ee_src"]
 
-        print(f"Total input power:     {(ion_heating + electron_heating)} MW")
-        print(f"  |- Ion heating:      {ion_heating} MW")
-        print(f"  |- Electron heating: {electron_heating} MW")
+        print(f"Total input power:     {(ion_heating + electron_heating):.3e} MW")
+        print(f"  |- Ion heating:      {ion_heating:.3e} MW")
+        print(f"  |- Electron heating: {electron_heating:.3e} MW")
         print("")
         
         recycle_heating = hbal["Ed_target_recycle"]
@@ -632,18 +638,18 @@ class Balance1D():
         R_rec = hbal["Rd+_rec"]
         R_ex = hbal["Rd+_ex"]
 
-        print(f"Total power loss: {(ion_energy_flux + electron_energy_flux - recycle_heating - R_ex - R_rec)} MW")
-        print(f"  |- Ions:              {ion_energy_flux} MW")
-        # print(f"      |- Convection          {ion_convection} MW")
-        # print(f"      |- Kinetic energy      {ion_kinetic} MW")
-        # print(f"      |- Conduction          {(ion_energy_flux - ion_kinetic - ion_convection)} MW")
-        print(f"  |- Electrons:         {electron_energy_flux} MW")
-        # print(f"      |- Convection          {electron_convection} MW")
-        # print(f"      |- Kinetic energy      {electron_kinetic} MW")
-        # print(f"      |- Conduction          {(electron_energy_flux - electron_kinetic - electron_convection)} MW")
-        print(f"  |- Recycled neutrals: {-recycle_heating} MW")
-        print(f"  |- Ionization:        {-R_ex} MW")
-        print(f"  |- Recombination:     {-R_rec} MW")
+        print(f"Total power loss: {(ion_energy_flux + electron_energy_flux - recycle_heating - R_ex - R_rec):.3e} MW")
+        print(f"  |- Ions:              {ion_energy_flux:.3e} MW")
+        print(f"      |- Convection          {ion_convection:.3e} MW")
+        print(f"      |- Kinetic energy      {ion_kinetic:.3e} MW")
+        print(f"      |- Conduction          {(ion_energy_flux - ion_kinetic - ion_convection):.3e} MW")
+        print(f"  |- Electrons:         {electron_energy_flux:.3e} MW")
+        print(f"      |- Convection          {electron_convection:.3e} MW")
+        print(f"      |- Kinetic energy      {electron_kinetic:.3e} MW")
+        print(f"      |- Conduction          {(electron_energy_flux - electron_kinetic - electron_convection):.3e} MW")
+        print(f"  |- Recycled neutrals: {-recycle_heating:.3e} MW")
+        print(f"  |- Ionization:        {-R_ex:.3e} MW")
+        print(f"  |- Recombination:     {-R_rec:.3e} MW")
         print("")
 
         
@@ -675,7 +681,7 @@ class Balance1D():
         print("Diagnostic output")
         print("----------------------")
         error = pbalerror["imbalance"][-1] if self.time else pbalerror["imbalance"]
-        print(f"Imbalance: sources + net sheath flux: {error:.3e} [s^-1]")
+        print(f"(sources + recycled flow) / sources: {error:.3e}")
 
         ### Print output for heat balance
         print("\n\nHeat flows [MW]")
@@ -697,3 +703,9 @@ class Balance1D():
         print("----------------------")
         error = hbalerror["error"][-1] if self.time else hbalerror["error"]
         print(f"Error: (R + Src + Sheath) / Src: {error:.2%}")
+        
+    def check_bug(self):
+        if type(self.pbal["Sd+_src"]) == np.float64:
+            raise Exception("BUG FOUND")
+        else:
+            print("No bug found")
