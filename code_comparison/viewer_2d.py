@@ -19,6 +19,8 @@ sys.path.append(os.path.join(onedrive_path, r"Project\python-packages"))
 
 from hermes3.utils import *
 from code_comparison.solps_pp import *
+from soledge.wrapper_class import SOLEDGEcase
+
 try:
     # import gridtools.solps_python_scripts.setup
     # from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d
@@ -56,7 +58,7 @@ class viewer_2d():
                  wspace = 0.05,
                  cmap = "Spectral_r",
                  add_cbar = True,
-                 slider = True):
+                 slider = False):
         
         plots = []
         for case in cases:
@@ -68,7 +70,8 @@ class viewer_2d():
                 plots.append(SOLPSplot(case["path"], param = param))
                 
             elif case["code"] == "soledge":
-                plots.append(SOLEDGEplot(case["path"], param = param))
+                plots.append(SOLEDGEplotCase(case["path"], param = param))
+                
         self.cases = cases
         self.plots = plots
         num_cases = len(cases)
@@ -123,6 +126,7 @@ class viewer_2d():
                 axes[i] = fig.add_subplot(gs0a[i], sharex=axes[0], sharey=axes[0])
             
             case = cases[i]
+
             plot.plot(ax = axes[i], norm = norm, cmap = cmap, separatrix = True)
             axes[i].set_title(f"{case['name']}")
             
@@ -177,7 +181,7 @@ class viewer_2d():
         
             def update(val):
                 slider.ax.set_ylim(self.min, self.max) # This is inexplicably needed otherwise it freezes
-                print(val)
+
                 
                 if logscale == True:
                     cbar.norm.vmin = np.log10(val[0])
@@ -233,8 +237,26 @@ class HermesPlot():
         self.Zlim = [ds["Z"].values.min(), ds["Z"].values.max()]
         
     def plot(self, ax, **kwargs):
-        self.dataarray.bout.polygon(ax = ax, add_colorbar = False, **kwargs)
+        self.dataarray.bout.polygon(ax = ax, add_colorbar = False, antialias = True, **kwargs)
         
+class SOLEDGEplotCase():
+    """
+    Same as SOLEDGEplot but wraps SOLEDGEcase instead
+    """
+    def __init__(self, path, param):
+        self.param = param
+        self.case = SOLEDGEcase(path)
+        
+        data = self.case.get_data(param)
+        
+        self.vmin = min(data)
+        self.vmax = max(data)
+            
+        self.Rlim = [self.case.R.min(), self.case.R.max()]
+        self.Zlim = [self.case.Z.min(), self.case.Z.max()]
+        
+    def plot(self, **kwargs):
+        self.case.plot_2d(param = self.param, cbar = False, **kwargs)
         
 class SOLEDGEplot():
     """
@@ -249,19 +271,25 @@ class SOLEDGEplot():
         
         
         with HiddenPrints():
-            Plasmas = load_plasma_files(path, nZones=0, Evolution=0, iPlasmas=[0,1])
-        
-
-        
-        
-
-        if param == "Nd":
-            print("SOLEDGE: Combining Nmi and Nni")
-            iPar = Plasmas[1][0].Triangles.VNames.index("Nni")	
-            self.data = Plasmas[1][0].Triangles.Values[iPar]
+            self.Plasmas, Plasmas = load_plasma_files(path, nZones=0, Evolution=0, iPlasmas=[0,1])
             
-            iPar = Plasmas[1][0].Triangles.VNames.index("Nmi")	
-            self.data += Plasmas[1][0].Triangles.Values[iPar]
+        
+
+        
+        
+
+        if param == "Nd" or param == "Nn":
+            print("SOLEDGE: Combining Nmi and Nni")
+            # iPar = Plasmas[1][0].Triangles.VNames.index("Nni")	
+            # self.data = Plasmas[1][0].Triangles.Values[iPar]
+            
+            # iPar = Plasmas[1][0].Triangles.VNames.index("Nmi")	
+            # self.data += Plasmas[1][0].Triangles.Values[iPar]
+            
+            self.data = self.get_param_data("Nni") + self.get_param_data("Nmi") * 2
+
+        if param == "Pa":
+            self.data = self.get_param_data("Nni") * self.get_param_data("Tni") * constants("q_e")
             
         elif param == "TiTe":  # Ti/Te ratio
             Ti_i = Plasmas[1][0].Triangles.VNames.index("Tempi")
@@ -307,7 +335,9 @@ class SOLEDGEplot():
         self.Rlim = [self.R.min(), self.R.max()]
         self.Zlim = [self.Z.min(), self.Z.max()]
         
-        
+    def get_param_data(self, param):
+        iPar = self.Plasmas[1][0].Triangles.VNames.index(param)	
+        return self.Plasmas[1][0].Triangles.Values[iPar]
         
     def plot(self, ax, 
              norm = None,
@@ -392,7 +422,7 @@ class SOLPSplot():
              ax = None,
              norm = None, 
              cmap = "Spectral_r",
-             antialias = False,
+             antialias = True,
              linecolor = "k",
              linewidth = 0,
              vmin = None,
@@ -414,7 +444,8 @@ class SOLPSplot():
             vmax = vmax,
             logscale = logscale,
             alpha = alpha,
-            separatrix = separatrix
+            separatrix = separatrix, 
+            cbar = False
         )
         
 class SOLPSplotOLD():
