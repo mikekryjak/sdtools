@@ -11,6 +11,7 @@ import xbout
 import scipy
 import re
 import netCDF4 as nc
+import pickle
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -94,7 +95,7 @@ class SOLPScase():
         eirene_mc_papl_sna_bal: particle source due to ionisation in s^-1. 3rd dim species (second is EIRENE neutral), 4d dim strata
         
         """
-        
+        self.path = path
         raw_balance = nc.Dataset(os.path.join(path, "balance.nc"))
         
         ## Need to transpose to get over the backwards convention compared to MATLAB
@@ -184,7 +185,7 @@ class SOLPScase():
         ## 2D selectors
         s = self.s = {}
         for location in psel.keys():
-            s[location] = (slice(None,None), psel[location])
+            s[location] = (psel[location], slice(None, None))
         # s["inner_lower_target"] = (1, slice(None,None))
         # s["inner_lower_target_guard"] = (0, slice(None,None))
         # s["inner_upper_target"] = (upper_break-2, slice(None,None))
@@ -454,14 +455,17 @@ class SOLPScase():
              dpi = 150,
              xlim = (None, None),
              ylim = (None, None)
-    ):
+    ):  
+        print(data)
         
         if custom_cmap != None:
             cmap = custom_cmap
         
         if grid_only is True:
             data = np.zeros_like(self.bal["te"])
-        elif len(data)==0:
+        if data == None:
+            data = self.bal[param]
+        elif len(data) == 0:
             data = self.bal[param]
         if absolute:
             data = np.abs(data)
@@ -484,9 +488,6 @@ class SOLPScase():
         nx, ny = self.g["nx"], self.g["ny"]
         
         
-        # print(f"Data shape: {data.shape}")
-        # print(f"Grid shape: {nx, ny}")
-        # print(cry.shape)
         
         
         # In hermes-3 and needed for plot: lower left, lower right, upper right, upper left, lower left
@@ -561,7 +562,97 @@ class SOLPScase():
         if ylim != (None, None):
             ax.set_ylim(ylim)
             
-    
+    def plot_neutral_vectors(self,
+                             ax, 
+                             normalise_arrows = True,
+                             flux = False,  # Plot neutral flux instead of speed?
+                             vmin = None,
+                             vmax = None,
+                             cmap = "jet",
+                             logscale = False,
+                             width = 0.0025,
+                             scale_mult = 1,
+                             gridcolor = "lightgrey",
+                             gridwidth = 0.5):
+        
+        fort46_path = os.path.join(self.path, "fort.46.pkl")
+        with open(fort46_path, "rb") as f:
+            f46 = pickle.load(f)
+            
+        triangles_path = os.path.join(self.path, "triangle_mesh.pkl")
+        with open(triangles_path, "rb") as f:
+            triangles = pickle.load(f)
+            
+            
+        if ax == None:
+            fig, ax = plt.subplots()
+
+        nodes = triangles["nodes"]
+        cells = triangles["cells"]
+        triang = mpl.tri.Triangulation(nodes[:,0], nodes[:,1], cells)
+
+        if flux:
+            U = f46["vxdena"] / (2*constants("mass_p"))
+            V = f46["vydena"] / (2*constants("mass_p"))
+            clabel = "Flux [$m^2/s$]"
+        else:
+            U = f46["vxdena"] / f46["pdena"] / (2*constants("mass_p"))
+            V = f46["vydena"] / f46["pdena"] / (2*constants("mass_p"))
+            clabel = "Flux [$m/s$]"
+            
+        speed = np.hypot(U, V)
+
+        tri_coords = nodes[cells]
+        centroids = tri_coords.mean(axis=1)
+        px = centroids[:, 0]
+        py = centroids[:, 1]
+
+        # normalize vectors to unit length for plotting
+        # avoid division by zero
+        scale = 5e4 * scale_mult
+        if normalise_arrows:
+            eps = 1e-16
+            U = U / (speed + eps) * scale
+            V = V / (speed + eps) * scale
+            
+        # set up log normalization (avoid zeros by clipping)
+        if vmin is None:
+            vmin = max(speed.min(), 1e-3)  # lower bound >0
+        if vmax is None:
+            vmax = speed.max()
+            
+        if logscale:
+            norm = mpl.colors.LogNorm(vmin=vmin, vmax=vmax)
+            cbar_formatter = mpl.ticker.LogFormatterSciNotation(base=10)
+        else:
+            norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)
+            cbar_formatter = None
+
+        if ax is None:
+            fig, ax = plt.subplots(figsize = (5,15))
+
+        ax.triplot(triang, color = gridcolor, lw = gridwidth)
+
+
+        Q = ax.quiver(px, py, U, V, speed,
+                        angles='xy',        # no automatic rotation
+                        scale_units='xy',   # scale in data units
+                        cmap = cmap,
+                        norm = norm,
+                        scale=3e6,            # if vectors are already in desired length
+                        width=width        # adjust arrow thickness
+                        )
+
+        # create a colorbar whose height matches ax
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="3%", pad=0.05)
+        cbar = plt.colorbar(Q, cax=cax, format=cbar_formatter)
+        cbar.set_label(clabel)
+        cbar.ax.yaxis.set_tick_params(which='both', length=4)
+
+        ax.set_aspect("equal")
+        
+            
             
     def plot_separatrix(self, ax, **separatrix_kwargs):
         
@@ -1386,7 +1477,76 @@ def read_display_tallies(path):
 
     return {"reg":dfreg, "xreg":dfxreg, "yreg":dfyreg }
 
+def extract_eirene_spectra(logpath):
+    """
+    Extracts EIRENE spectra saved to log file.
+    WARNING: WILL ONLY GET THE FIRST INSTANCE!
+    
+    """
+    ## Extract spectrum relevant lines
+    lines = []
+    read = False
+    with open(logpath, 'r') as f:
+        for line in f:
+            
+            if "THIS IS THE SUM OVER THE STRATA" in line:
+                read = True
+            if "B2-EIRENE GLOBAL BALANCES" in line:
+                read = False
+                
+            if read:
+                lines.append(line.rstrip())
+                
+    ## Parse for stats and locate data
+    for i, line in enumerate(lines):
+        if "NUMBER OF MONTE CARLO HISTORIES" in line:
+            n_histories = float(lines[i+1].split()[-1])
+        if "SPECTRUM CALCULATED FOR SCORING CELL" in line:
+            cell_id = int(line.split()[-1])
+        if "INTEGRAL OF SPECTRUM" in line:
+            spectrum_integral = float(line.split()[-1])
+        
+        if "B-LEFT" in line:
+            line_data_bin0 = i+1
+            line_data_start = i+3
+            
+        if "TEST PARTICLE INFLUX FROM SOURCE (AMP)" in line:
+            line_data_end = i-5
+            line_data_lastbin = i-3
+        
+    ## Extract lines with spectrum data    
+    spectrum_lines = []
+    spectrum_lines.append(lines[line_data_bin0])
+    for i in range(line_data_start, line_data_end):
+        spectrum_lines.append(lines[i])
+        
+        
+    ## Extract data from lines
+    bin = []
+    B_left = []
+    B_right = []
+    flux_per_bin = []
 
+    for i, line in enumerate(spectrum_lines):
+            
+            line_split = line.strip().split(" ")
+            bin.append(int(line_split[0]))
+            B_left.append(float(line_split[2]))
+            B_right.append(float(line_split[4]))
+            flux_per_bin.append(float(line_split[6]))
+
+
+    out = {}
+    out["B_left"] = np.array(B_left)
+    out["B_right"] = np.array(B_right)
+    out["B_mean"] = (out["B_left"] + out["B_right"]) / 2
+    out["flux_per_bin"] = np.array(flux_per_bin)
+    out["bin"] = np.array(bin)
+    out["n_histories"] = n_histories
+    out["spectrum_integral"] = spectrum_integral
+    out["cell_id"] = cell_id
+    
+    return out
 
 def returnll(R, Z):
     # return the poloidal distances from the target for a given configuration
