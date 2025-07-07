@@ -17,12 +17,12 @@ try:
     import gridtools.solps_python_scripts.setup
     from gridtools.solps_python_scripts.plot_solps       import plot_1d, plot_2d
 except:
-    print("Gridtools not found")
+    print("Gridtools not found in code_comparison")
 
 try:
     from soledge.wrapper_class import *
 except:
-    print("SOLEDGE could not be imported")
+    print("SOLEDGE could not be imported in code_comparison")
 
 from hermes3.utils import *
 from hermes3.selectors import get_1d_radial_data, get_1d_poloidal_data
@@ -148,10 +148,21 @@ class SOLEDGEdata:
                 # df = df.query("index > 0")
                 self.regions[region] = df
                 
+                self.regions[region]["Nn"] = self.regions[region]["Na"] + self.regions[region]["Nm"]*2
+                self.regions[region]["Pm"] = self.regions[region]["Tm"] * self.regions[region]["Nm"] * constants("q_e")
+                self.regions[region]["Pn"] = self.regions[region]["Pa"] + self.regions[region]["Pm"]
+                self.regions[region]["Tn"] = self.regions[region]["Pn"] / self.regions[region]["Nn"] / constants("q_e")
+                
+                
+                
             if "inner" in region or "outer" in region:
                 self.regions[region]["M"] = np.abs(self.regions[region]["M"])
                 self.regions[region]["Vd+"] = np.abs(self.regions[region]["Vd+"])
                 self.regions[region]["NVd+"] = np.abs(self.regions[region]["NVd+"])
+                
+        
+                
+           
     
     def read_csv(self, path, mode):
         
@@ -271,6 +282,8 @@ class SOLEDGEdata:
         
     def derive_variables(self):
         for region in self.regions.keys():
+            
+
             if "Te" in self.regions[region].keys():
                 self.regions[region]["Pe"] = self.regions[region]["Ne"] * self.regions[region]["Te"] * constants("q_e")
             if "Td+" in self.regions[region].keys():
@@ -281,6 +294,11 @@ class SOLEDGEdata:
                 self.regions[region]["Pm"] = self.regions[region]["Nm"] * self.regions[region]["Tm"] * constants("q_e")
             if "Vd+" in self.regions[region].keys():
                 self.regions[region]["NVd+"] = self.regions[region]["Vd+"] * self.regions[region]["Ne"] * constants("mass_p") * 2
+                    
+            if "Na" in self.regions[region].keys():
+                self.regions[region]["Nn"] = self.regions[region]["Na"] + self.regions[region]["Nm"]*2
+                self.regions[region]["Pn"] = self.regions[region]["Pa"] + self.regions[region]["Pm"]
+                self.regions[region]["Tn"] = self.regions[region]["Pn"] / self.regions[region]["Nn"] / constants("q_e")
             
 
 class SOLPSdata:
@@ -343,9 +361,9 @@ class SOLPSdata:
                 for param in ["Vd+", "NVd+", "M"]:
                     regions[region][param] = np.abs(regions[region][param])
                     
-            ## MULTIPLY BY -1 FOR OUTER LEG
-            if "outer_fieldline" in region:
-                for param in ["Vd+", "NVd+", "M"]:
+            ## MULTIPLY BY -1 FOR Inner LEG
+            if "inner_fieldline" in region:
+                for param in ["Vd+", "NVd+"]:
                     regions[region][param] = regions[region][param] * -1
         
         self.regions = regions
@@ -503,6 +521,8 @@ class Hermesdata:
         for region in regions:
             if "fieldline" in region:
                 self.regions[region+"_parallel"] = self.regions[region].copy()
+                
+            self.regions[region]["M"] = np.abs(self.regions[region]["M"])
             
         for region in list(self.regions.keys()):
             if "fieldline" in region:
@@ -510,6 +530,11 @@ class Hermesdata:
                     self.regions[region].index = self.regions[region]["Spar"]
                 else:
                     self.regions[region].index = self.regions[region]["Spol"] 
+                
+                # Flip sign of flow related diagnostics for inner    
+                if "inner" in region:
+                    for param in ["Vd+", "NVd+", "M"]:
+                        self.regions[region][param] = self.regions[region][param] * -1
 
         
         # Make distance the index
@@ -525,6 +550,10 @@ class Hermesdata:
                 "Nd" : "Na",
                 "Pd" : "Pa"
             })
+            
+            self.regions[region]["Nn"] = self.regions[region]["Na"]
+            self.regions[region]["Pn"] = self.regions[region]["Pa"]
+            self.regions[region]["Tn"] = self.regions[region]["Ta"]
 
         
     def get_radial_data(self, dataset):
@@ -616,7 +645,9 @@ def lineplot_compare(
     legend_nrows = 2,
     combine_molecules = False,
     solps_noD2 = False,
-    titles = "long"
+    titles = "long",
+    title_append = ""
+    
     ):
     
     marker = "o"
@@ -627,21 +658,22 @@ def lineplot_compare(
         
     set_yscales = {
     "omp" : {
-        "Td+": "log", "Te": "log", "Ta" : "log", "Tm" : "log",
-        "Ne": "log", "Nd": "log", "Na": "log", "Nm": "log", 
-        "Pe":"log", "Pd+":"log"},
+        "Td+": "log", "Te": "log", "Ta" : "log", "Tm" : "log", "Tn": "log",
+        "Ne": "log", "Nd": "log", "Na": "log", "Nm": "log", "Nn": "log",
+        "Pe":"log", "Pd+":"log", "NVd+":"log", "Vd+": "log", "M": "linear",
+        },
     "imp" : {
         "Td+": "log", "Te": "log", "Ta" : "log", "Tm" : "log",
         "Ne": "log", "Nd": "log", "Na" : "log", "Nm": "log", 
-        "Pe":"log", "Pd+":"log"},
+        "Pe":"log", "Pd+":"log", "NVd+":"log", "Vd+": "log", "M": "linear"},
     "outer_lower" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "linear", "Nd": "log"},
     "outer_upper" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "linear", "Nd": "log"},
     "outer_fieldline" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "log", "Nd": "log"},
     "outer_fieldline_parallel" : {
-        "Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", 
-        "Ne": "log", "Nd": "log", "Na":"log", "Nm":"log",
-        "Pe": "linear", "Pd+": "linear", "Pa": "log",
-        "M": "linear", "NVd+": "linear"},
+        "Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Tn":"linear","Tm":"linear",
+        "Ne": "log", "Nd": "log", "Na":"log", "Nm":"log", "Nn":"log",
+        "Pe": "linear", "Pd+": "linear", "Pa": "log", "Pn":"log", "Pm":"log",
+        "M": "linear", "NVd+": "linear", "Vd+": "linear"},
     }
     set_yscales["inner_lower"] = set_yscales["outer_lower"]
     set_yscales["inner_upper"] = set_yscales["outer_upper"]
@@ -666,7 +698,7 @@ def lineplot_compare(
         scale = 1.3
         fig, axes = plt.subplots(1,len(params), dpi = dpi*scale, figsize = (4.7*len(params)/scale,5/scale), sharex = True)
         fig.subplots_adjust(hspace = 0, wspace = 0.35, bottom = 0.25, left = 0.1, right = 0.9)
-        fig.suptitle(region, x = 0.1, y = 1.0, fontsize = "xx-large", ha = "left")
+        fig.suptitle(region + title_append, x = 0.1, y = 1.0, fontsize = "xx-large", ha = "left")
         
         linestyles = {"Hermes-3" : "-", "SOLEDGE2D" : ":", "SOLPS" : "--"}
         styles = {
@@ -782,12 +814,23 @@ def lineplot_compare(
                     print(f"{region} not available in {name}")
                     
             # Set yscales
+            
+                
+            
             if "fieldline" in region:
-                axes[i].set_yscale(set_yscales["outer_fieldline_parallel"][param])
+                if param in set_yscales["outer_fieldline_parallel"].keys():
+                    axes[i].set_yscale(set_yscales["outer_fieldline_parallel"][param])
+                else:
+                    axes[i].set_yscale("linear")
+                    # raise Exception(f"Parameter {param} not available in yscales of region {region}")
+                  
                 
             elif region in set_yscales.keys():
                 if param in set_yscales[region].keys():
                     axes[i].set_yscale(set_yscales[region][param])
+                else:
+                    axes[i].set_yscale("linear")
+                    # raise Exception(f"Parameter {param} not available in yscales of region {region}")
 
                     
             if mode == "linear":
@@ -835,9 +878,9 @@ def lineplot_compare(
                 
             elif titles == "long":
                 title_translate = {
-                    "Td+" : "Ion temperature", "Te" : "Electron temperature", "Ta" : "Neutral temperature",
-                    "Ne" : "Electron density", "Na" : "Neutral density",
-                    "Pd+" : "Ion pressure", "Pe" : "Electron pressure", "Pa" : "Neutral pressure",
+                    "Td+" : "Ion temperature", "Te" : "Electron temperature", "Ta" : "Atom temperature", "Tm" : "Molecule temperature", "Tn" : "Neutral temperature",
+                    "Ne" : "Electron density", "Na" : "Atom density", "Nm" : "Molecule density", "Nn" : "Neutral density",
+                    "Pd+" : "Ion pressure", "Pe" : "Electron pressure", "Pa" : "Atom pressure", "Pm" : "Molecule pressure", "Pn" : "Neutral pressure"
                 }
                 title_fontsize = "large"
             
@@ -904,7 +947,66 @@ def lineplot_compare(
         # fig.legend(legend_items, cases.keys(), ncol = 1, loc = "upper right", bbox_to_anchor=(0.05,0.90))
         # fig.tight_layout()
         
+def plot_by_region(
+    cases,
+    regions,
+    params,
+    data_dicts,
+    densities = ["1e19", "2e19", "3e19"],
+    **kwargs):
+    """
+    Produces comparison plots grouped by region across all three densities. 
+    The inputs MUST be in terms of 1e19 with 1e19 in the case name.
+    
+    e.g.
+    
+                   
+    plot_by_region(
+        cases = { 
+
+            "SOLPS, phi=0" : dict(name="tightwall_noD2_1e19_zerophi", color="deeppink"),
+            "SOLEDGE2D" : dict(name="tightwall_1e19", color="black"),
+            r"Hermes-3: max_mfp=1, cond_alpha=0.25" : dict(name='1e19', color = "teal"),
+
+        },
+        regions = ["omp", "outer_fieldline_0.001_parallel", "outer_lower"],
+        params = ["Ne", "Te", "Td+", "NVd+", "Vd+", "M"],
+        data_dicts = {"SOLPS":sp, "SOLEDGE2D":sl, "Hermes-3":hr},
+        dpi = 100,
+        ylims = (5e17, 2e20),
+        lw = 2,
+        legend_nrows =1,
+        combine_molecules = False)
+    """
+    
+    ## Asssemble cases for all three densities
+    cases_data = {}
+    
+    for dens in densities:
+        cases_data[dens] = {}
+        
+        for casename, entry in cases.items():
             
+            
+            if "SOLPS" in casename:
+                cases_data[dens][casename] = dict(data = data_dicts["SOLPS"][entry["name"].replace("1e19", dens)], color = entry["color"])
+            elif "SOLEDGE" in casename:
+                cases_data[dens][casename] = dict(data = data_dicts["SOLEDGE2D"][entry["name"].replace("1e19", dens)], color = entry["color"])
+            elif "Hermes" in casename:
+                cases_data[dens][casename] = dict(data = data_dicts["Hermes-3"][entry["name"].replace("1e19", dens)], color = entry["color"])
+            else:
+                raise ValueError(f"Unknown case type for {casename}")
+                
+                
+    for region in regions:
+        for dens in densities:
+            lineplot_compare(
+                cases = cases_data[dens],
+                regions = [region],
+                params = params,
+                title_append = f" - {dens}",
+                **kwargs
+            )  
           
         
 def file_write(data, filename):
