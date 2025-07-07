@@ -531,7 +531,7 @@ def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None):
             selection = (slice(i+0,i+1), slice(0+MYG, nyg - MYG))
             
         else:
-            raise Exception(f"Region {region} not implemented")
+            raise Exception(f"Region {region} not implemented for single null")
         
     else:
         raise Exception(f"Topology {m['topology']} not implemented")
