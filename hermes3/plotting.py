@@ -640,9 +640,9 @@ def plot_xy_grid(ds, ax):
     ax.plot([yflat[m["j1_2g"]]]*np.ones_like(xflat), xflat, label = "j1_2g", color = m["colors"][1])
     ax.plot([yflat[m["j2_1g"]]]*np.ones_like(xflat), xflat, label = "j2_1g",   color = m["colors"][2])
     ax.plot([yflat[m["j2_2g"]]]*np.ones_like(xflat), xflat, label = "j2_2g", color = m["colors"][3])
-    ax.plot(yflat, [yflat[m["ixseps1"]]]*np.ones_like(yflat), label = "ixseps1", color = m["colors"][4])
+    ax.plot(yflat, [yflat[m["ixseps1"]]]*np.ones_like(yflat), label = "ixseps1", color = m["colors"][4], lw = 1)
     if m["topology"] != "single-null":
-        ax.plot(yflat, [yflat[m["ixseps2"]]]*np.ones_like(yflat), label = "ixseps1", color = m["colors"][5], ls=":")
+        ax.plot(yflat, [yflat[m["ixseps2"]]]*np.ones_like(yflat), label = "ixseps1", color = m["colors"][5], ls=":", lw = 1)
         
     ax.plot(yflat[m["ny_inner"]]*np.ones_like(xflat), xflat, label = "ny_inner", color = m["colors"][5])
     ax.legend(loc = "upper center", bbox_to_anchor = (0.5, 1.3), ncol = 3)
@@ -671,13 +671,13 @@ def plot_rz_grid(ds, ax, xlim = (None,None), ylim = (None,None)):
         ds["R"][m["ixseps1"], slice(None,m["ny_inner"])], 
         ds["Z"][m["ixseps1"], slice(None,m["ny_inner"])], 
         
-        label = "ixseps1", color = m["colors"][4], alpha = 0.7, lw = 2)
+        label = "ixseps1", color = m["colors"][4], alpha = 0.7, lw = 1)
     
     ax.plot(
         ds["R"][m["ixseps1"], slice(m["ny_inner"]+m["MYG"], m["nyg"])], 
         ds["Z"][m["ixseps1"], slice(m["ny_inner"]+m["MYG"], m["nyg"])], 
         
-        color = m["colors"][4], alpha = 0.7, lw = 2)
+        color = m["colors"][4], alpha = 0.7, lw = 1)
     
     ax.plot(ds["R"][:,m["ny_inner"]], ds["Z"][:,m["ny_inner"]], label = "ny_inner", color = m["colors"][5], alpha = 0.7)
     
