@@ -5,7 +5,7 @@ from hermes3.front_tracking import *
 import numpy as np
 import scipy
 
-def get_1d_radial_data(ds, params, region, average_midplanes = False, guards = False):
+def get_1d_radial_data(ds, params, region, guards = False):
     """
     Return a Pandas Dataframe with a radial slice of data in the given region
     The dataframe contains a radial distance normalised to the separatrix
@@ -83,7 +83,14 @@ def get_1d_radial_data(ds, params, region, average_midplanes = False, guards = F
     return df
 
 
-def get_1d_poloidal_data(ds, params, region, sepdist = None, sepadd = None, target_first = False):
+def get_1d_poloidal_data(
+    ds, 
+    params, 
+    region, 
+    sepdist = None, 
+    sepadd = None,
+    target_first = False,
+    interpolate = False):
     """
     Return a dataframe with data along a field line as well as poloidal and parallel connection lengths.
     Refer to get_custom_sol_ring for the indexing routine. 
@@ -101,6 +108,8 @@ def get_1d_poloidal_data(ds, params, region, sepdist = None, sepadd = None, targ
     target_first : bool, if True, reverse the dataframe so that 0 distance is at the target
 
     """
+    if "t" in ds.dims:
+        raise Exception("get_1d_poloidal_data doesn't support multiple time slices")
     reg = ds.hermesm.select_custom_sol_ring(region, sepadd = sepadd, sepdist = sepdist).squeeze()
 
     df = pd.DataFrame()
@@ -114,12 +123,43 @@ def get_1d_poloidal_data(ds, params, region, sepdist = None, sepadd = None, targ
             df[param] = reg[param].values
         else:
             print(f"Parameter {param} not found")
+            
+    if interpolate:
+        df_interp = pd.DataFrame()
+        Z = df["Z"].values
+        R = df["R"].values
+        ds = np.sqrt(np.diff(R)**2 + np.diff(Z)**2)
+        s = np.concatenate(([0], np.cumsum(ds)))  # shape (N,)
+        R_spline = scipy.interpolate.UnivariateSpline(s, R, s=0)
+        Z_spline = scipy.interpolate.UnivariateSpline(s, Z, s=0)
+        
+        
+        s_fine = np.linspace(s[0], s[-1], 100)
+        df_interp["R"] = R_spline(s_fine)
+        df_interp["Z"] = Z_spline(s_fine)
+        
+        for param in df.columns.drop(["R", "Z"]):
+            param_spline = scipy.interpolate.UnivariateSpline(s, df[param].values, s=0)
+            df_interp[param] = param_spline(s_fine)
+            
+        df = df_interp
+        
         
     # Ensure inner starts at midplane
     if "inner" in region:
         df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
         df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
         df = df.iloc[::-1].reset_index(drop = True)
+        
+    # Keep only one point beyond midplane
+    signs = np.sign(df["Z"])
+    sign_changes = signs != signs.shift()
+    change_indices = df.index[sign_changes][1:]
+    if len(change_indices) > 1:
+        raise Exception("Multiple sign changes in Z. Haven't considered this yet")
+
+    idx_before_mp = change_indices[0]-1
+    df = df.iloc[idx_before_mp:].reset_index(drop = True)
 
     # Interpolate start of field line onto Z = 0  (between midplane_a and midplane_b)
     for param in df.columns.drop("Z"):
