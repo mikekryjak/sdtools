@@ -2027,9 +2027,24 @@ class scaling_comparison():
         # Then divide by the sum of the positive fractions. Now sum of positive weights = K, and 
         # the negative weight is scaled the same as the positive weights for consistency.
         K = np.log(terms["ratio"].product()) / np.log(param_ratio)
+        
+        # DEBUG -----------------------------------------------------------------
+        
+        # log_product = np.log(terms["ratio"].product())
+        # param_ratio = param_ratio
+        # K_fractionsum = K / terms[terms>0]["fraction"].sum()  
+        
+        # print("------------------------------------")
+        # print(f"param: {param}")
+        # print(f"param 1: {df1[param]}, param 2: {df2[param]}")
+        # print(f"log_product = {log_product:.3f}, param_ratio = {param_ratio:.3f}, log(param_ratio) = {np.log(param_ratio):.3f}")
+        # print(f"K = log_product / log_ratio = {K:.3f}")
+        # print(f"Sum of positive fractions = {terms[terms>0]['fraction'].sum():.3f}")
+        # print(f"K / fractionsum = {K_fractionsum:.3f}")
+        # print("")
+        
         terms["weights"] = terms["fraction"] * K / terms[terms>0]["fraction"].sum()   
 
-        
         terms_check.loc["total", "scaling_ratio"] = terms["ratio"].product(axis=0)
         terms_check.loc["total", "abs(fraction)"] = terms["fraction"].abs().sum(axis=0)
         terms_check.loc["total", "weights"] = terms["weights"].sum(axis=0)
@@ -2054,12 +2069,20 @@ def compare_dls(toplot, params, settings = defaultdict(dict), xlims = defaultdic
 
         for j, param in enumerate(params):
             axes[j].plot(df["Spar"], df[param], label = name, **settings[param])
+            
+            dfx = df[df["Xpoint"] == 1]
+            
+            xpoint_settings = {"marker":"o", "lw":0, "c" :"k"}
+            xpoint_settings.update(settings[param])
+            axes[j].plot(dfx["Spar"], dfx[param], **xpoint_settings)
+            
             axes[j].set_title(param)
             if param in xlims:
                 axes[j].set_xlim(xlims[param])
             
             if param in scales:
                 axes[j].set_yscale(scales[param])
-
+            
+             
         for ax in axes:
             ax.legend()
