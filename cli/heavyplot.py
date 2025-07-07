@@ -28,34 +28,37 @@ def heavyplot(casename, save = True):
 
     """
     tstart = tm.time()
-    db = CaseDB(case_dir = r"/users/mjk557/scratch/cases", grid_dir = r"/users/mjk557/scratch/cases")
+    db = CaseDB(case_dir = r"/home/mike/work/cases", grid_dir = r"/home/mike/work/cases")
     
     casename = casename.split(r"/")[-1]
     case = db.load_case_2D(casename, use_squash = False)
+    case.extract_2d_tokamak_geometry()
     ds = case.ds
         
-    # ds = ds2
-    tlen = ds.dims["t"]
+    tlen = ds.sizes["t"]
     if tlen > 10:
         tres = 10
     else:
         tres = tlen
+        
     ts = np.linspace(0, tlen-1, tres, dtype = int)
+
     colors = [plt.cm.get_cmap("Spectral_r", tres)(x) for x in range(tres)]
 
     toplot = {}
     for t in ts:
-        toplot[f"t={t/10}ms"] = ds.isel(t=t, x = slice(2,-2))
+        time_ms = ds.isel(t=t)["t"].values * 1e3
+        toplot[f"t={time_ms:.3f}ms"] = ds.isel(t=t, x = slice(2,-2))
 
     if save is True:
-        save_name = f"hmon_{casename}"
+        save_name = f"mon_{casename}"
     else:
         save_name = ""
 
     lineplot(
         toplot,
         clean_guards = False,
-        params = ["Te", "Td+",  "Ne", "Nd", "NVd", "Rd+_ex", "Rc"],
+        params = ["Te", "Td",  "Ne", "Nd", "Rd+_ex"],
         regions = ["omp", "outer_lower", "field_line"],
         colors = colors,
         save_name = save_name

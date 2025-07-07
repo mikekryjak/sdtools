@@ -68,6 +68,14 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
     
     # Get process parameters
     t = get_var("t") * (1/Omega_ci) * 1000
+    
+    # Sometimes the last timestep is bugged and like 1e20 higher, not sure why
+    if t[-1] > t[-2]*1000:
+        skip = 1
+        print("\nLast timestep is bugged, skipping last timestep")
+    else:
+        skip = 0
+    
     Ne = get_var("Ne") * Nnorm
     Nn = get_var("Nd") * Nnorm
     Te = get_var("Te") * Tnorm
@@ -88,10 +96,20 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
 
     # Get solver parameters
     wtime = get_var("wtime")
-    nliters = get_var("cvode_nliters")
-    nniters = get_var("cvode_nniters")
-    nfails = get_var("cvode_num_fails")
-    lorder = get_var("cvode_last_order")
+    
+    cvode = True
+    try:
+        nliters = get_var("cvode_nliters")
+        nniters = get_var("cvode_nniters")
+        nfails = get_var("cvode_num_fails")
+        lorder = get_var("cvode_last_order")
+    except:
+        cvode = False
+        nliters = np.zeros_like(t)
+        nniters = np.zeros_like(t)
+        nfails = np.zeros_like(t)
+        lorder = np.zeros_like(t)
+    
     
     print("..data", end="")
 
@@ -119,10 +137,12 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
     # Second row of plots
     stime = np.diff(t, prepend = t[0]*0.99)
     ms_per_24hrs = (stime) / (wtime/(60*60*24))  # ms simulated per 24 hours
-    lratio = np.diff(nliters, prepend=nliters[1]*0.99) / np.diff(nniters, prepend=nniters[1]*0.99)   # Ratio of linear to nolinear iterations
-    fails = np.diff(nfails, prepend = nfails[1]*0.99)
-    fails[0] = fails[1]
-    lorder[0] = lorder[1]
+    
+    if cvode:
+        lratio = np.diff(nliters, prepend=nliters[1]*0.99) / np.diff(nniters, prepend=nniters[1]*0.99)   # Ratio of linear to nolinear iterations
+        fails = np.diff(nfails, prepend = nfails[1]*0.99)
+        fails[0] = fails[1]
+        lorder[0] = lorder[1]
     ms_per_24hrs[0] = ms_per_24hrs[1]
     
     # ddt
@@ -145,45 +165,45 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
         fig.suptitle(casename, y = 1.02)
 
         lw = 2
-        axes[0,0].plot(t, Ne_sep, c = "darkorange", lw = lw)
+        axes[0,0].plot(t[:-skip], Ne_sep[:-skip], c = "darkorange", lw = lw)
         axes[0,0].set_title("$N_{e}^{omp,sep}$")
         
         if neutrals is True:
             
-            axes[0,3].plot(t, Tn_sol, c = "limegreen", lw = lw)
+            axes[0,3].plot(t[:-skip], Tn_sol[:-skip], c = "limegreen", lw = lw)
             axes[0,3].set_title("$T_{n}^{omp,sol}$")
             
-            axes[0,1].plot(t, Tn_core_avg, c = "darkorchid", lw = lw)
+            axes[0,1].plot(t[:-skip], Tn_core_avg[:-skip], c = "darkorchid", lw = lw)
             axes[0,1].set_title("$T_{n}^{core,avg}$")
 
-            axes[0,2].plot(t, Nn_target, c = "deeppink", lw = lw)
+            axes[0,2].plot(t[:-skip], Nn_target[:-skip], c = "deeppink", lw = lw)
             axes[0,2].set_title("$N_{n}^{targ,max}$")
         
         else:
             
-            axes[0,1].plot(t, Te_sol, c = "limegreen", lw = lw)
+            axes[0,1].plot(t[:-skip], Te_sol[:-skip], c = "limegreen", lw = lw)
             axes[0,1].set_title("$T_{e}^{omp,sol}$")
             
-            axes[0,2].plot(t, Ne_target, c = "deeppink", lw = lw)
+            axes[0,2].plot(t[:-skip], Ne_target[:-skip], c = "deeppink", lw = lw)
             axes[0,2].set_title("$N_{e}^{targ,max}$")
             
-            axes[0,3].plot(t, Te_target, c = "darkorchid", lw = lw)
+            axes[0,3].plot(t[:-skip], Te_target[:-skip], c = "darkorchid", lw = lw)
             axes[0,3].set_title("$T_{e}^{targ,max}$")
             
             
             
             
-        axes[1,0].plot(t, ms_per_24hrs, c = "k", lw = lw)
+        axes[1,0].plot(t[:-skip], ms_per_24hrs[:-skip], c = "k", lw = lw)
         axes[1,0].set_title("ms $t_{sim}$ / 24hr $t_{wall}$")
-        # axes[1,0].set_yscale("log")
-        axes[1,1].plot(t, lratio, c = "k", lw = lw)
-        axes[1,1].set_title("linear/nonlinear")
-        axes[1,2].plot(t, np.clip(fails, 0, np.max(fails)), c = "k", lw = lw)
-        axes[1,2].set_title("nfails")
-        axes[1,2].set_ylim(0,None)
-        # axes[1,2].set_yscale("log")
-        axes[1,3].plot(t, lorder, c = "k", lw = lw)
-        axes[1,3].set_title("order")
+        
+        if cvode:
+            axes[1,1].plot(t[:-skip], lratio[:-skip], c = "k", lw = lw)
+            axes[1,1].set_title("linear/nonlinear")
+            axes[1,2].plot(t[:-skip], np.clip(fails, 0, np.max(fails))[:-skip], c = "k", lw = lw)
+            axes[1,2].set_title("nfails")
+            axes[1,2].set_ylim(0,None)
+            axes[1,3].plot(t[:-skip], lorder[:-skip], c = "k", lw = lw)
+            axes[1,3].set_title("order")
 
         for i in [0,1]:
             for ax in axes[i,:]:
