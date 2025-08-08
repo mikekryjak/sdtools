@@ -2,7 +2,7 @@ from xarray import register_dataset_accessor, register_dataarray_accessor
 from xbout import BoutDatasetAccessor, BoutDataArrayAccessor
 from hermes3.plotting import *
 from hermes3.front_tracking import _get_front_position
-from hermes3.selectors import get_1d_radial_data
+from hermes3.selectors import get_1d_radial_data, _get_poloidal_range
 import numpy as np
 
 
@@ -491,50 +491,53 @@ def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None):
     elif sepadd != None and sepdist != None:
         raise ValueError("Must use either index i or separatrix distance sepdist, not both")
     
+    # FIXME: This currently assumes that OMP distances are the same as IMP.
     elif sepdist != None:
-        df = get_1d_radial_data(ds, [], "outer_midplane")
+        df = get_1d_radial_data(ds, [], "omp")
         sepind = df[df["sep"] == 1].index[0]
         sepadd = df.loc[(df["Srad"] - sepdist).abs().idxmin()].name - sepind
         
     radial_index = sepadd + m["ixseps1"]
 
-    
-    if m["topology"] == "connected-double-null":
+    selection = (radial_index, slice(*_get_poloidal_range(ds, region)))
+    #### Below is now in _get_poloidal_range
+
+    # if m["topology"] == "connected-double-null":
          
-        ny_inner = m["ny_inner"]
-        MYG = m["MYG"]
-        nyg = m["nyg"]
-        omp_a = m["omp_a"]
-        omp_b = m["omp_b"]
-        imp_a = m["imp_a"]
-        imp_b = m["imp_b"]
+    #     ny_inner = m["ny_inner"]
+    #     MYG = m["MYG"]
+    #     nyg = m["nyg"]
+    #     omp_a = m["omp_a"]
+    #     omp_b = m["omp_b"]
+    #     imp_a = m["imp_a"]
+    #     imp_b = m["imp_b"]
         
 
-        if region == "inner":
-            selection = (radial_index, slice(0+MYG, ny_inner + MYG))
-        elif region == "inner_lower":
-            selection = (radial_index, slice(0+MYG, imp_a +1))
-        elif region == "inner_upper":
-            selection = (radial_index, slice(imp_b, ny_inner + MYG))
-        elif region == "outer":
-            selection = (radial_index, slice(ny_inner + MYG*3, nyg - MYG))
-        elif region == "outer_lower":
-            selection = (radial_index, slice(omp_b-1, nyg - MYG))
-        elif region == "outer_upper":
-            selection = (radial_index, slice(ny_inner + MYG*3, omp_b+1))
-        else:
-            raise Exception(f"Region {region} not implemented")
+    #     if region == "inner":
+    #         selection = (radial_index, slice(0+MYG, ny_inner + MYG))
+    #     elif region == "inner_lower":
+    #         selection = (radial_index, slice(0+MYG, imp_a +1))
+    #     elif region == "inner_upper":
+    #         selection = (radial_index, slice(imp_b, ny_inner + MYG))
+    #     elif region == "outer":
+    #         selection = (radial_index, slice(ny_inner + MYG*3, nyg - MYG))
+    #     elif region == "outer_lower":
+    #         selection = (radial_index, slice(omp_b-1, nyg - MYG))
+    #     elif region == "outer_upper":
+    #         selection = (radial_index, slice(ny_inner + MYG*3, omp_b+1))
+    #     else:
+    #         raise Exception(f"Region {region} not implemented")
             
-    elif m["topology"] == "single-null":
+    # elif m["topology"] == "single-null":
         
-        if region == "all":
-            selection = (slice(i+0,i+1), slice(0+MYG, nyg - MYG))
+    #     if region == "all":
+    #         selection = (slice(i+0,i+1), slice(0+MYG, nyg - MYG))
             
-        else:
-            raise Exception(f"Region {region} not implemented for single null")
+    #     else:
+    #         raise Exception(f"Region {region} not implemented for single null")
         
-    else:
-        raise Exception(f"Topology {m['topology']} not implemented")
+    # else:
+    #     raise Exception(f"Topology {m['topology']} not implemented")
     
     return ds.isel(x = selection[0], theta = selection[1])
 
