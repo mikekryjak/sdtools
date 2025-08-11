@@ -263,6 +263,7 @@ def get_1d_poloidal_data(
         reg = ds.hermesm.select_custom_sol_ring(region, sepadd = sepadd, sepdist = sepdist).squeeze()
 
         df = pd.DataFrame()
+        df["R"] = reg["R"].values
         df["Z"] = reg["Z"].values
         df["dpol"] = reg["dpol"].values  # Poloidal cell width
         df["Bxy"] = reg["Bxy"].values  # Total magnetic field
