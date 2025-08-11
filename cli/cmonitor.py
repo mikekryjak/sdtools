@@ -71,10 +71,10 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
     
     # Sometimes the last timestep is bugged and like 1e20 higher, not sure why
     if t[-1] > t[-2]*1000:
-        skip = 1
+        skip = -2
         print("\nLast timestep is bugged, skipping last timestep")
     else:
-        skip = 0
+        skip = -1
     
     Ne = get_var("Ne") * Nnorm
     Nn = get_var("Nd") * Nnorm
@@ -165,44 +165,44 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
         fig.suptitle(casename, y = 1.02)
 
         lw = 2
-        axes[0,0].plot(t[:-skip], Ne_sep[:-skip], c = "darkorange", lw = lw)
+        axes[0,0].plot(t[:skip], Ne_sep[:skip], c = "darkorange", lw = lw)
         axes[0,0].set_title("$N_{e}^{omp,sep}$")
         
         if neutrals is True:
             
-            axes[0,3].plot(t[:-skip], Tn_sol[:-skip], c = "limegreen", lw = lw)
+            axes[0,3].plot(t[:skip], Tn_sol[:skip], c = "limegreen", lw = lw)
             axes[0,3].set_title("$T_{n}^{omp,sol}$")
             
-            axes[0,1].plot(t[:-skip], Tn_core_avg[:-skip], c = "darkorchid", lw = lw)
+            axes[0,1].plot(t[:skip], Tn_core_avg[:skip], c = "darkorchid", lw = lw)
             axes[0,1].set_title("$T_{n}^{core,avg}$")
 
-            axes[0,2].plot(t[:-skip], Nn_target[:-skip], c = "deeppink", lw = lw)
+            axes[0,2].plot(t[:skip], Nn_target[:skip], c = "deeppink", lw = lw)
             axes[0,2].set_title("$N_{n}^{targ,max}$")
         
         else:
             
-            axes[0,1].plot(t[:-skip], Te_sol[:-skip], c = "limegreen", lw = lw)
+            axes[0,1].plot(t[:skip], Te_sol[:skip], c = "limegreen", lw = lw)
             axes[0,1].set_title("$T_{e}^{omp,sol}$")
             
-            axes[0,2].plot(t[:-skip], Ne_target[:-skip], c = "deeppink", lw = lw)
+            axes[0,2].plot(t[:skip], Ne_target[:skip], c = "deeppink", lw = lw)
             axes[0,2].set_title("$N_{e}^{targ,max}$")
             
-            axes[0,3].plot(t[:-skip], Te_target[:-skip], c = "darkorchid", lw = lw)
+            axes[0,3].plot(t[:skip], Te_target[:skip], c = "darkorchid", lw = lw)
             axes[0,3].set_title("$T_{e}^{targ,max}$")
             
             
             
             
-        axes[1,0].plot(t[:-skip], ms_per_24hrs[:-skip], c = "k", lw = lw)
+        axes[1,0].plot(t[:skip], ms_per_24hrs[:skip], c = "k", lw = lw)
         axes[1,0].set_title("ms $t_{sim}$ / 24hr $t_{wall}$")
         
         if cvode:
-            axes[1,1].plot(t[:-skip], lratio[:-skip], c = "k", lw = lw)
+            axes[1,1].plot(t[:skip], lratio[:skip], c = "k", lw = lw)
             axes[1,1].set_title("linear/nonlinear")
-            axes[1,2].plot(t[:-skip], np.clip(fails, 0, np.max(fails))[:-skip], c = "k", lw = lw)
+            axes[1,2].plot(t[:skip], np.clip(fails, 0, np.max(fails))[:skip], c = "k", lw = lw)
             axes[1,2].set_title("nfails")
             axes[1,2].set_ylim(0,None)
-            axes[1,3].plot(t[:-skip], lorder[:-skip], c = "k", lw = lw)
+            axes[1,3].plot(t[:skip], lorder[:skip], c = "k", lw = lw)
             axes[1,3].set_title("order")
 
         for i in [0,1]:
