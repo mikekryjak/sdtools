@@ -743,6 +743,10 @@ def lineplot(
     ):
     """
     Versatile lineplot for 1D profiles in 2D models at OMP, IMP or target, as well as 1D models
+    
+    Inputs
+    --------
+    cases: dict()
     """
     
     marker = "o"
