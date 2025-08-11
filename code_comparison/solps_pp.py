@@ -456,17 +456,26 @@ class SOLPScase():
              xlim = (None, None),
              ylim = (None, None)
     ):  
-        print(data)
+        # print(data)
+        # print(len(data))
+        # print(data.size)
+        # print(type(data))
         
         if custom_cmap != None:
             cmap = custom_cmap
+
+        if type(data) is type(np.array([])):
+            # print("Data is numpy array")
+            if not data.size > 0:
+                data = self.bal[param]
+        # else:
+            # print(f"Data is not numpy array, it's {type(data)}")
+        # elif data == None:
+        #     data = self.bal[param]
         
         if grid_only is True:
             data = np.zeros_like(self.bal["te"])
-        if data == None:
-            data = self.bal[param]
-        elif len(data) == 0:
-            data = self.bal[param]
+        
         if absolute:
             data = np.abs(data)
         
