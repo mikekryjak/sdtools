@@ -5,6 +5,18 @@ import matplotlib.pyplot as plt
 import sys
 from .utils import constants
 
+def softFloor(arr, min):
+    
+    for i, value in enumerate(arr):
+        arr[i] = value + min * np.exp(-value / min)
+
+    return arr
+
+def floor(value, min):
+    if value < min:
+        return min
+    else:
+        return value
 
 
 def get_Kei_coll(ds):
@@ -30,20 +42,6 @@ def get_Kei_coll(ds):
 
     me_mi = Me / (Mp * Ai)
 
-    def softFloor(arr, min):
-        
-        for i, value in enumerate(arr):
-            arr[i] = value + min * np.exp(-value / min)
-
-        return arr
-
-    def floor(value, min):
-        if value < min:
-            return min
-        else:
-            return value
-
-            
     coulomb_log = np.zeros_like(Te)
 
     for i in range(len(Te)):
@@ -75,4 +73,27 @@ def get_Kei_coll(ds):
 
     nu = (qe**2 * Zi)**2 * np.clip(Ni, a_min=0.0, a_max=None) * softFloor(coulomb_log, 1.0) * (1. + me_mi) / (3 * (np.pi * (vesq + visq))**1.5 * (e0 * Me)**2) * ei_multiplier
     
+    return nu
+
+def get_Kee_coll(ds):
+    
+    Ai = 2
+    Mp = constants("mass_p")
+    Me = constants("mass_e")
+    qe = constants("q_e")
+    e0 = constants("e0")
+        
+    Te = ds["Te"].values
+    Ne = ds["Ne"].values
+    Telim = np.clip(Te, 0.1, None)
+    Nelim = np.clip(Ne, 1e10, None)
+    logTe = np.log(Telim)
+
+    coulomb_log = 30.4 - 0.5 * np.log(Nelim) + (5 / 4) * logTe - np.sqrt(1e-5 + (logTe - 2)**2 / 16)
+
+    v1sq = 2 * Telim * qe / Me;
+
+    denom = (3 * (np.pi * 2 * v1sq)**1.5) * (e0 * Me)**2
+
+    nu = (qe**4) * np.clip(Ne, 0, None) * np.clip(coulomb_log, 1, None) * 2 / denom
     return nu

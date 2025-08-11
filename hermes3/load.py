@@ -162,9 +162,10 @@ class Case:
 
         if unnormalise is True and use_xhermes is False:
             self.unnormalise(unnormalise_geom)
-        elif use_xhermes is False or unnormalise is False:
+            print("Unnormalising with sdtools (not recommended)")
+        if use_xhermes is False and unnormalise is False:
             print("Skipping unnormalisation")
-        elif use_xhermes is True and unnormalise is True:
+        if use_xhermes is True and unnormalise is True:
             print("Unnormalising with xHermes")
             
         # xhermes now does the derivations
