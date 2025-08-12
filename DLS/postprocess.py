@@ -1183,42 +1183,10 @@ class compare_SOLPS_DLS():
         self.dls = DLScase.data
         self.dls["qpar_cond_frac"] = 1
         self.dls["Ne_sq_cz"] = self.dls["Ne"]**2 * self.dls["cz"]
+        self.dls["Nz"] = self.dls["Ne"] * self.dls["cz"]
         
         self.solps = self.calculate_solps(self.solps)
-        
-        # # Read DLS
-        # dls = pd.DataFrame()
-        # dls["Qrad"] = out["Qrad_profiles"][0]
-        # dls["Spar"] = out["Spar_profiles"][0]
-        # dls["Spol"] = out["Spol_profiles"][0]
-        # dls["Te"] = out["Te_profiles"][0]
-        # dls["qpar"] = out["qpar_profiles"][0]
-        # dls["Btot"] = out["Btot_profiles"][0]
-        # dls["qpar_over_B"] = dls["qpar"] / dls["Btot"]
-        
-        # if cvar == "density":
-        #     dls["cz"] = out.inputs.cz0
-        #     dls["Ne"] = out["cvar"][0] * dls["Te"].iloc[-1] / dls["Te"]   ## Assuming cvar is ne
-        # elif cvar == "impurity_frac":
-        #     dls["cz"] = out["cvar"][0]
-        #     dls["Ne"] = dls.iloc[-1]["Te"] * out.inputs.nu0 / dls["Te"]
-        # else:
-        #     raise Exception()
-        
-        # Xpoint = out["Xpoints"][0]
-        # dls.loc[Xpoint, "Xpoint"] = 1
-
-        # # qradial is the uniform upstream heat source
-        # dls["qradial"] = 1.0
-        # # dls["qradial"].iloc[Xpoint:] = out["state"].qradial
-        # dls.loc[Xpoint:, "qradial"] = out["state"].qradial
-        
-        # self.dls = dls
-        
-        
-        
-        
-        # self.dls = self.calculate_dls(self.dls)
+    
         
         
     def calculate_solps(self, solps):
@@ -1238,6 +1206,7 @@ class compare_SOLPS_DLS():
         
         solps["Pe"] = solps["Te"] * solps["ne"] * 1.60217662e-19
         solps["Ne"] = solps["ne"]
+        solps["Nz"] = solps["ne"] * solps[f"f{self.impurity}"]
         
         solps["fhex_cond"] = solps["fhex_cond"].abs()
         solps["fhx_total"] = solps["fhx_total"].abs()
@@ -1255,24 +1224,7 @@ class compare_SOLPS_DLS():
                 
         return solps
 
-    # def calculate_dls(self, dls):
-        
-        
-    #     # Radiative power loss without flux expansion effect.
-    #     # Units are W, bit integrated assuming unity cross-sectional area, so really W/m2
-    #     # Done by reconstructing the RHS of the qpar equation
-    #     dls["Prad_per_area"] = np.gradient(dls["qpar"]/dls["Btot"], dls["Spar"]) + dls["qradial"]/dls["Btot"]
-    #     dls["Prad_per_area_cum"] = sp.integrate.cumulative_trapezoid(y = dls["Prad_per_area"], x = dls["Spar"], initial = 0)  # W/m2
-    #     dls["Prad_per_area_cum_norm"] = dls["Prad_per_area_cum"] / dls["Prad_per_area_cum"].max()
-    #     # Proper radiative power integral [W]
-    #     dls["Prad_cum"] = sp.integrate.cumulative_trapezoid(y = dls["Qrad"] / dls["Btot"], x = dls["Spar"], initial = 0)   # Radiation integral over volume
-    #     dls["Prad_cum_norm"] = dls["Prad_cum"] / dls["Prad_cum"].max()
-        
-    #     dls["Pe"] = dls["Te"] * dls["Ne"] * 1.60217662e-19
-    #     dls["Ne_sq_cz"] = dls["Ne"]**2 * dls["cz"]
-    #     dls["qpar_cond_frac"] = 1
-        
-    #     return dls
+
     
     def get_front_location(self, mode = "dls", threshold = 0.5, debug_plot = False):
         """
@@ -1327,6 +1279,8 @@ class compare_SOLPS_DLS():
                 self.plot_radiation_integral(axes[i], normalise = normalise_radiation, per_area= radiation_per_area, plot_cz = plot_cz)
             elif plot == "cz":
                 self.plot_cz(axes[i])
+            elif plot == "Nz":
+                self.plot_Nz(axes[i])
             elif plot == "Ne_cz":
                 self.plot_ne_cz(axes[i])
             else:
@@ -1412,7 +1366,7 @@ class compare_SOLPS_DLS():
         self.plot_Xpoint(ax)
         self.apply_plot_settings(ax)
         
-    def plot_cz(self, ax):
+    def plot_Nz(self, ax):
         solps = self.solps
         dls = self.dls
         
@@ -1420,6 +1374,22 @@ class compare_SOLPS_DLS():
         
         dls_var = dls["cz"]
         solps_var = solps[f"f{self.impurity}"]
+        
+        ax.plot(dls["Spar"], dls_var/dls_var.iloc[-1], label = "DLS")
+        ax.plot(solps["Spar"], solps_var/solps_var.iloc[-1],  label = "SOLPS")
+
+        ax.set_ylabel(f"f{self.impurity}")
+        self.plot_Xpoint(ax)
+        self.apply_plot_settings(ax)
+        
+    def plot_nz(self, ax):
+        solps = self.solps
+        dls = self.dls
+        
+        ax.set_title("fAr (normalised)")
+        
+        dls_var = dls["cz"] * dls["Ne"]
+        solps_var = solps[f"f{self.impurity}"] * solps["Ne"]
         
         ax.plot(dls["Spar"], dls_var/dls_var.iloc[-1], label = "DLS")
         ax.plot(solps["Spar"], solps_var/solps_var.iloc[-1],  label = "SOLPS")
@@ -1869,7 +1839,7 @@ class plot_comparison():
         
         self.study_labels = dict(
             adas_curve = r"Constant $n_e \tau$ cooling curve",
-            fit_curve = "Extract cooling curve",
+            fit_curve = "Exact cooling curve",
             fit_curve_kappa = r"Extract cooling curve, tune $\kappa_{0,e}$",
             other_losses = "Total rad. losses",
             include_cz = "Fix $f_{N}$",
@@ -1898,6 +1868,7 @@ class plot_comparison():
         self.ylabels = {
             "Te" : r"eV",
             "Ne" : r"$m^{-3}$",
+            "Nz" : r"$m^{-3}$",
             "Ne_sq_cz" : r"$m^{-6}$",
             "qpar" : r"$MWm^{-2}$",
             "Qrad_cum_norm" : r"fraction",
@@ -1907,13 +1878,18 @@ class plot_comparison():
             "Qrad_cum_norm" : "Cum. rad. integral (normalised)",
             "Te" : "Electron temp.",
             "Ne" : "Electron dens. (normalised)",
+            "Nz" : f"Argon density (normalised)",
             "Ne_sq_cz" : f"$N_e^2 f_Ar$ (normalised)",
             "qpar" : "Tot. par. heat flux",
         }         
 
         # self.colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
         # self.colors = ["darkorange", "firebrick"]
-        self.colors = ["teal", "darkorange", "firebrick"]
+        self.colors = dict(
+            adas_curve = "teal",
+            fit_curve = "darkorange",
+            fit_curve_kappa = "firebrick",
+        )
         self.dls_skip = 4
     
         
@@ -1926,12 +1902,12 @@ class plot_comparison():
     def make_legend_elements(self):
         elements = [mpl.lines.Line2D([0],[0], **self.SOLPSstyle, label = "SOLPS")]
         for i, study in enumerate(self.studies):
-            elements.append(mpl.lines.Line2D([0],[0], **self.DLSstyles[study], color = self.colors[i], label = self.study_labels[study]))
+            elements.append(mpl.lines.Line2D([0],[0], **self.DLSstyles[study], color = self.colors[study], label = self.study_labels[study]))
         elements.append(mpl.lines.Line2D([0],[0], **self.Xpointstyle, color = "deeppink", label = "X-point"))
         
         return elements
         
-    def plot(self, param, axes, normalise = False):
+    def plot(self, param, axes, normalise = False, **kwargs):
         
         for i, case in enumerate(self.cases):
             ax = axes[i]
@@ -1962,7 +1938,11 @@ class plot_comparison():
                     mult = 1
                 
                 ax.plot(solps["Spar"], solps_data*mult, label = study, **self.SOLPSstyle)  # SOLPS
-                ax.plot(dls["Spar"], dls_data*mult, **self.DLSstyles[study], c = self.colors[study_no], alpha = 0.8)   # DLS
+                
+                DLS_kwargs = self.DLSstyles[study]
+                DLS_kwargs.update({"c": self.colors[study], "alpha": 0.8})
+                DLS_kwargs.update(kwargs)
+                ax.plot(dls["Spar"], dls_data*mult, **DLS_kwargs)   # DLS
                 
                 # if param == "qpar":
                 #     ax.plot(solps["Spar"], solps["qpar_cond"]*mult, label = study, **{**dict(ls=":"), **self.SOLPSstyle})  # SOLPS
@@ -1972,9 +1952,10 @@ class plot_comparison():
             ax.set_ylabel(self.ylabels[param])
             ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(5))
             ax.grid(which = "both", visible = True, lw = 0.16, c = "k", alpha = 0.3)
+            ax.yaxis.grid(False, which = "minor")
             # ax.make_xpoint()
             
-            if any([x in param for x in ["Ne"]]):
+            if any([x in param for x in ["Ne", "Nz"]]):
                 logscale = True
                 ax.set_yscale("log")
             else:

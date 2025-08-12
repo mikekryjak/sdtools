@@ -107,10 +107,16 @@ class SOLEDGEdata:
         
         
         self.regions["inner_fieldline_0.001_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_lower", d_from_sep = 0.001, parallel_length = True)
-        self.regions["outer_fieldline_0.001_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_upper", d_from_sep = 0.001, parallel_length = True)
-        self.regions["outer_fieldline_0.003_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_upper", d_from_sep = 0.003, parallel_length = True)
-        self.regions["outer_fieldline_0.015_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_upper", d_from_sep = 0.015, parallel_length = True)
-        self.regions["outer_fieldline_0.030_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_upper", d_from_sep = 0.030, parallel_length = True)
+        self.regions["outer_fieldline_0.001_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_lower", d_from_sep = 0.001, parallel_length = True)
+        
+        self.regions["outer_fieldline_0.003_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_lower", d_from_sep = 0.003, parallel_length = True)
+        self.regions["outer_fieldline_0.015_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_lower", d_from_sep = 0.015, parallel_length = True)
+        self.regions["outer_fieldline_0.030_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_lower", d_from_sep = 0.030, parallel_length = True)
+        
+        self.regions["outer_upper_fieldline_0.001_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_upper", d_from_sep = 0.001, parallel_length = True)
+        self.regions["outer_upper_fieldline_0.003_parallel"] = self.case.get_1d_poloidal_data(params = self.case.params, region =  "outer_upper", d_from_sep = 0.003, parallel_length = True)
+        
+        
         for region in self.regions.keys():
             if "fieldline" in region:
                 
@@ -340,6 +346,9 @@ class SOLPSdata:
         regions["outer_fieldline_0.015"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower", sepdist = 0.015)
         regions["outer_fieldline_0.030"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower", sepdist = 0.030)
         
+        regions["outer_upper_fieldline_0.001"] = spc.get_1d_poloidal_data(list_params, region =  "outer_upper", sepdist = 0.001)
+        regions["outer_upper_fieldline_0.003"] = spc.get_1d_poloidal_data(list_params, region =  "outer_upper", sepdist = 0.003)
+        
         regions["inner_fieldline"] = spc.get_1d_poloidal_data(list_params, region =  "inner_lower", sepdist = 0.0014)
         
         for region in list(regions.keys()):
@@ -516,6 +525,9 @@ class Hermesdata:
         self.regions["outer_fieldline_0.003"] = get_1d_poloidal_data(ds, self.params, region =  "outer_lower", sepdist = 0.003)
         self.regions["outer_fieldline_0.015"] = get_1d_poloidal_data(ds, self.params, region =  "outer_lower", sepdist = 0.015)
         self.regions["outer_fieldline_0.030"] = get_1d_poloidal_data(ds, self.params, region =  "outer_lower", sepdist = 0.030)
+        
+        self.regions["outer_upper_fieldline_0.001"] = get_1d_poloidal_data(ds, self.params, region =  "outer_upper", sepdist = 0.001)
+        self.regions["outer_upper_fieldline_0.003"] = get_1d_poloidal_data(ds, self.params, region =  "outer_upper", sepdist = 0.003)
         
         regions = list(self.regions.keys())
         for region in regions:
