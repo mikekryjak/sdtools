@@ -297,7 +297,7 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False, l
             log_axes[1].set_ylim(0,None)
             
             log_axes[2].plot(snes_time[skip], snes_reason[skip], c = "k", lw = lw)
-            log_axes[2].set_title("failure reason", fontsize = title_font_size)
+            log_axes[2].set_title("convg reason", fontsize = title_font_size)
             
             log_axes[3].plot(snes_time[skip], snes_timestep[skip], c = "k", lw = lw)
             log_axes[3].set_title("timestep", fontsize = title_font_size)
