@@ -15,7 +15,7 @@ from datetime import datetime
 
 
 
-def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
+def cmonitor(path, save = False, plot = False, table = True, neutrals = False, logfile_plots = False):
     """
     Produce convergence report of 2D Hermes-3 simulation
     Plots of process conditions at OMP and target 
@@ -165,33 +165,85 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
 
     print("..calculations", end="")
     
+    if logfile_plots:
+        ### Extract SNES diagnostic plots
+        # needs diagnose = True under [solver]
+        logpath = os.path.join(path, "BOUT.log.0")
+        lines = []
+
+        with open(logpath) as f:
+            lines = f.read().splitlines()
+            
+        time = []
+        timestep = []
+        nniters = []
+        nliters = []
+        reason = []
+        steps_since_fail = []
+        step_counter = 0
+        snes_prints_found = False
+
+        for line in lines:
+            if "Time: " in line:
+                if "SNES failures" in line:
+                    step_counter = 0
+                else:
+                    step_counter += 1
+                    
+                steps_since_fail.append(step_counter)
+                
+                line = line.split(",")
+                time.append(float(line[0].split(":")[-1].strip()))
+                timestep.append(float(line[1].split(":")[-1].strip()))
+                nniters.append(float(line[2].split(":")[-1].strip()))
+                nliters.append(float(line[3].split(":")[-1].strip()))
+                reason.append(float(line[4].split(":")[-1].strip()))
+                
+                snes_prints_found = True
+                
+                
+        snes_time = np.array(time) * (1/Omega_ci) * 1000
+        snes_timestep = np.array(timestep)
+        snes_nniters = np.array(nniters)
+        snes_nliters = np.array(nliters)
+        snes_reason = np.array(reason)
+        snes_steps_since_fail = np.array(steps_since_fail)
+        snes_nonlinear_linear_ratio = snes_nliters / snes_nniters
+    
     # Plotting
     if plot is True or save is True:
         scale = 1.3
-        figsize = (8*scale,5*scale)
+        figsize = (8*scale,6*scale)
         dpi = 150/scale
         title_font_size = "medium"
         # fig, axes = plt.subplots(2,4, figsize=figsize, dpi = dpi)
         
         # Use GridSpec for flexible layout
         fig = plt.figure(figsize=figsize, dpi=dpi)
-        gs = fig.add_gridspec(3, 4)  # 3 rows, 4 columns
+        gs = fig.add_gridspec(4, 4)  # 3 rows, 4 columns
         
 
-        # Original two rows of 4
+        # Original two rows of 4 for physics and numerics stuff
         axes = np.empty((2, 4), dtype=object)
         for r in range(2):
             for c in range(4):
                 axes[r, c] = fig.add_subplot(gs[r, c])
                 
+        ## Add 1 big column for ddt
         big_ax = fig.add_subplot(gs[2, slice(None,3)])  
+        
+        ## Add 5 columns for log file parser
+        if logfile_plots:
+            
+            gs_log = gs[3, :].subgridspec(1, 5)  # 1 row x 5 cols inside the bottom row
+            log_axes = [fig.add_subplot(gs_log[0, i]) for i in range(5)]
 
         fig.subplots_adjust(wspace = 0.3, hspace=0.5, top = 0.85)
         
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         fig.suptitle(f"{now} - Casename: {casename}", y = 0.93)
 
-        lw = 2
+        lw = 1
         axes[0,0].plot(t[skip], Ne_sep[skip], c = "darkorange", lw = lw)
         axes[0,0].set_title("$N_{e}^{omp,sep}$", fontsize = title_font_size)
         
@@ -234,24 +286,62 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False):
             axes[1,3].plot(t[skip], lorder[skip], c = "k", lw = lw)
             axes[1,3].set_title("order", fontsize = title_font_size)
             
+        ## SNES    
+        elif snes_prints_found and logfile_plots:
+            pass
+            log_axes[0].plot(snes_time[skip], snes_nonlinear_linear_ratio[skip], c = "k", lw = lw)
+            log_axes[0].set_title("linear/nonlinear ratio", fontsize = title_font_size)
+            
+            log_axes[1].plot(snes_time[skip], snes_nniters[skip], c = "k", lw = lw)
+            log_axes[1].set_title("nonlin. its per step", fontsize = title_font_size)
+            log_axes[1].set_ylim(0,None)
+            
+            log_axes[2].plot(snes_time[skip], snes_reason[skip], c = "k", lw = lw)
+            log_axes[2].set_title("failure reason", fontsize = title_font_size)
+            
+            log_axes[3].plot(snes_time[skip], snes_timestep[skip], c = "k", lw = lw)
+            log_axes[3].set_title("timestep", fontsize = title_font_size)
+            
+            log_axes[4].plot(snes_time[skip], snes_steps_since_fail[skip], c = "k", lw = lw)
+            log_axes[4].set_title("steps since failure", fontsize = title_font_size)
+        
+        else:
+            print("Non-CVODE solver detected without diagnose=True under [solver], skipping diagnostic plots")
+            
         ## ddts
         for param in res:
             big_ax.plot(t[skip], res[param][skip], label=param)
             big_ax.set_yscale("log")
             big_ax.grid()
-            big_ax.set_title("Volume weighted RMS ddt()", fontsize = "x-small")
+            big_ax.set_title("Volume weighted RMS ddt() (normalised)", fontsize = "x-small")
             big_ax.legend(fontsize = "x-small", loc = "upper left", bbox_to_anchor=(1,1), ncols = 2)
 
-        for i in [0,1]:
-            for ax in axes[i,:]:
-                ax.grid(c = "k", alpha = 0.15)
-                ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(min_n_ticks=3, nbins=5))
-                ax.yaxis.set_major_locator(mpl.ticker.MaxNLocator(min_n_ticks=3, nbins=5))
-                # ax.xaxis.set_major_locator(mpl.ticker.MultipleLocator(4))
-                ax.tick_params(axis='x',labelsize=8)
-                ax.tick_params(axis='y',labelsize=8)
-                
-        # fig.tight_layout()
+        ### Axes properties
+        
+        small_axes = list(axes.flatten())
+        if logfile_plots:
+            small_axes += list(log_axes)
+        
+        for ax in small_axes:
+            ax.grid(c = "k", alpha = 0.15)
+            ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(min_n_ticks=3, nbins=5))
+            ax.yaxis.set_major_locator(mpl.ticker.MaxNLocator(min_n_ticks=3, nbins=5))
+
+            # ax.xaxis.set_major_locator(mpl.ticker.MultipleLocator(4))
+            ax.tick_params(axis='x',labelsize=6)
+            ax.tick_params(axis='y',labelsize=6)
+            
+        
+            
+        big_ax.tick_params(axis='x',labelsize=7)
+        big_ax.tick_params(axis='y',labelsize=7)
+        
+        if logfile_plots:
+            for ax in log_axes:
+                ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(min_n_ticks=3, nbins=4))
+                ax.tick_params(axis='x', labelcolor='red', color = "red")  # Not the same time as in dataset
+            
+
         
         print("..figures", end="")
         
@@ -308,8 +398,14 @@ if __name__ == "__main__":
     parser.add_argument("-p", action="store_true", help = "Plot?")
     parser.add_argument("-t", action="store_true", help = "Table?")
     parser.add_argument("-s", action="store_true", help = "Save figure?")
-    parser.add_argument("-neutrals", action="store_true", help = "Neutral focused plot?")
+    parser.add_argument("-solverdiags", action="store_true", help = "Parse SNES console output?")
+    parser.add_argument("-neutrals", action="store_true", help = "Alternative physics quantities")
     
     # Extract arguments and call function
     args = parser.parse_args()
-    cmonitor(args.path, plot = args.p, table = args.t, save = args.s, neutrals = args.neutrals)
+    cmonitor(args.path, 
+             plot = args.p, 
+             table = args.t, 
+             save = args.s, 
+             neutrals = args.neutrals, 
+             logfile_plots = args.solverdiags)
