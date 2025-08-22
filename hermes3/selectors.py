@@ -53,7 +53,155 @@ def get_1d_radial_data(ds,
     Regions = omp, imp, inner_lower, inner_upper, outer_lower, outer_upper.
     alternatively, you can specify a poloidal index to get data at that index.
     """
+
+    # ---- helpers ----
+    def _quad_at_zero(Z1d, V1d):
+        """
+        Quadratic interpolate V(Z) to Z=0 using the three closest Z points.
+        Robust to non-monotonic Z; falls back to linear/nearest if needed.
+        """
+        Z1d = np.asarray(Z1d)
+        V1d = np.asarray(V1d)
+        if Z1d.size == 0:
+            return np.nan
+        k = np.argpartition(np.abs(Z1d), min(3, Z1d.size))[:min(3, Z1d.size)]
+        kz = k[np.argsort(Z1d[k])]
+        z = Z1d[kz]
+        y = V1d[kz]
+
+        if z.size == 1:
+            return float(y[0])
+        if z.size == 2 or np.any(np.isclose(np.diff(z), 0.0)):
+            return float(np.interp(0.0, z, y))
+
+        denom0 = (z[0]-z[1])*(z[0]-z[2])
+        denom1 = (z[1]-z[0])*(z[1]-z[2])
+        denom2 = (z[2]-z[0])*(z[2]-z[1])
+        if np.isclose(denom0,0) or np.isclose(denom1,0) or np.isclose(denom2,0):
+            return float(np.interp(0.0, z, y))
+        w0 = (z[1]*z[2]) / denom0
+        w1 = (z[0]*z[2]) / denom1
+        w2 = (z[0]*z[1]) / denom2
+        return float(y[0]*w0 + y[1]*w1 + y[2]*w2)
+
+    # ---- start of original logic ----
+    df = pd.DataFrame()
+    m = ds.metadata
+    
+    xslice = slice(None, None) if guards else slice(m["MXG"], -m["MXG"])
         
+    if region is None and poloidal_index is None:
+        raise Exception("Please specify region or poloidal_index")
+    
+    translate_dict = {
+        "outer_midplane" : "omp",
+        "inner_midplane" : "imp"
+    }
+    if region in translate_dict:
+        region = translate_dict[region]
+    
+    # Interpolate to Z = 0 for IMP or OMP
+    if region == "omp" or region == "imp":
+        # slice a narrow band around the midplane
+        if region == "omp":
+            reg = ds.isel(x=xslice, theta=slice(m["omp_a"] - 2, m["omp_b"] + 2))
+        else:
+            reg = ds.isel(x=xslice, theta=slice(m["imp_a"] - 2, m["imp_b"] + 2))
+
+        # Ensure a single chunk along the core dim for gufunc
+        # (cheap here since theta band is small)
+        reg = reg.unify_chunks()
+        try:
+            reg = reg.chunk(dict(theta=-1))
+        except Exception:
+            # ok if already NumPy-backed or chunking not applicable
+            pass
+
+        # warn on missing vars (keep behavior)
+        for param in params:
+            if param not in ds:
+                print(f"Parameter {param} not found")
+
+        # build list of variables to interpolate (include dr)
+        wanted = ["dr"] + [p for p in params if p in ds]
+        # vectorized quadratic-at-zero for each var across all x
+        out = {}
+        for p in wanted:
+            out[p] = xr.apply_ufunc(
+                _quad_at_zero,
+                reg["Z"], reg[p],
+                input_core_dims=[["theta"], ["theta"]],
+                output_core_dims=[[]],
+                vectorize=True,
+                dask="parallelized",
+                dask_gufunc_kwargs={"allow_rechunk": True},  # Each core dim must be single chunk
+                output_dtypes=[float],
+            )
+        mid = xr.Dataset(out)
+
+        # to pandas, matching previous behavior (drop x index -> 0..N-1)
+        df = mid.to_dataframe().reset_index(drop=True)
+
+    else:
+        # Take region directly from named selection
+        if region in ["inner_lower_target", "inner_upper_target", "outer_lower_target", "outer_upper_target"]:
+            reg = ds.hermesm.select_region(region).squeeze()
+        
+        # Get data by poloidal index
+        elif poloidal_index is None:
+            raise Exception("If not requesting midplane, please pass poloidal_index")
+        else:
+            reg = ds.isel(x=xslice, theta=poloidal_index).squeeze()
+    
+        df["dr"] = reg["dr"].values
+
+        for param in params:
+            if param in reg:
+                df[param] = reg[param].values
+            else:
+                print(f"Parameter {param} not found")
+    
+    # Calculate radial distance from separatrix (vectorized)
+    dr = df["dr"].to_numpy()
+    df["Srad"] = np.cumsum(dr) - 0.5 * dr
+    
+    df["sep"] = 0
+    sepind = ds.metadata["ixseps1g"]
+    df.loc[sepind, "sep"] = 1
+    dfsep = df[df["sep"] == 1]
+    
+    # Correct so 0 is in between the cell centres straddling separatrix
+    sepcorr = (df["Srad"][sepind] - df["Srad"][sepind - 1]) / 2
+    df["Srad"] -= dfsep["Srad"].values - sepcorr
+    
+    # Cut off SOL or core if necessary
+    if sol is False and core is False:
+        raise Exception("Please specify sol or core to be True")
+    
+    if sol is False:
+        df = df[df["Srad"] < 0]
+    
+    if core is False:
+        df = df[df["Srad"] > 0]    
+    
+    return df
+
+def get_1d_radial_data_old(ds, 
+                       params, 
+                       region = None, 
+                       poloidal_index = None, 
+                       guards = False,
+                       sol = True,
+                       core = True
+                       ):
+    """
+    Return a Pandas Dataframe with a radial slice of data in the given region
+    The dataframe contains a radial distance normalised to the separatrix.
+    Guards are excluded. if OMP or IMP is selected, it will interpolate onto Z = 0.
+    Regions = omp, imp, inner_lower, inner_upper, outer_lower, outer_upper.
+    alternatively, you can specify a poloidal index to get data at that index.
+    """
+   
     df = pd.DataFrame()
     m = ds.metadata
     
@@ -77,10 +225,15 @@ def get_1d_radial_data(ds,
     # Interpolate to Z = 0 for IMP or OMP
     if region == "omp" or region == "imp":
        
+       # Take 2 cells on either side to then interpolate in the middle
         if region == "omp":
             reg = ds.isel(x = xslice, theta = slice(m["omp_a"] - 2, m["omp_b"] + 2))
         else:
             reg = ds.isel(x = xslice, theta = slice(m["imp_a"] - 2, m["imp_b"] + 2))
+            
+        for param in params:
+            if param not in ds.data_vars:
+                print(f"Parameter {param} not found")
         
         # For every parameter, collect the value interpolated at Z = 0 
         for i in reg.coords["x"].values:
@@ -89,12 +242,10 @@ def get_1d_radial_data(ds,
             
             # Put parameters into dataframe
             for param in ["dr"] + params:
-                
                 if param in ring:
                     interp = scipy.interpolate.interp1d(Z, ring[param].values, kind = "quadratic")
                     df.loc[i, param] = interp(0)
-                else:
-                    print(f"Parameter {param} not found")
+                
             
         df.reset_index(inplace = True, drop = True)
     
