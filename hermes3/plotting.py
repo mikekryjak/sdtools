@@ -1450,3 +1450,39 @@ def plot_cvode_performance_single(ds):
 
 
     fig.tight_layout()
+    
+def plot_variable_magnitude(ds, ax = None, ylims = None):
+    """
+    Plot box and whisker plot showing the magnitudes
+    of all the normalised variables in the dataset.
+    Must be fed unnormalised data as it will normalise them again.
+    Variable names are hardcoded.
+    """
+    
+    if "t" in ds.sizes: ds.isel(t=-1)
+    data = ds["Ne"].values.flatten()
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize = (6,4), dpi = 150)    
+
+    toplot = []
+    params = ["NVd", "NVd+", "Nd", "Nd+", "Pd", "Pd+", "Pe"]
+    colors = [plt.get_cmap("tab10")(x) for x in range(len(params))]
+
+    for i, param in enumerate(params):
+        data = ds[param] / ds[param].conversion   # Make sure it's normalised
+        toplot.append(abs(data).values.flatten())
+
+    bplot = ax.boxplot(toplot, labels = params, patch_artist = True, whis = (5, 95), flierprops = {"ms":1, "markerfacecolor":"k", "color":"grey", "mew":0.2})
+    for patch, color in zip(bplot["boxes"], colors):
+        patch.set_facecolor(color)
+
+    ax.set_yscale("log")
+    ax.grid(alpha=0.5)
+    ax.set_ylabel("Normalised parameter absolute value")
+    ax.set_title("Distributions of normalised values")
+
+    ax.yaxis.set_major_locator(mpl.ticker.LogLocator(base=10, numticks=15))
+    
+    if ylims != (None, None):
+        ax.set_ylim(ylims)
