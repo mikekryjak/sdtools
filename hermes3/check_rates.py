@@ -3,20 +3,9 @@ import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
 import sys
-from .utils import constants
+from .utils import constants, softFloor, floor
 
-def softFloor(arr, min):
-    
-    for i, value in enumerate(arr):
-        arr[i] = value + min * np.exp(-value / min)
 
-    return arr
-
-def floor(value, min):
-    if value < min:
-        return min
-    else:
-        return value
 
 
 def get_Kei_coll(ds):

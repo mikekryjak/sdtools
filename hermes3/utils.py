@@ -7,6 +7,14 @@ import os, sys
 import pandas as pd
 import xarray
 
+def softFloor(arr, min):
+    return arr + min * np.exp(-arr / min)
+
+def floor(value, min):
+    if value < min:
+        return min
+    else:
+        return value
 
 class HiddenPrints:
     """
