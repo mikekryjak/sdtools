@@ -109,11 +109,13 @@ class Load:
             loadfilepath = squashfilepath
                 
         if use_xhermes is True:
+
             ds = xhermes.open_hermesdataset(
                         datapath = loadfilepath, 
                         inputfilepath = inputfilepath, 
                         gridfilepath = gridfilepath,
                         geometry = "toroidal",
+                        unnormalise = unnormalise,
                         **xbout_kwargs
                         )
         else:
@@ -122,6 +124,7 @@ class Load:
                             inputfilepath = inputfilepath, 
                             gridfilepath = gridfilepath,
                             geometry = "toroidal",
+                            unnormalise = unnormalise,
                             **xbout_kwargs
                             )
         
@@ -1282,7 +1285,8 @@ class Case:
         # self.hthe = self.J * self.ds["Bpxy"]    # poloidal arc length per radian
         # self.dl = self.dy * self.hthe    # poloidal arc length
         
-        ds["dr"] = (["x", "theta"], ds.dx.data / (ds.R.data * ds.Bpxy.data))  # eqv. to dr = dx/sqrt(g11)
+        # ds["dr"] = (["x", "theta"], ds.dx.data / (ds.R.data * ds.Bpxy.data))  # eqv. to dr = dx/sqrt(g11)
+        ds["dr"] = (["x", "theta"], ds.dx.data/np.sqrt(ds.g11.data))  # eqv. to dr = dx/sqrt(g11)
         ds["dr"].attrs.update({
             "conversion" : 1,
             "units" : "m",
