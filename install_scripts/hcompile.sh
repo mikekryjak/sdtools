@@ -13,23 +13,26 @@ BUILD_DIR="build-mc-ena"   #  E-AFN-neutral-advection
 FAST_BUILD=false
 NO_BOUT=false
 EXPRESS=false
+CUSTOM_BOUT_SRC=""
 
 usage() {
   cat <<EOF
 Usage: $0 [-f] [-n]
-  -f    Skip removing existing build directory (i.e. “fast” build)
-  -n    Do not rebuild BOUT++ (this is WIP)
-  -e    Skip BOUT++ rebuild and Hermes-3 configuration (go to build directory and run cmake)
+  -f          Skip removing existing build directory (i.e. “fast” build)
+  -n          Do not rebuild BOUT++ (this is WIP)
+  -e          Skip BOUT++ rebuild and Hermes-3 configuration (go to build directory and run cmake)
+  -c <path>   Path to custom BOUT++ source directory (sets DHERMES_BOUT_SRC)
 EOF
   exit 1
 }
 
 # Parse flags
-while getopts "fne" opt; do
+while getopts "fnec:" opt; do
   case $opt in
     f) FAST_BUILD=true ;;
     n) NO_BOUT=true      ;;
     e) EXPRESS=true     ;;
+    c) CUSTOM_BOUT_SRC="$OPTARG" ;;
     *) usage              ;;
   esac
 done
@@ -43,11 +46,17 @@ if [ "$EXPRESS" = false ]; then
 
   echo "IN STATEMENT"
   # Prepare CMake arguments
-  CMAKE_ARGS="-B $BUILD_DIR -DBOUT_DOWNLOAD_SUNDIALS=ON -DBOUT_USE_PETSC=ON -DHERMES_SLOPE_LIMITER=MC"
+  CMAKE_ARGS="-B $BUILD_DIR -DCMAKE_BUILD_TYPE=Release -DCHECK=0 -DBOUT_DOWNLOAD_SUNDIALS=ON -DCMAKE_BUILD_TYPE=Release -DCHECK=0 -DBOUT_USE_PETSC=ON -DHERMES_SLOPE_LIMITER=MC"
 
   if [ "$NO_BOUT" = true ]; then
     CMAKE_ARGS="$CMAKE_ARGS -DHERMES_BUILD_BOUT=OFF"
     echo "Disabling BOUT++ build"
+  fi
+
+  # -n makes sure string length is not zero
+  if [ -n "$CUSTOM_BOUT_SRC" ]; then
+    CMAKE_ARGS="$CMAKE_ARGS -DHERMES_BOUT_SRC=$CUSTOM_BOUT_SRC"
+    echo "Using custom BOUT++ source: $CUSTOM_BOUT_SRC"
   fi
 
   # Enter the directories and compile
