@@ -399,6 +399,7 @@ class Monitor2D():
             
             
 def plot_ddt(case, 
+             ax = None,
              smoothing = 1, 
              dpi = 120, 
              volume_weighted = True, 
@@ -453,8 +454,9 @@ def plot_ddt(case,
             res[param] /= ds[param].attrs["conversion"]
             # res[param] = res[param] / res[param][0]
 
-    fig, ax = plt.subplots(figsize = (5,4), dpi = dpi)
-    fig.subplots_adjust(right=0.8)
+    if ax == None:
+        fig, ax = plt.subplots(figsize = (5,4), dpi = dpi)
+        fig.subplots_adjust(right=0.8)
 
 
     for param in list_params:
@@ -626,6 +628,7 @@ def plot_performance(cs, logscale = True):
     ax.set_ylabel("ms / 24hr")
     ax.set_xlabel("Sim time [ms]")
     ax.set_yscale("log")
+
 
     
 def plot_xy_grid(ds, ax):
@@ -1451,6 +1454,80 @@ def plot_cvode_performance_single(ds):
 
     fig.tight_layout()
     
+def plot_fluctuations(ds, params, mode = "variable_max", ylims = (None,None), xlims = (None,None)):
+    """
+    Plot variable fluctuations over domain (defined in params as list).
+    Mode:
+        variable_max: maximum abs(var) fluctuation over time
+        variable_rms: rms of variable fluctuation over time
+        ddt_max: maximum abs(ddt(var)) over time
+        ddt_rms: rms of ddt(var) over time
+        
+    Both variable fluctuation and ddt are divided by the variable, so the fluctuations
+    are relative.
+    
+    """    
+
+    no_params = len(params)
+    fig, axes = plt.subplots(1,no_params, figsize = (3.0*no_params,4.5), dpi = 150)
+    if no_params == 1:
+        axes = [axes]
+
+    for i, param in enumerate(params):
+    
+        
+        
+        if "t" not in ds.sizes and mode not in ["ddt"]:
+            raise Exception("WARNING: NO TIME!")
+            # fluctuations = np.sqrt((ds[ddt_param]**2).mean(dim="t"))
+            
+        da_param = ds[param]
+        
+        diff = abs(da_param.diff(dim="t"))
+        reldiff = diff/da_param
+        
+        if mode == "rel_variable_max":
+            data = reldiff.max(dim = "t")
+            suptitle = "Maximum relative fluctuation"
+        elif mode == "rel_variable_rms":
+            data = np.sqrt((reldiff**2).mean(dim="t"))
+            suptitle = "RMS relative fluctuation"
+        elif mode == "rel_ddt_max":
+            ddt_param = ds[f"ddt({param})"]
+            rel_ddt_param = ddt_param / da_param
+            data = abs(rel_ddt_param).max(dim="t")
+            suptitle = "Max relative ddt"
+        elif mode == "rel_ddt_rms":
+            ddt_param = ds[f"ddt({param})"]
+            rel_ddt_param = ddt_param / da_param
+            data = np.sqrt((rel_ddt_param)**2).mean(dim="t")
+            suptitle = "RMS relative ddt"
+        elif mode == "ddt":
+            ddt_param = ds[f"ddt({param})"]
+            data = ddt_param
+            suptitle = "ddt"
+        else:
+            raise ValueError(f"Mode {mode} not recognised. Has to be variable_max, variable_rms, ddt_max or ddt_rms")
+                
+        ax = axes[i]
+        data.hermesm.clean_guards().bout.polygon(ax = ax, cmap = "Spectral_r", targets = False, 
+                                                                separatrix_kwargs = dict(color="white", linestyle = "-", linewidth = 0),
+                                                                antialias = False,
+                                                                logscale = False,
+                                                                # vmin = np.nanmin(data.values), vmax = np.nanmax(data.values),
+                                                                )
+        fig.suptitle(suptitle, y = 0.85)
+    
+        ax.set_title(param)
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        if ylims != (None,None):
+            ax.set_ylim(ylims)
+        if xlims != (None,None):
+            ax.set_xlim(xlims)
+            
+        fig.tight_layout()
+        
 def plot_variable_magnitude(ds, ax = None, ylims = None):
     """
     Plot box and whisker plot showing the magnitudes
