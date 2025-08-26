@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from hermes3.utils import *
 from hermes3.named_selections import *
+from hermes3.selectors import *
 import general.plotstyle
 
 
@@ -260,7 +261,7 @@ class Monitor2D():
         elif mode == "pcolor" or mode == "polygon":
             
             # Select final timestep if one not provided
-            if "t" in self.ds.dims.keys():
+            if "t" in self.ds.sizes.keys():
                 self.ds = self.ds.isel(t=-1)
             
             if self.settings["all"]["view"] == "lower_divertor":
@@ -736,7 +737,6 @@ def lineplot(
     markersize = 2,
     lw = 2,
     dpi = 120,
-    clean_guards = True,
     logscale = True,
     log_threshold = 10,  # Ratio of max to min required for logscale
     save_name = "",
@@ -760,7 +760,7 @@ def lineplot(
     
     # Automatically select last timestep if none provided
     for name in cases.keys():
-        if "t" in  cases[name].dims.keys():
+        if "t" in  cases[name].sizes.keys():
             cases[name] = cases[name].isel(t=-1)
 
 
@@ -777,66 +777,55 @@ def lineplot(
             print("Warning: 1D plot omitting target values")
         
         region_ds = dict()
+        dfs = {}
         for name in cases.keys():
             ds = cases[name]
             if region == "omp":
-                region_ds[name] = ds.hermesm.select_region("outer_midplane_a")
-                xlabel = "dist from sep [m]"
+                dfs[name] = get_1d_radial_data(ds, params, "omp")
             elif region == "imp":
-                region_ds[name] = ds.hermesm.select_region("inner_midplane_a")
-                xlabel = "dist from sep [m]"
+                dfs[name] = get_1d_radial_data(ds, params, "imp")
             elif region == "outer_lower":
-                region_ds[name] = ds.hermesm.select_region("outer_lower_target")
-                xlabel = "dist from sep [m]"
+                dfs[name] = get_1d_radial_data(ds, params, "outer_lower_target")
             elif region == "field_line":
-                region_ds[name] = ds.hermesm.select_custom_sol_ring("outer_lower", sepadd = 0).squeeze()
-                xlabel = "Distance from midplane [m]"
+                dfs[name] = get_1d_poloidal_data(ds, params, "outer_lower", sepadd = 1)
+                # region_ds[name] = ds.hermesm.select_custom_sol_ring("outer_lower", sepadd = 0).squeeze()
+
             elif region == "1d":
                 region_ds[name] = ds.squeeze()
                 xlabel = "Distance from midplane [m]"
             else:
                 raise Exception(f"Region {region} not found")
             
-            if clean_guards is True:
-                if region == "omp" or region == "imp" or region == "outer_lower":
-                    region_ds[name] = region_ds[name].isel(x=slice(2,-2))
-                elif region == "field_line":
-                    region_ds[name] = region_ds[name].isel(theta = slice(None,-2))
-                elif region == "1d":
-                    if guard_replace is True:
-                        raise Exception("Cannot guard replace and clean guards at the same time")
-                    region_ds[name] = region_ds[name].isel(pos=slice(2,-2))
-                    
-                else:
-                    raise Exception(f"{region} guard cleaning not implemented")
-                
-        
-            
+
         for i, param in enumerate(params):
-            
+
             datamins = []
             datamaxes = []
             
             for j, name in enumerate(cases.keys()):
                 
-                
-                
+  
                 if region == "1d":
-                    xplot = region_ds[name]["pos"]
+                    data = region_ds[name][param].values
+                    xplot = region_ds[name]["pos"].values
+                    
                 elif region == "field_line":    # Poloidal
-                    m = region_ds[name].metadata
-                    xplot = region_ds[name].coords["theta"] - region_ds[name].coords["theta"][0]
-                else:    # Radial, 0 at sep
-                    sep_R = region_ds[name].coords["R"][region_ds[name].metadata["ixseps1"]- region_ds[name].metadata["MXG"]]
-                    xplot = region_ds[name].coords["R"] - sep_R
+                    xplot = dfs[name]["Spar"].values
+                    data = dfs[name][param]
+                    xlabel = "Spar [m]"
+                    # m = region_ds[name].metadata
+                    # xplot = region_ds[name].coords["theta"] - region_ds[name].coords["theta"][0]
+                elif region in ["omp", "imp", "outer_lower"]:  
+                    xplot = dfs[name]["Srad"].values
+                    data = dfs[name][param]
+                    xlabel = "Dist from sep [m]"
                     
-                xplot = xplot.values.copy()  # Extract numpy array
-                    
-                if param in region_ds[name].data_vars:
-                    data = region_ds[name][param].values.copy()   # Extract numpy array
-                else: 
-                    data = np.zeros_like(region_ds[name]["Ne"])
-                    print(f"Warning: {param} not found in {name}!")
+                else:
+                    if param in region_ds[name].data_vars:
+                        data = region_ds[name][param].values.copy()   # Extract numpy array
+                    else: 
+                        data = np.zeros_like(region_ds[name]["Ne"])
+                        print(f"Warning: {param} not found in {name}!")
                     
                 
                 if guard_replace is True:
@@ -851,6 +840,7 @@ def lineplot(
                 if colors == None:
                     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
                     
+                
                 axes[i].plot(xplot, data, label = name, c = colors[j], marker = marker, ms = ms, lw = lw, ls = ls)
                 
                 
