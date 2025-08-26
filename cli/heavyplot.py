@@ -29,7 +29,6 @@ def heavyplot(casename, save = True):
     """
     tstart = tm.time()
     db = CaseDB(case_dir = r"/home/mike/work/cases", grid_dir = r"/home/mike/work/cases")
-    
     casename = casename.split(r"/")[-1]
     case = db.load_case_2D(casename, use_squash = False)
     case.extract_2d_tokamak_geometry()
@@ -57,7 +56,6 @@ def heavyplot(casename, save = True):
 
     lineplot(
         toplot,
-        clean_guards = False,
         params = ["Te", "Td",  "Ne", "Nd", "Rd+_ex"],
         regions = ["omp", "outer_lower", "field_line"],
         colors = colors,
