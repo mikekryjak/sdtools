@@ -94,7 +94,7 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False, l
     Tn = get_var("Td") * Tnorm
 
     res = {}
-    ddt_params = ["ddt(Pe)","ddt(Pd+)", "ddt(Pd)", "ddt(Ne)", "ddt(Nn)", "ddt(NVd+)", "ddt(NVd)"]
+    ddt_params = ["ddt(Pe)","ddt(Pd+)", "ddt(Pd)", "ddt(Nd+)", "ddt(Nn)", "ddt(NVd+)", "ddt(NVd)"]
 
     for param in ddt_params:
         try:
@@ -399,6 +399,7 @@ if __name__ == "__main__":
     parser.add_argument("-t", action="store_true", help = "Table?")
     parser.add_argument("-s", action="store_true", help = "Save figure?")
     parser.add_argument("-solverdiags", action="store_true", help = "Parse SNES console output?")
+    parser.add_argument("-pid", action="store_true", help = "Plot SNES PID timestepper components?")
     parser.add_argument("-neutrals", action="store_true", help = "Alternative physics quantities")
     
     # Extract arguments and call function
@@ -408,4 +409,5 @@ if __name__ == "__main__":
              table = args.t, 
              save = args.s, 
              neutrals = args.neutrals, 
-             logfile_plots = args.solverdiags)
+             logfile_plots = args.solverdiags,
+             pid = args.pid)
