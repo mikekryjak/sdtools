@@ -156,9 +156,13 @@ def guard_replace_1d(da):
     da = da.copy()
     
     if type(da) == xarray.core.dataarray.DataArray:
-        da[{"pos" : -2}] = (da[{"pos" : -2}] + da[{"pos" : -3}])/2
-        da[{"pos" : 1}] = (da[{"pos" : 1}] + da[{"pos" : 2}])/2
         
+        if da.name != "pos":
+            # da[{"pos" : -2}] = (da[{"pos" : -2}] + da[{"pos" : -3}])/2
+            # da[{"pos" : 1}] = (da[{"pos" : 1}] + da[{"pos" : 2}])/2
+            da[{"pos" : -2}] = (da.isel(pos=-2) + da.isel(pos=-3))/2
+            da[{"pos" : 1}] = (da.isel(pos=1) + da.isel(pos=2))/2
+            
         da = da.isel(pos = slice(1, -1))
         
     else:
