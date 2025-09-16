@@ -1,13 +1,10 @@
 #!/bin/bash
 
-# BUILD_DIR="build-mc-master"
-BUILD_DIR="build-mc-ena"   #  E-AFN-neutral-advection
-# BUILD_DIR="build-mc-master-fix-heatflux-diags"
-# BUILD_DIR="build-mc-master-old-remkit-comparison"
-# BUILD_DIR="build-mc-master-next"
-# BUILD_DIR="build-mc-selective-collisions"
-# BUILD_DIR="build-mc-eafn"
-# BUILD_DIR="build-mc-neutral-fluxlims"
+
+BUILD_DIR="build-mc-master"
+
+# Slope limiter setting
+LIMITER="MC"
 
 # Defaults
 FAST_BUILD=false
@@ -46,7 +43,7 @@ if [ "$EXPRESS" = false ]; then
 
   echo "IN STATEMENT"
   # Prepare CMake arguments
-  CMAKE_ARGS="-B $BUILD_DIR -DCMAKE_BUILD_TYPE=Release -DCHECK=0 -DBOUT_DOWNLOAD_SUNDIALS=ON -DCMAKE_BUILD_TYPE=Release -DCHECK=0 -DBOUT_USE_PETSC=ON -DHERMES_SLOPE_LIMITER=MC"
+  CMAKE_ARGS="-B $BUILD_DIR -DCMAKE_BUILD_TYPE=Release -DCHECK=0 -DBOUT_DOWNLOAD_SUNDIALS=ON -DCMAKE_BUILD_TYPE=Release -DCHECK=0 -DBOUT_USE_PETSC=ON -DHERMES_SLOPE_LIMITER=$LIMITER"
 
   if [ "$NO_BOUT" = true ]; then
     CMAKE_ARGS="$CMAKE_ARGS -DHERMES_BUILD_BOUT=OFF"
