@@ -401,6 +401,7 @@ class Monitor2D():
             
 def plot_ddt(case, 
              ax = None,
+             trim_timestep = 1,
              smoothing = 1, 
              dpi = 120, 
              volume_weighted = True, 
@@ -420,6 +421,7 @@ def plot_ddt(case,
         # No guard cells at all
         ds = case.ds.isel(pos=slice(2,-2))
 
+    ds = ds.isel(t = slice(None, -trim_timestep))    # Trim first few timesteps if required
     m = ds.metadata
     
     # Find parameters (species dependent)
