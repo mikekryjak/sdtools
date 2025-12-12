@@ -1,5 +1,8 @@
 # import pickle as pkl
-import dill
+try:
+    import dill
+except:
+    print("Failed to import dill, some functionality will not be available.")
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
