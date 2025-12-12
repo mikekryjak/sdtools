@@ -276,10 +276,14 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False, l
         axes[1,0].plot(t[skip], ms_per_24hrs[skip], c = "k", lw = lw)
         axes[1,0].set_title("ms $t_{sim}$ / 24hr $t_{wall}$", fontsize = title_font_size)
         axes[1,0].set_yscale("log")
-        axes[1,0].yaxis.set_major_locator(mpl.ticker.MaxNLocator(nbins=6, min_n_ticks=5))
-        axes[1,0].yaxis.set_minor_locator(mpl.ticker.NullLocator())
-        axes[1,0].yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.1f}"))
-        axes[1,0].yaxis.set_minor_formatter(mpl.ticker.StrMethodFormatter("{x:.1f}"))
+        # axes[1,0].yaxis.set_major_locator(mpl.ticker.MaxNLocator(nbins=6, min_n_ticks=5))
+        axes[1,0].yaxis.set_major_locator(mpl.ticker.LogLocator(base=10, numticks=5))
+        axes[1,0].yaxis.set_minor_locator(mpl.ticker.LogLocator(base=10, subs=[1]))
+        # axes[1,0].yaxis.set_minor_locator(mpl.ticker.LogLocator(base=10, subs='auto'))
+        # axes[1,0].yaxis.set_minor_locator(mpl.ticker.LogLocator(base=10, subs='auto'))
+        axes[1,0].yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.0f}"))
+        axes[1,0].yaxis.set_minor_formatter(mpl.ticker.StrMethodFormatter("{x:.0f}"))
+        axes[1,0].grid(True, which="minor", axis = "y", c = "k", alpha = 0.8, lw = 0.1)
         # axes[1,0].tick_params(axis = "y", which = "both", labelsize = 8)
 
         
