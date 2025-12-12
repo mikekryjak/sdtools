@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import boutdata
-from boututils.options import BOUTOptions
+from boutdata.data import BoutOptions
 from boutdata.collect import create_cache
 import argparse
 import os
@@ -38,7 +38,7 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False, l
     print(f"Reading {casename}")
     print("Calculating...", end = "")
 
-    # Reading with cache for extra speed
+    # Reading with cache for extra speed   
     cache = create_cache(path, "BOUT.dmp")
     print("..cache", end="")
     def get_var(name, guards = True):
