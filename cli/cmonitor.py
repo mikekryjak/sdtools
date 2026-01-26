@@ -298,8 +298,7 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False, l
             axes[1,3].set_title("order", fontsize = title_font_size)
             
         ## SNES    
-        elif snes_prints_found and logfile_plots:
-            pass
+        elif logfile_plots and snes_prints_found:
             log_axes[0].plot(snes_time[skip], snes_nonlinear_linear_ratio[skip], c = "k", lw = lw)
             log_axes[0].set_title("linear/nonlinear ratio", fontsize = title_font_size)
             
