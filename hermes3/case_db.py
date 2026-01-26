@@ -2,7 +2,7 @@ from pathlib import Path
 import os
 from boutdata.squashoutput import squashoutput
 from datetime import datetime as dt
-from boututils.options import BOUTOptions
+from boutdata.data import BoutOptionsFile
 from hermes3.load import Load
 
 
@@ -49,10 +49,9 @@ class CaseDB():
             raise Exception(f"Case {casename} not found in database")
         
         casepath = self.casepaths[casename]
-        options = BOUTOptions()
-        options.read_inp(casepath)
+        options = BoutOptionsFile(os.path.join(casepath, "BOUT.inp"))
 
-        gridname = options.mesh["file"]
+        gridname = options["mesh"]["file"].replace('"','')
 
         if gridname in self.gridpaths.keys():
             gridfilepath = self.gridpaths[gridname]
