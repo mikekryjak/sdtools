@@ -131,7 +131,9 @@ class Load:
         if squeeze:
             ds = ds.squeeze(drop = False)
             
-        ds["M"] = ds["Vd+"] / np.sqrt(constants("q_e")*(ds["Td+"] + ds["Te"])/(constants("mass_p")*2))  # NOTE: will break for multiple ions
+        # Only calculate Mach number if the required variables exist
+        if all(var in ds for var in ["Vd+", "Td+", "Te"]):
+            ds["M"] = ds["Vd+"] / np.sqrt(constants("q_e")*(ds["Td+"] + ds["Te"])/(constants("mass_p")*2))  # NOTE: will break for multiple ions
             
         print("")
             
