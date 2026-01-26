@@ -4,9 +4,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-import boutdata
-from boututils.options import BOUTOptions
-from boutdata.collect import create_cache
 import argparse
 import os, sys
 import time as tm
