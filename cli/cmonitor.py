@@ -134,6 +134,8 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False, l
 
     # First row of plots
     Ne_sep = Ne[:,x_sep,y_omp]
+    Te_sep = Te[:,x_sep,y_omp]
+    Tn_sep = Tn[:,x_sep,y_omp]
     # Ntot = ((Ne[:, x_ng, :] + Nn[:, x_ng, :]) * dv).sum(axis = (1,2))
     Ne_target = np.max((0.5*(Ne[:,x_ng, -2] + Ne[:,x_ng,-3])), axis = 1)
     Nn_target = np.max((0.5*(Nn[:,x_ng, -2] + Nn[:,x_ng,-3])), axis = 1)
@@ -250,8 +252,10 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False, l
         ## Physics
         if neutrals is True:
             
-            axes[0,3].plot(t[skip], Tn_sol[skip], c = "limegreen", lw = lw)
-            axes[0,3].set_title("$T_{n}^{omp,sol}$", fontsize = title_font_size)
+            # axes[0,3].plot(t[skip], Tn_sol[skip], c = "limegreen", lw = lw)
+            # axes[0,3].set_title("$T_{n}^{omp,sol}$", fontsize = title_font_size)
+            axes[0,3].plot(t[skip], Tn_sep[skip], c = "limegreen", lw = lw)
+            axes[0,3].set_title("$T_{n}^{omp,sep}$", fontsize = title_font_size)
             
             axes[0,1].plot(t[skip], Tn_core_avg[skip], c = "darkorchid", lw = lw)
             axes[0,1].set_title("$T_{n}^{core,avg}$", fontsize = title_font_size)
@@ -261,8 +265,10 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False, l
         
         else:
             
-            axes[0,1].plot(t[skip], Te_sol[skip], c = "limegreen", lw = lw)
-            axes[0,1].set_title("$T_{e}^{omp,sol}$", fontsize = title_font_size)
+            # axes[0,1].plot(t[skip], Te_sol[skip], c = "limegreen", lw = lw)
+            # axes[0,1].set_title("$T_{e}^{omp,sol}$", fontsize = title_font_size)
+            axes[0,1].plot(t[skip], Te_sep[skip], c = "limegreen", lw = lw)
+            axes[0,1].set_title("$T_{e}^{omp,sep}$", fontsize = title_font_size)
             
             axes[0,2].plot(t[skip], Ne_target[skip], c = "deeppink", lw = lw)
             axes[0,2].set_title("$N_{e}^{targ,max}$", fontsize = title_font_size)
