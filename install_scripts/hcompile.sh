@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# BUILD_DIR="build-mc-master"
-
+BUILD_DIR="build-mc-master"
 
 # Slope limiter setting
 LIMITER="MC"
@@ -14,14 +13,14 @@ FAST_BUILD=false
 NO_BOUT=false
 EXPRESS=false
 CUSTOM_BOUT_SRC=""
-CHECK_LEVEL=0
-BUILD_TYPE="Release"
+CHECK_LEVEL="0"
+BUILD_TYPE="RelWithDebInfo"
 NO_SUBMODULE_UPDATE=false
 OVERRIDE_WARNINGS=false
 
 usage() {
   cat <<EOF
-Usage: $0 [-f] [-n] [e] [-c <path>] [-d]
+Usage: $0 [-f] [-n] [e] [-c <path>] [-d] [-u] [-w]
   -f          Skip removing existing build directory (i.e. “fast” build)
   -n          Do not rebuild BOUT++ (this is WIP)
   -e          Skip BOUT++ rebuild and Hermes-3 configuration (go to build directory and run cmake)
@@ -29,21 +28,25 @@ Usage: $0 [-f] [-n] [e] [-c <path>] [-d]
   -d          Use debug build
   -u          Do not update git submodules
   -w          Override compilation error on warnings
+  -p          Compile with the BOUT++ python interface
+  -l          Write build log to hermes-buildlog.out 
 EOF
   exit 1
 }
 
 # Parse flags
-while getopts "fnec:du" opt; do
+while getopts "fnec:duwpl" opt; do
   case $opt in
     f) FAST_BUILD=true ;;
     n) NO_BOUT=true      ;;
     e) EXPRESS=true     ;;
     c) CUSTOM_BOUT_SRC="$OPTARG" ;;
-    d) CHECK_LEVEL="3"
+    d) CHECK_LEVEL="4"
        BUILD_TYPE="Debug" ;;
     u) NO_SUBMODULE_UPDATE=true ;;
     w) OVERRIDE_WARNINGS=true ;;
+    p) BOUTPP=true ;;
+    l) WRITE_LOG=true ;;
     *) usage              ;;
   esac
 done
@@ -53,10 +56,18 @@ done
 export PETSC_DIR=/home/mike/work/petsc-3.23.3
 export PETSC_ARCH=arch-linux-c-opt
 
+if [ "$WRITE_LOG" = true ]; then
+  # Log outcome
+  rm -f hermes-buildlog.out # Remove if already exists
+  exec 3>&1 4>&2 # Trap stdout, stderr etc all at the same time.
+  trap 'exec 2>&4 1>&3' 0 1 2 3
+  exec 1>hermes-buildlog.out 2>&1
+fi
+
 if [ "$EXPRESS" = false ]; then
 
   # Prepare CMake arguments
-  CMAKE_ARGS="-B $BUILD_DIR -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCHECK=$CHECK_LEVEL -DBOUT_DOWNLOAD_SUNDIALS=ON -DBOUT_USE_PETSC=ON -DHERMES_SLOPE_LIMITER=$LIMITER"
+  CMAKE_ARGS="-B $BUILD_DIR -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCHECK=$CHECK_LEVEL -DBOUT_DOWNLOAD_SUNDIALS=ON -DBOUT_USE_PETSC=ON -DHERMES_SLOPE_LIMITER=$LIMITER -DBOUT_USE_NLS=OFF"
 
   if [ "$NO_BOUT" = true ]; then
     CMAKE_ARGS="$CMAKE_ARGS -DHERMES_BUILD_BOUT=OFF"
@@ -72,6 +83,11 @@ if [ "$EXPRESS" = false ]; then
   if [ "$NO_SUBMODULE_UPDATE" = true ]; then
     CMAKE_ARGS="$CMAKE_ARGS -DHERMES_UPDATE_GIT_SUBMODULE=OFF"
     echo "Disabling git submodule update"
+  fi
+
+  if [ "$BOUTPP" = true ]; then
+    CMAKE_ARGS="$CMAKE_ARGS -DHERMES_BUILD_BOUT_PYTHON=ON"
+    echo "Enabling BOUT++ python interface"
   fi
 
   if [ "$OVERRIDE_WARNINGS" = true ]; then
