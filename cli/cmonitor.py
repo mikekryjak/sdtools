@@ -15,7 +15,7 @@ from datetime import datetime
 
 
 
-def cmonitor(path, save = False, plot = False, table = True, neutrals = False, logfile_plots = False):
+def cmonitor(path, save = False, plot = False, table = True, neutrals = False, logfile_plots = False, sep = True):
     """
     Produce convergence report of 2D Hermes-3 simulation
     Plots of process conditions at OMP and target 
@@ -26,6 +26,7 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False, l
     -----
     path: path to case directory
     save: bool, save figure. saved by case name
+    sep: bool, if true, show profiles at separatrix, otherwise  last sol ring
     plot: bool, show ploy
     table = bool, show table
     """
@@ -252,23 +253,27 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False, l
         ## Physics
         if neutrals is True:
             
-            # axes[0,3].plot(t[skip], Tn_sol[skip], c = "limegreen", lw = lw)
-            # axes[0,3].set_title("$T_{n}^{omp,sol}$", fontsize = title_font_size)
-            axes[0,3].plot(t[skip], Tn_sep[skip], c = "limegreen", lw = lw)
-            axes[0,3].set_title("$T_{n}^{omp,sep}$", fontsize = title_font_size)
+            if sep is True:
+                axes[0,1].plot(t[skip], Tn_sep[skip], c = "limegreen", lw = lw)
+                axes[0,1].set_title("$T_{n}^{omp,sep}$", fontsize = title_font_size)
+            else:
+                axes[0,1].plot(t[skip], Tn_sol[skip], c = "limegreen", lw = lw)
+                axes[0,1].set_title("$T_{n}^{omp,sol}$", fontsize = title_font_size)
             
-            axes[0,1].plot(t[skip], Tn_core_avg[skip], c = "darkorchid", lw = lw)
-            axes[0,1].set_title("$T_{n}^{core,avg}$", fontsize = title_font_size)
-
             axes[0,2].plot(t[skip], Nn_target[skip], c = "deeppink", lw = lw)
             axes[0,2].set_title("$N_{n}^{targ,max}$", fontsize = title_font_size)
         
+            axes[0,3].plot(t[skip], Tn_core_avg[skip], c = "darkorchid", lw = lw)
+            axes[0,3].set_title("$T_{n}^{core,avg}$", fontsize = title_font_size)
         else:
             
-            # axes[0,1].plot(t[skip], Te_sol[skip], c = "limegreen", lw = lw)
-            # axes[0,1].set_title("$T_{e}^{omp,sol}$", fontsize = title_font_size)
-            axes[0,1].plot(t[skip], Te_sep[skip], c = "limegreen", lw = lw)
-            axes[0,1].set_title("$T_{e}^{omp,sep}$", fontsize = title_font_size)
+            if sep is True:
+                axes[0,1].plot(t[skip], Te_sep[skip], c = "limegreen", lw = lw)
+                axes[0,1].set_title("$T_{e}^{omp,sep}$", fontsize = title_font_size)
+            else:
+                axes[0,1].plot(t[skip], Te_sol[skip], c = "limegreen", lw = lw)
+                axes[0,1].set_title("$T_{e}^{omp,sol}$", fontsize = title_font_size)
+
             
             axes[0,2].plot(t[skip], Ne_target[skip], c = "deeppink", lw = lw)
             axes[0,2].set_title("$N_{e}^{targ,max}$", fontsize = title_font_size)
@@ -416,6 +421,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", action="store_true", help = "Save figure?")
     parser.add_argument("-solverdiags", action="store_true", help = "Parse SNES console output?")
     parser.add_argument("-neutrals", action="store_true", help = "Alternative physics quantities")
+    parser.add_argument("-sep", action="store_true", help = "Plot profiles at sep (T) or last sol ring (F)?")
     
     # Extract arguments and call function
     args = parser.parse_args()
@@ -424,4 +430,5 @@ if __name__ == "__main__":
              table = args.t, 
              save = args.s, 
              neutrals = args.neutrals, 
+             sep = args.sep,
              logfile_plots = args.solverdiags)
