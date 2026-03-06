@@ -71,7 +71,7 @@ mpl.rcParams['legend.facecolor'] = "white"
 # mpl.rcParams["axes.spines.top"] = False
 mpl.rcParams["axes.spines.left"] = True
 mpl.rcParams["figure.figsize"] = (5,4)
-mpl.rcParams["figure.dpi"] = 140
+mpl.rcParams["figure.dpi"] = 100
 mpl.rcParams["figure.facecolor"] = "white"
 
 
