@@ -884,7 +884,7 @@ def lineplot(
             axes[i].grid(which="minor", visible = True)
             axes[i].set_xlabel(xlabel, fontsize=9)
             axes[i].set_title(f"{param}", fontsize = "x-large")
-            fig.suptitle(f"{region} profiles")
+            fig.suptitle(f"{region} profiles", y=1.05)
             
             # print(f"{param}, datamin = {datamin:.3f}, datamax = {datamax:.3f}, datarange = {datarange:.3f}")            
             # print(f"       ymin: {ymin:.3f}, ymax: {ymax:.3f}")
@@ -1274,29 +1274,74 @@ def plot_2d_timeslices(ds, param, tinds,
 
 def plot2d(
     toplot,
-    clean_guards = True,
-    ylim = (None, None),
-    xlim = (None, None),
-    title = "",
-    tight_layout = True,
-    cmap = "Spectral_r",
-    dpi = 150,
-    scale = 1,
-    grid = True,
-    margins = (None, None),
-    save_path = "",
-    w_pad = -2,
-    **kwargs):
+    clean_guards=True,
+    ylim=(None, None),
+    xlim=(None, None),
+    title="",
+    tight_layout=True,
+    cmap="Spectral_r",
+    dpi=120,
+    scale=1,
+    grid=True,
+    margins=(None, None),
+    save_path="",
+    h_gap=0.05,
+    w_gap=0.3,
+    subplot_size=4,
+    subplot_width=None,
+    subplot_height=None,
+    **kwargs,
+):
 
     """
-    User friendly plot of a number of dataarrays in a row
-    Input: 
-        [dict(data = da, **kwargs)]
+    User friendly plot of a number of dataarrays in a row.
+
+    subplot_size : width of each subplot in inches. Height is derived from the
+        R/Z aspect ratio of the data (or ylim/xlim if provided). Width is always
+        the same, so fonts/ticks/lines are always the same physical size regardless
+        of shape. Override with subplot_width or subplot_height (inches).
     """
 
     numplots = len(toplot)
-    fig, axes = plt.subplots(1, numplots, dpi = dpi/scale, figsize = (11/3*numplots*scale,4*scale))
-    if len(toplot) == 1: axes = [axes]
+
+    # --- Compute aspect ratio from data or limits ---
+
+
+    first_data = toplot[0]["data"]
+    x_range = (
+        (xlim[1] - xlim[0])
+        if xlim != (None, None)
+        else (
+            float(first_data["R"].max() - first_data["R"].min())
+            if "R" in first_data.coords
+            else 1.0
+        )
+    )
+    y_range = (
+        (ylim[1] - ylim[0])
+        if ylim != (None, None)
+        else (
+            float(first_data["Z"].max() - first_data["Z"].min())
+            if "Z" in first_data.coords
+            else 1.0
+        )
+    )
+    aspect = y_range / x_range  # height / width
+
+    # --- Subplot dimensions: width is fixed, height follows aspect ratio ---
+    w = subplot_width if subplot_width is not None else subplot_size
+    h = subplot_height if subplot_height is not None else w * aspect
+
+    fig, axes = plt.subplots(
+        1,
+        numplots,
+        dpi=dpi,
+        figsize=(w * numplots * scale, h * scale),
+        layout="constrained",
+    )
+    fig.get_layout_engine().set(h_pad=h_gap, w_pad=w_gap, hspace=0, wspace=0)
+    if len(toplot) == 1:
+        axes = [axes]
 
     default_kwargs = {
         "targets" : False, "cmap" : cmap, "antialias": True, 
@@ -1328,8 +1373,21 @@ def plot2d(
         ax.grid(which="both", visible = grid)
         if margins != (None, None): ax.margins(x=margins[0], y = margins[1])
 
-    fig.suptitle(title)
-    if tight_layout is True: fig.tight_layout(w_pad = w_pad)
+    if title:
+        # Force layout so axes positions are finalised, then place title
+        # just above the actual top of the subplots (not the figure top,
+        # which can be far above the axes when aspect ratio is constrained).
+        fig.canvas.draw()
+        top = max(ax.get_position().y1 for ax in axes)
+        fig.text(
+            0.5,
+            top + 0.08,
+            title,
+            ha="center",
+            va="bottom",
+            fontsize=plt.rcParams["figure.titlesize"],
+            fontweight=plt.rcParams.get("figure.titleweight", "normal"),
+        )
 
     if save_path != "":
         plt.savefig(save_path)
