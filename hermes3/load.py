@@ -280,15 +280,15 @@ class Case:
         # Mach number
         
 
-    def clean_guards(self):
+    # def clean_guards(self):
         
-        to_clean = ["Dd_Dpar", "Ed+_iz","Ed+_rec", "Ed_Dpar", "Edd+_cx",
-                    "Fd+_iz", "Fd+_rec", "Fd_Dpar", "Fdd+_cx", "Rd+_ex",
-                    "Rd+_rec", "Sd+_iz", "Sd+_rec", "Sd+_src", "Sd_Dpar",
-                    "Sd_src"]
+    #     to_clean = ["Dd_Dpar", "Ed+_iz","Ed+_rec", "Ed_Dpar", "Edd+_cx",
+    #                 "Fd+_iz", "Fd+_rec", "Fd_Dpar", "Fdd+_cx", "Rd+_ex",
+    #                 "Rd+_rec", "Sd+_iz", "Sd+_rec", "Sd+_src", "Sd_Dpar",
+    #                 "Sd_src"]
         
-        for param in to_clean:
-            self.ds[param]
+    #     for param in to_clean:
+    #         self.ds[param]
         
     # Now in xHermes
     # def guard_replace(self):
@@ -1196,7 +1196,7 @@ class Case:
         
         self.ds["dv"] = self.ds.J * self.ds.dy * self.ds.dx * self.ds.dz
         self.ds["dv"].attrs.update({
-            "conversion" : 1,
+            "conversion" : self.metadata["rho_s0"]**3,
             "units" : "m3",
             "standard_name" : "cell volume",
             "long_name" : "Cell Volume"})
@@ -1274,7 +1274,7 @@ class Case:
         # Cell areas in flux space
         ds["dv"] = (["x", "theta"], ds["dx"].data * ds["dy"].data * ds["dz"].data * ds["J"].data)
         ds["dv"].attrs.update({
-            "conversion" : 1,
+            "conversion" : m["rho_s0"]**3,
             "units" : "m3",
             "standard_name" : "cell volume",
             "long_name" : "Cell volume",
