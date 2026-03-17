@@ -64,7 +64,8 @@ def get_1d_radial_data(ds,
         V1d = np.asarray(V1d)
         if Z1d.size == 0:
             return np.nan
-        k = np.argpartition(np.abs(Z1d), min(3, Z1d.size))[:min(3, Z1d.size)]
+        n = min(3, Z1d.size)
+        k = np.argpartition(np.abs(Z1d), n - 1)[:n]
         kz = k[np.argsort(Z1d[k])]
         z = Z1d[kz]
         y = V1d[kz]
