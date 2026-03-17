@@ -1040,6 +1040,9 @@ class SOLPScase():
         # df.loc[Xpoint_index, "Xpoint"] = "after"
         # df["Xpoint"] = 1
 
+        if not guards:
+            df = df.iloc[:-1]
+
 
         if target_first:
             df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
