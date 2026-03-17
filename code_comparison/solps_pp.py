@@ -870,6 +870,31 @@ class SOLPScase():
 
         return pd.DataFrame(results)
 
+    def get_1d_poloidal_data_double(
+        self,
+        params,
+        region="outer",
+        **kwargs,
+        ):
+
+        """
+        Prepare a full two-divertor field line dataset by using get_1d_poloidal_data
+        for both upper and lower and concatenating them. 
+
+        Each dataset starts at the midplane with an interpolated value exactly at Z=0, 
+        so here we flip the upper leg and join it to the lower leg while removing one
+        of the duplicate midplane points.
+        """
+
+        if "lower" in region or "upper" in region:
+            raise ValueError("Region should be 'inner' or 'outer' for double leg data, not 'inner_lower' etc.")
+
+        df_lower = self.get_1d_poloidal_data(params, region=f"{region}_lower", **kwargs)
+        df_upper = self.get_1d_poloidal_data(params, region=f"{region}_upper", **kwargs)
+        fl = pd.concat([df_upper.iloc[::-1], df_lower.iloc[1:]], ignore_index = True)
+
+        return fl
+
     def get_1d_poloidal_data(
         self,
         params,
@@ -893,6 +918,9 @@ class SOLPScase():
         NOTE: Be very careful when flipping the direction of the field line (target_first) as there are some hysteresis
         effects. Do all operations on Spar before reversing.
         """
+
+        if region == "outer" or region == "inner":
+            raise ValueError("Only one divertor leg at a time is supported for now, specify upper or lower")
         
         if type(params) == str:
             params = [params]
