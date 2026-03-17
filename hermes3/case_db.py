@@ -49,7 +49,7 @@ class CaseDB():
             raise Exception(f"Case {casename} not found in database")
         
         casepath = self.casepaths[casename]
-        options = BoutOptionsFile(os.path.join(casepath, "BOUT.inp"))
+        options = BoutOptionsFile(os.path.join(casepath, "BOUT.inp"), recalculate_xyz=False)
 
         gridname = options["mesh"]["file"].replace('"','')
 
