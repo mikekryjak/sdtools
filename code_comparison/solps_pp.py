@@ -781,16 +781,104 @@ class SOLPScase():
             df = df.iloc[1:-1]  # Trim guards but keep indices          
         
         return df
-    
+
+    def _interpolate_exact_sol_ring(self, params, region, sepdist):
+        """
+        Returns poloidal data radially interpolated to an exact separatrix distance.
+        Uses the midplane radial profile to determine the target flux surface,
+        then interpolates across rings at each poloidal position.
+
+        Parameters
+        ----------
+        params : list of str, parameters to extract
+        region : str, region name (inner_lower, inner_upper, outer_lower, outer_upper)
+        sepdist : float, separatrix distance in [m]
+
+        Returns
+        -------
+        df : DataFrame with R, Z, hx, Btot, Bpol, vol and requested params
+        """
+        if "outer" in region:
+            mp_region = "omp"
+        elif "inner" in region:
+            mp_region = "imp"
+        else:
+            raise ValueError("Region must contain 'inner' or 'outer'")
+
+        # Get midplane radial profile to find fractional ring index for desired sepdist
+        radial_df = self.get_1d_radial_data(
+            [], region=mp_region, keep_geometry=True, guards=True
+        )
+
+        # Interpolate to find fractional ring index at the desired separatrix distance
+        y_frac = float(
+            scipy.interpolate.interp1d(
+                radial_df["dist"].values,
+                np.arange(len(radial_df), dtype=float),
+            )(sepdist)
+        )
+
+        # Get poloidal indices for the region (use sepadd=0 just to get the slice)
+        test_selector = self.make_custom_sol_ring(region, i=0)
+        pol_slice = test_selector[0]
+
+        nx = self.g["nx"]
+        if isinstance(pol_slice, slice):
+            pol_indices = list(range(*pol_slice.indices(nx)))
+        else:
+            pol_indices = [pol_slice]
+
+        ny = self.g["ny"]
+        y_indices = np.arange(ny, dtype=float)
+
+        geom_params = ["R", "Z", "hx", "Btot", "Bpol", "vol"]
+        all_param_names = list(
+            dict.fromkeys(geom_params + params)
+        )  # deduplicate, preserve order
+
+        # Build lookup: param -> 2D array
+        lookup = {}
+        for param_name in all_param_names:
+            if param_name in self.bal:
+                arr = self.bal[param_name]
+            elif param_name in self.g:
+                arr = self.g[param_name]
+            else:
+                raise ValueError(f"Parameter {param_name} not found")
+
+            if (
+                param_name.startswith("fh")
+                and "x" not in param_name
+                and "y" not in param_name
+            ):
+                arr = arr[:, :, 0]
+
+            if len(arr.shape) > 2:
+                raise ValueError(f"Parameter {param_name} has more than 2 dimensions")
+
+            lookup[param_name] = arr
+
+        # Interpolate across rings at each poloidal position
+        results = {p: np.empty(len(pol_indices)) for p in all_param_names}
+
+        for i, pol_i in enumerate(pol_indices):
+            for param_name in all_param_names:
+                radial_values = lookup[param_name][pol_i, :]
+                results[param_name][i] = float(
+                    scipy.interpolate.interp1d(y_indices, radial_values)(y_frac)
+                )
+
+        return pd.DataFrame(results)
+
     def get_1d_poloidal_data(
         self,
         params,
-        region = "outer_lower",
-        sepadd = None,
-        sepdist = None,
-        target_first = False,
-        guards = False
-        
+        region="outer_lower",
+        sepadd=None,
+        sepdist=None,
+        target_first=False,
+        guards=False,
+        interpolate_radial=True,
     ):
         """
         Returns field line data from the balance file
@@ -799,6 +887,8 @@ class SOLPScase():
         R and Z are provided for checking field line location only.
         only outer_lower region is provided at the moment.
         sepadd is the ring index number with sepadd = 0 being the separatrix
+        interpolate_radial: if True and sepdist is given, interpolate across rings to get
+            data at the exact sepdist rather than snapping to the closest ring.
         TODO: Try using "conn" which is the connection length. There is a difference to the DLS due to interpolation
         NOTE: Be very careful when flipping the direction of the field line (target_first) as there are some hysteresis
         effects. Do all operations on Spar before reversing.
@@ -812,63 +902,85 @@ class SOLPScase():
         
         elif sepadd != None and sepdist != None:
             raise ValueError("Must use either index i or separatrix distance sepdist, not both")
-        
-        elif sepdist != None:
-            radial_df = self.get_1d_radial_data([], region = "omp")
-            sepind = radial_df[radial_df["sep"] == 1].index[0]
-            sepadd = radial_df.loc[(radial_df["dist"] - sepdist).abs().idxmin()].name - sepind
-            
-        
-        yind = self.g["sep"] + sepadd   # Ring index
-        omp = self.g["omp"]
-        imp = self.g["imp"]
-        
-        selector = self.make_custom_sol_ring(region, i = sepadd)
-        
-        hx = self.bal["hx"][selector]
-        Btot = self.g["Btot"][selector]
-        Bpol = self.g["Bpol"][selector]
-        R = self.g["R"][selector]
-        Z = self.g["Z"][selector]
-        vol = self.g["vol"][selector]
-        
-        data = {}
-        
-        for param in params:
-            
-            # Look in bal or geometry
-            if param in self.bal:
-                data[param] = self.bal[param]
-            elif param in self.g:
-                data[param] = self.g[param]
-            else:
-                raise ValueError(f"Parameter {param} not found")
-            
-            if param.startswith("fh") and "x" not in param and "y" not in param:
-                data[param] = data[param][:,:,0]   # Select poloidal
-            
-            # Catch special variables with more dimensions
-            if len(data[param].shape) > 2:
-                raise ValueError(f"Paramerer {param} has more than 2 dimensions")
-            
-            
-        
-        df = pd.DataFrame()
-        df["R"] = R
-        df["Z"] = Z
-        
-        ## Poloidal connection length
-        df["Spol"] = np.cumsum(hx)  # Poloidal distance
-        
-        # df["Spol"] -= df["Spol"].iloc[0]   # Now 0 is cell centre before midplane
-        
-        for param in params:
-            df[param] = data[param][selector]
-        
-        ## Parallel connection length
-        dSpar = hx * abs(Btot / abs(Bpol))
-        df["Spar"] = np.cumsum(dSpar)
-        df["apar"] = vol / dSpar
+
+        # Radial interpolation path: interpolate across rings for exact sepdist
+        if interpolate_radial:
+            if sepdist is None:
+                raise ValueError(
+                    "sepdist must be specified if interpolate_radial is True"
+                )
+
+            df = self._interpolate_exact_sol_ring(params, region, sepdist)
+
+            hx = df["hx"].values
+            Btot = df["Btot"].values
+            Bpol = df["Bpol"].values
+            vol = df["vol"].values
+
+            df["Spol"] = np.cumsum(hx)
+
+            dSpar = hx * abs(Btot / abs(Bpol))
+            df["Spar"] = np.cumsum(dSpar)
+            df["apar"] = vol / dSpar
+
+            df = df.drop(columns=["hx", "Btot", "Bpol", "vol"])
+
+        else:
+            if sepdist != None:
+                radial_df = self.get_1d_radial_data([], region="omp")
+                sepind = radial_df[radial_df["sep"] == 1].index[0]
+                sepadd = (
+                    radial_df.loc[(radial_df["dist"] - sepdist).abs().idxmin()].name
+                    - sepind
+                )
+
+            yind = self.g["sep"] + sepadd  # Ring index
+            omp = self.g["omp"]
+            imp = self.g["imp"]
+
+            selector = self.make_custom_sol_ring(region, i=sepadd)
+
+            hx = self.bal["hx"][selector]
+            Btot = self.g["Btot"][selector]
+            Bpol = self.g["Bpol"][selector]
+            R = self.g["R"][selector]
+            Z = self.g["Z"][selector]
+            vol = self.g["vol"][selector]
+
+            data = {}
+
+            for param in params:
+                # Look in bal or geometry
+                if param in self.bal:
+                    data[param] = self.bal[param]
+                elif param in self.g:
+                    data[param] = self.g[param]
+                else:
+                    raise ValueError(f"Parameter {param} not found")
+
+                if param.startswith("fh") and "x" not in param and "y" not in param:
+                    data[param] = data[param][:, :, 0]  # Select poloidal
+
+                # Catch special variables with more dimensions
+                if len(data[param].shape) > 2:
+                    raise ValueError(f"Paramerer {param} has more than 2 dimensions")
+
+            df = pd.DataFrame()
+            df["R"] = R
+            df["Z"] = Z
+
+            ## Poloidal connection length
+            df["Spol"] = np.cumsum(hx)  # Poloidal distance
+
+            # df["Spol"] -= df["Spol"].iloc[0]   # Now 0 is cell centre before midplane
+
+            for param in params:
+                df[param] = data[param][selector]
+
+            ## Parallel connection length
+            dSpar = hx * abs(Btot / abs(Bpol))
+            df["Spar"] = np.cumsum(dSpar)
+            df["apar"] = vol / dSpar
 
 
         if any([name in region for name in ["outer_upper", "inner_lower"]]):
