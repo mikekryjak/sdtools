@@ -19,10 +19,10 @@ try:
 except:
     print("Gridtools not found in code_comparison")
 
-try:
-    from soledge.wrapper_class import *
-except:
-    print("SOLEDGE could not be imported in code_comparison")
+# try:
+from soledge_scripts.wrapper_class import SOLEDGEcase
+# except:
+#     print("SOLEDGE could not be imported in code_comparison")
 
 from hermes3.utils import *
 from hermes3.selectors import get_1d_radial_data, get_1d_poloidal_data

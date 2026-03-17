@@ -19,7 +19,7 @@ sys.path.append(os.path.join(onedrive_path, r"Project\python-packages"))
 
 from hermes3.utils import *
 from code_comparison.solps_pp import *
-from soledge.wrapper_class import SOLEDGEcase
+from soledge_scripts.wrapper_class import SOLEDGEcase
 
 try:
     # import gridtools.solps_python_scripts.setup
