@@ -35,38 +35,46 @@ class interpolateSOLPStoHermes:
                 separatrix=False,
             )
 
+        params = ["R", "Z", param]
+
         for region in regions:
-            for subregion in ["divertor", "sol"]:
-                print(region, subregion, "\n")
+            print(region, "\n")
 
-                for sepadd in range(num_solrings):
-                    radial_index = sepadd + m["ixseps1"]
-                    print(radial_index, ", ", end="")
-                    sepdist = radial_sol["Srad"][radial_index]
+            for sepadd in range(num_solrings):
+                radial_index = sepadd + m["ixseps1"]
+                print(radial_index, ", ", end="")
+                sepdist = radial_sol["Srad"][radial_index]
 
+                # Fetch field lines once per SOL ring, shared across divertor/sol subregions
+                flh = get_1d_poloidal_data(
+                    ds, params=params + ["theta_idx"], region=region, sepadd=sepadd
+                )
+                fls = solps.get_1d_poloidal_data(
+                    params=params, region=region, sepdist=sepdist
+                )
+
+                for subregion in [
+                    "divertor",
+                    # "sol"
+                ]:
                     poloidal_indices, param_interp = self._get_interpolated(
-                        sepadd,
-                        sepdist,
+                        flh,
+                        fls,
                         param,
-                        region=region,
                         subregion=subregion,
                         debug=False,
                         plot_line_ax=plot_line_ax if plot_lines else None,
                     )
+                    param_values[radial_index, poloidal_indices] = param_interp
 
-                    for i in range(len(poloidal_indices)):
-                        param_values[radial_index, poloidal_indices[i]] = param_interp[
-                            i
-                        ]
-
-                print("")
+            print("")
 
         ds[f"{param}_interp"] = ds[param].copy(data=param_values)
 
         # return ds
 
     def _get_interpolated(
-        self, sepadd, sepdist, param, region, subregion, debug=False, plot_line_ax=None
+        self, flh, fls, param, subregion, debug=False, plot_line_ax=None
     ):
         """
         Interpolates a specified SOLPS parameter onto the Hermes-3 grid by performing
@@ -74,14 +82,12 @@ class interpolateSOLPStoHermes:
         (Scrape-Off Layer).
         Parameters
         ----------
-        sepadd : float
-            SOL ring selection (number of SOL rings from separatrix in Hermes-3 grid)
-        sepdist : float
-            Distance of selected SOL ring from separatrix (to get equivalent from SOLPS)
+        flh : DataFrame
+            Hermes-3 field line data for the current SOL ring and region (pre-fetched).
+        fls : DataFrame
+            SOLPS field line data for the current SOL ring and region (pre-fetched).
         param : str
             Name of the parameter to interpolate
-        region : str
-            outer_lower, outer_upper, inner_lower, inner_upper
         subregion : str
             Interpolation subregion. Either "divertor" or "sol".
             - "divertor": Flips field lines to start at target, interpolates toward X-point.
@@ -99,27 +105,13 @@ class interpolateSOLPStoHermes:
         Notes
         -----
         The function uses cubic spline interpolation (k=3) for divertor mode and linear
-        interpolation (k=1) for SOL mode. The first point is removed in SOL mode as it
+        interpolation for SOL mode. The first point is removed in SOL mode as it
         represents a midplane cell edge.
         """
 
-        ds = self.ds
-        solps = self.solps
-        m = ds.metadata
-
-        params = ["R", "Z", param]
-        flh = get_1d_poloidal_data(
-            ds, params=params + ["theta_idx"], region=region, sepadd=sepadd
-        )
-        fls = solps.get_1d_poloidal_data(params=params, region=region, sepdist=sepdist)
-
-        # if debug:
-        #     fig, ax = plt.subplots()
-        #     ax.plot(flh["Spol"], flh[param], label = "Hermes", marker = "o")
-        #     ax.plot(fls["Spol"], fls[param], label = "SOLPS", marker = "x")
-
-        #     ax.legend()
-        #     ax.set_title(f"Full: {sepadd}")
+        # Work on copies so the caller's DataFrames are not mutated between subregion calls
+        flh = flh.copy()
+        fls = fls.copy()
 
         def flip(df):
             df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
@@ -152,9 +144,7 @@ class interpolateSOLPStoHermes:
             flh = flh[flh["region"] == "upstream"]
             fls = fls[fls["region"] == "upstream"]
 
-            out = scipy.interpolate.make_interp_spline(fls["Spol"], fls[param], k=1)(
-                flh["Spol"]
-            )
+            out = np.interp(flh["Spol"], fls["Spol"], fls[param])
 
             if debug:
                 fig, ax = plt.subplots()
@@ -162,7 +152,6 @@ class interpolateSOLPStoHermes:
                 ax.plot(fls["Spol"], fls[param], label="SOLPS", marker="x")
                 ax.plot(flh["Spol"], out, label="Interpolated", marker="o")
                 ax.legend()
-                ax.set_title(sepadd)
                 # ax.set_xlim(0.8, None)
 
         if plot_line_ax:
