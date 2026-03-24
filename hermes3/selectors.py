@@ -395,6 +395,7 @@ def get_1d_poloidal_data(
     sepdist = None, 
     sepadd = None,
     target_first = False,
+    interpolate_midplane = True,
     interpolate_radial = False,
     interpolate_poloidal = False,
     interpolate_poloidal_resolution = 100):
@@ -445,7 +446,8 @@ def get_1d_poloidal_data(
         df["dpol"] = reg["dpol"].values  # Poloidal cell width
         df["Bxy"] = reg["Bxy"].values  # Total magnetic field
         df["Bpxy"] = reg["Bpxy"].values  # Poloidal magnetic field
-        
+        df["theta_idx"] = reg["theta_idx"].values.astype(int)  # Poloidal index
+
         for param in params:
             if param in reg:
                 df[param] = reg[param].values
@@ -504,12 +506,25 @@ def get_1d_poloidal_data(
 
     # Interpolate start of field line onto Z = 0  (between midplane_a and midplane_b)
     # Assumes only one point upstream of midplane
-    for param in df.columns.drop("Z"):
-        interp = scipy.interpolate.interp1d(df["Z"], df[param], kind = "linear")
-        df.loc[0, param] = interp(0)
-    df.loc[0,"Z"] = 0 
-    df["Spol"] -= df["Spol"].iloc[0]   # Now 0 is at Z = 0
-    df["Spar"] -= df["Spar"].iloc[0]   # Now 0 is at Z = 0
+    if interpolate_midplane:
+        for param in df.columns.drop(["Z", "theta_idx"]):
+            interp = scipy.interpolate.interp1d(df["Z"], df[param], kind = "linear")
+            df.loc[0, param] = interp(0)
+        df.loc[0,"Z"] = 0 
+        df.loc[0, "theta_idx"] = np.nan
+        df["Spol"] -= df["Spol"].iloc[0]  # Now 0 is at Z = 0
+        df["Spar"] -= df["Spar"].iloc[0]  # Now 0 is at Z = 0
+
+
+    global_xpoint_index = xhermes.slice_poloidal(ds, f"{region}_xpoint")
+
+    Xpoint_index = df[df["theta_idx"] == global_xpoint_index].index[0]
+
+    # df["Xpoint"] = 0
+    # df.loc[Xpoint_index, "Xpoint"] = 1
+
+    df.loc[:Xpoint_index, "region"] = "upstream"
+    df.loc[Xpoint_index:, "region"] = "divertor"
             
     # Flip data so target is first if needed
     if target_first:
