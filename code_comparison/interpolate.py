@@ -5,27 +5,21 @@ import numpy as np
 
 
 class interpolateSOLPStoHermes:
+    """
+    WARNING: Hermes-3 must have guard cells loaded for this to work.
+
+    """
     def __init__(self, ds, solps):
         self.ds = ds
         self.solps = solps
 
-    def interpolate(self, param, regions, plot_lines=False):
+    def interpolate(self, param, regions, plot_lines=False, plot_interp_debug=False):
         m = self.ds.metadata
         ds = self.ds
         solps = self.solps
 
-        # Get radial slice at target to get separatrix distances
-        radial = get_1d_radial_data(
-            self.ds, params=["R", "Z"], guards=True, region="omp"
-        )
-        radial_sol = radial[radial["Srad"] > 0]
-        param_values = np.zeros_like(ds[param].values)
-        num_solrings = m["nx"] - m["ixseps1"] - 2
-
-        print(num_solrings)
-
         if plot_lines:
-            fig, plot_line_ax = plt.subplots(dpi=200)
+            fig, plot_line_ax = plt.subplots(figsize=(10, 20), dpi=100)
             ds["Ne"].hermesm.clean_guards().bout.polygon(
                 ax=plot_line_ax,
                 grid_only=True,
@@ -34,16 +28,40 @@ class interpolateSOLPStoHermes:
                 antialias=True,
                 separatrix=False,
             )
+            plot_line_ax.set_xlim(0.1, 0.65)
+            # plot_line_ax.set_ylim(-0.9, -0.5)
+            plot_line_ax.set_ylim(0.5, 0.9)
+            plot_line_ax.set_title("Lines=hermes, points=solps")
 
         params = ["R", "Z", param]
+        param_values = np.zeros_like(ds[param].values)
 
         for region in regions:
             print(region, "\n")
 
+            ## Get radial slice to determine sepdist for a given sepadd
+            if "inner" in region:
+                midplane_region = "imp"
+            elif "outer" in region:
+                midplane_region = "omp"
+            else:
+                raise ValueError(
+                    f"Invalid region {region}, must contain 'inner' or 'outer'"
+                )
+
+            # Get radial slice at target to get separatrix distances
+            radial = get_1d_radial_data(
+                self.ds, params=["R", "Z"], guards=True, region=midplane_region
+            )
+            radial_sol = radial[radial["region"] == "sol"]
+            num_solrings = len(radial_sol) - 2
+
+            ## Get poloidal slices
             for sepadd in range(num_solrings):
+                # for sepadd in [0]:
                 radial_index = sepadd + m["ixseps1"]
-                print(radial_index, ", ", end="")
-                sepdist = radial_sol["Srad"][radial_index]
+                sepdist = radial_sol.loc[radial_index, "Srad"]
+                print(f"{sepadd}/{sepdist:4f}, ", end="")
 
                 # Fetch field lines once per SOL ring, shared across divertor/sol subregions
                 flh = get_1d_poloidal_data(
@@ -53,28 +71,26 @@ class interpolateSOLPStoHermes:
                     params=params, region=region, sepdist=sepdist
                 )
 
-                for subregion in [
-                    "divertor",
-                    # "sol"
-                ]:
+                for subregion in ["divertor", "sol"]:
                     poloidal_indices, param_interp = self._get_interpolated(
                         flh,
                         fls,
                         param,
                         subregion=subregion,
-                        debug=False,
+                        interp_debug=plot_interp_debug,
                         plot_line_ax=plot_line_ax if plot_lines else None,
                     )
+
                     param_values[radial_index, poloidal_indices] = param_interp
 
             print("")
 
         ds[f"{param}_interp"] = ds[param].copy(data=param_values)
 
-        # return ds
+        return ds
 
     def _get_interpolated(
-        self, flh, fls, param, subregion, debug=False, plot_line_ax=None
+        self, flh, fls, param, subregion, interp_debug=False, plot_line_ax=None
     ):
         """
         Interpolates a specified SOLPS parameter onto the Hermes-3 grid by performing
@@ -92,7 +108,7 @@ class interpolateSOLPStoHermes:
             Interpolation subregion. Either "divertor" or "sol".
             - "divertor": Flips field lines to start at target, interpolates toward X-point.
             - "sol": Interpolates from midplane to X-point without flipping.
-        debug : bool, optional
+        interp_debug : bool, optional
             If True, generates a plot comparing Hermes, SOLPS, and interpolated data.
             Default is False.
         Returns
@@ -146,16 +162,23 @@ class interpolateSOLPStoHermes:
 
             out = np.interp(flh["Spol"], fls["Spol"], fls[param])
 
-            if debug:
-                fig, ax = plt.subplots()
-                ax.plot(flh["Spol"], flh[param], label="Hermes", marker="o")
-                ax.plot(fls["Spol"], fls[param], label="SOLPS", marker="x")
-                ax.plot(flh["Spol"], out, label="Interpolated", marker="o")
-                ax.legend()
-                # ax.set_xlim(0.8, None)
+        if interp_debug:
+            fig, ax = plt.subplots()
+            ax.plot(flh["Spol"], flh[param], label="Hermes", marker="o")
+            ax.plot(fls["Spol"], fls[param], label="SOLPS", marker="x")
+            ax.plot(flh["Spol"], out, label="Interpolated", marker="o")
+            ax.legend()
+
+            if subregion == "sol":
+                ax.set_xlabel("Poloidal distance from midplane")
+            elif subregion == "divertor":
+                ax.set_xlabel("Poloidal distance from target")
+            # ax.set_xlim(0.8, None)
 
         if plot_line_ax:
-            plot_line_ax.plot(flh["R"], flh["Z"], lw = 1)
+            plot_line_ax.plot(flh["R"], flh["Z"], lw=1)
+            plot_line_ax.plot(fls["R"], fls["Z"], lw=0, marker="o", c="deeppink", ms=1)
 
         poloidal_indices = flh["theta_idx"].values.astype(int)
+
         return poloidal_indices, out
