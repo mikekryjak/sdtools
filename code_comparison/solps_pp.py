@@ -522,12 +522,13 @@ class SOLPScase():
         
         if grid_only is True:
             polys = mpl.collections.PatchCollection(
-                patches, alpha = alpha, norm = norm, cmap = cmap, 
+                patches, alpha = alpha,
                 antialiaseds = antialias,
                 edgecolors = linecolor,
-                facecolor = "white",
+                facecolors = "none",
                 linewidths = linewidth,
-                joinstyle = "bevel")
+                joinstyle = "bevel",
+                match_original = False)
         
         else:
             polys = mpl.collections.PatchCollection(
