@@ -2,6 +2,7 @@ from xarray import register_dataset_accessor, register_dataarray_accessor
 from xbout import BoutDatasetAccessor, BoutDataArrayAccessor
 from hermes3.plotting import *
 from hermes3.front_tracking import *
+import xhermes
 import numpy as np
 import scipy
 
@@ -29,7 +30,13 @@ def _get_poloidal_range(ds, region):
         elif region == "outer_upper":
             start = m["ny_inner"] + m["MYG"]*3
             end = m["omp_b"]+1
-        
+        elif region == "inner":
+            start = m["MYG"]
+            end = m["ny_inner"] + m["MYG"]
+        elif region == "outer":
+            start = m["ny_inner"] + m["MYG"] * 3
+            end = m["nyg"] - m["MYG"]
+
         else:
             raise ValueError(f"Unknown region {region} for poloidal range")
         
