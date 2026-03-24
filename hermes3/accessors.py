@@ -482,6 +482,11 @@ def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None):
         sepdist : radial distance from the separatrix
         region : inner, inner_lower, inner_upper, outer, outer_lower, outer_upper
     """
+
+    if "inner" in region:
+        midplane_region = "imp"
+    elif "outer" in region:
+        midplane_region = "omp"
     
     m = ds.metadata
     
@@ -493,51 +498,14 @@ def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None):
     
     # FIXME: This currently assumes that OMP distances are the same as IMP.
     elif sepdist != None:
-        df = get_1d_radial_data(ds, [], "omp")
+        df = get_1d_radial_data(ds, [], midplane_region)
         sepind = df[df["sep"] == 1].index[0]
         sepadd = df.loc[(df["Srad"] - sepdist).abs().idxmin()].name - sepind
         
     radial_index = sepadd + m["ixseps1"]
 
     selection = (radial_index, slice(*_get_poloidal_range(ds, region)))
-    #### Below is now in _get_poloidal_range
 
-    # if m["topology"] == "connected-double-null":
-         
-    #     ny_inner = m["ny_inner"]
-    #     MYG = m["MYG"]
-    #     nyg = m["nyg"]
-    #     omp_a = m["omp_a"]
-    #     omp_b = m["omp_b"]
-    #     imp_a = m["imp_a"]
-    #     imp_b = m["imp_b"]
-        
-
-    #     if region == "inner":
-    #         selection = (radial_index, slice(0+MYG, ny_inner + MYG))
-    #     elif region == "inner_lower":
-    #         selection = (radial_index, slice(0+MYG, imp_a +1))
-    #     elif region == "inner_upper":
-    #         selection = (radial_index, slice(imp_b, ny_inner + MYG))
-    #     elif region == "outer":
-    #         selection = (radial_index, slice(ny_inner + MYG*3, nyg - MYG))
-    #     elif region == "outer_lower":
-    #         selection = (radial_index, slice(omp_b-1, nyg - MYG))
-    #     elif region == "outer_upper":
-    #         selection = (radial_index, slice(ny_inner + MYG*3, omp_b+1))
-    #     else:
-    #         raise Exception(f"Region {region} not implemented")
-            
-    # elif m["topology"] == "single-null":
-        
-    #     if region == "all":
-    #         selection = (slice(i+0,i+1), slice(0+MYG, nyg - MYG))
-            
-    #     else:
-    #         raise Exception(f"Region {region} not implemented for single null")
-        
-    # else:
-    #     raise Exception(f"Topology {m['topology']} not implemented")
     
     return ds.isel(x = selection[0], theta = selection[1])
 
