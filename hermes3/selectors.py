@@ -89,7 +89,7 @@ def get_1d_radial_data(ds,
     df = pd.DataFrame()
     m = ds.metadata
     
-    xslice = slice(None, None) if guards else slice(m["MXG"], -m["MXG"])
+    xslice = slice(None, None)
         
     if region is None and poloidal_index is None:
         raise Exception("Please specify region or poloidal_index")
@@ -142,6 +142,7 @@ def get_1d_radial_data(ds,
 
         # to pandas, matching previous behavior (drop x index -> 0..N-1)
         df = mid.to_dataframe().reset_index(drop=True)
+        df = df.drop(columns=["t"], errors="ignore")
 
     else:
         # Take region directly from named selection
@@ -167,13 +168,23 @@ def get_1d_radial_data(ds,
     df["Srad"] = np.cumsum(dr) - 0.5 * dr
     
     df["sep"] = 0
-    sepind = ds.metadata["ixseps1g"]
+    sepind = ds.metadata["ixseps1"]
     df.loc[sepind, "sep"] = 1
     dfsep = df[df["sep"] == 1]
     
     # Correct so 0 is in between the cell centres straddling separatrix
     sepcorr = (df["Srad"][sepind] - df["Srad"][sepind - 1]) / 2
     df["Srad"] -= dfsep["Srad"].values - sepcorr
+
+    # Label regions
+    df["region"] = ""
+    df.loc[df["Srad"] > 0, "region"] = "sol"
+    df.loc[df["Srad"] < 0, "region"] = "core"
+
+    # Remove guards if necessary
+    # NOTE: you must preserve the original index here!
+    if not guards:
+        df = df.iloc[m["MXG"] : -m["MXG"]]
     
     # Cut off SOL or core if necessary
     if sol is False and core is False:
