@@ -362,6 +362,31 @@ def _interpolate_exact_sol_ring(
     
     return df
 
+def get_1d_poloidal_data_double(
+    ds,
+    params,
+    region="outer",
+    **kwargs,
+):
+    """
+    Prepare a full two-divertor field line dataset by using get_1d_poloidal_data
+    for both upper and lower and concatenating them.
+
+    Each dataset starts at the midplane with an interpolated value exactly at Z=0,
+    so here we flip the upper leg and join it to the lower leg while removing one
+    of the duplicate midplane points.
+    """
+
+    if "lower" in region or "upper" in region:
+        raise ValueError(
+            "Region should be 'inner' or 'outer' for double leg data, not 'inner_lower' etc."
+        )
+
+    df_lower = get_1d_poloidal_data(ds, params, region=f"{region}_lower", **kwargs)
+    df_upper = get_1d_poloidal_data(ds, params, region=f"{region}_upper", **kwargs)
+    fl = pd.concat([df_upper.iloc[::-1], df_lower.iloc[1:]], ignore_index=True)
+
+    return fl
 
 def get_1d_poloidal_data(
     ds, 
