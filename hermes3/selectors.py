@@ -540,15 +540,19 @@ def get_1d_poloidal_data(
         df["Spar"] -= df["Spar"].iloc[0]  # Now 0 is at Z = 0
 
 
-    global_xpoint_index = xhermes.slice_poloidal(ds, f"{region}_xpoint")
+    if "sol" in region:
+        xpoint_index_name = f"{region.replace("_sol", "")}_xpoint"
+        global_xpoint_index = xhermes.slice_poloidal(ds, xpoint_index_name)
 
-    Xpoint_index = df[df["theta_idx"] == global_xpoint_index].index[0]
+        Xpoint_index = df[df["theta_idx"] == global_xpoint_index].index[0]
 
-    # df["Xpoint"] = 0
-    # df.loc[Xpoint_index, "Xpoint"] = 1
+        # df["Xpoint"] = 0
+        # df.loc[Xpoint_index, "Xpoint"] = 1
 
-    df.loc[:Xpoint_index, "region"] = "upstream"
-    df.loc[Xpoint_index:, "region"] = "divertor"
+        df.loc[:Xpoint_index, "region"] = "upstream"
+        df.loc[Xpoint_index:, "region"] = "divertor"
+    else:
+        df["region"] = "core"
             
     # Flip data so target is first if needed
     if target_first:
