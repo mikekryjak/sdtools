@@ -18,24 +18,30 @@ def _get_poloidal_range(ds, region):
     if m["topology"] == "connected-double-null":
 
         ## This comes from _select_custom_sol_ring
-        if region == "inner_lower":
+        if region == "inner_lower_sol":
             start = m["MYG"]
             end = m["imp_a"] + 1
-        elif region == "inner_upper":
+        elif region == "inner_upper_sol":
             start = m["imp_b"]
             end = m["ny_inner"] + m["MYG"]
-        elif region == "outer_lower":
+        elif region == "outer_lower_sol":
             start = m["omp_a"]
             end = m["nyg"] - m["MYG"]
-        elif region == "outer_upper":
+        elif region == "outer_upper_sol":
             start = m["ny_inner"] + m["MYG"]*3
             end = m["omp_b"]+1
-        elif region == "inner":
+        elif region == "inner_sol":
             start = m["MYG"]
             end = m["ny_inner"] + m["MYG"]
-        elif region == "outer":
+        elif region == "outer_sol":
             start = m["ny_inner"] + m["MYG"] * 3
             end = m["nyg"] - m["MYG"]
+        elif region == "inner_core":
+            start = m["j1_1g"]+1
+            end = m["j2_1g"]+1
+        elif region == "outer_core":
+            start = m["j1_2g"]+1
+            end = m["j2_2g"]+1
 
         else:
             raise ValueError(f"Unknown region {region} for poloidal range")
