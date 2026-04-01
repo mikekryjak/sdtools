@@ -196,7 +196,7 @@ class SOLPScase():
         # s["outer_lower_target_guard"] = (-1, slice(None,None))
         
         # First SOL rings
-        for name in ["outer", "outer_lower", "outer_upper", "inner", "inner_lower", "inner_upper"]:
+        for name in ["outer_sol", "outer_lower_sol", "outer_upper_sol", "inner_sol", "inner_lower_sol", "inner_upper_sol"]:
             s[name] = self.make_custom_sol_ring(name, i = 0)
             
         self.get_species()
@@ -380,7 +380,7 @@ class SOLPScase():
         Inputs
         ------
             name, str:
-                "outer", "outer_lower", "outer_upper", "inner", "inner_lower", "inner_upper"
+                "outer_sol", "outer_lower_sol", "outer_upper_sol", "inner_sol", "inner_lower_sol", "inner_upper_sol"
                 "inner_upper_leg", "outer_upper_leg", "inner_lower_leg", "outer_lower_leg"
             i, int: 
                 SOL ring index (0 = first inside SOL) 
@@ -409,23 +409,23 @@ class SOLPScase():
         
         ## Note: all of these start beyond the midplane so that you can interpolate to Z=0 later
         selections = {}
-        selections["outer"] =       (slice(self.g["upper_break"],None), yid)
-        selections["outer_lower"] = (slice(self.g["omp"]+1-1,None), yid)
-        selections["outer_upper"] = (slice(self.g["upper_break"], self.g["omp"]+1+1), yid)
+        selections["outer_sol"] =       (slice(self.g["upper_break"],None), yid)
+        selections["outer_lower_sol"] = (slice(self.g["omp"]+1-1,None), yid)
+        selections["outer_upper_sol"] = (slice(self.g["upper_break"], self.g["omp"]+1+1), yid)
         
         for leg_name in ["inner_upper_leg", "outer_upper_leg", "inner_lower_leg", "outer_lower_leg"]:
             selections[leg_name] = (self.psel[leg_name], yid)
         
         
-        selections["inner"] =       (slice(1, self.g["upper_break"]), yid)
-        selections["inner_lower"] = (slice(1, self.g["imp"]+1), yid)
-        selections["inner_upper"] = (slice(self.g["imp"]-1, self.g["upper_break"]), yid)
+        selections["inner_sol"] =       (slice(1, self.g["upper_break"]), yid)
+        selections["inner_lower_sol"] = (slice(1, self.g["imp"]+1), yid)
+        selections["inner_upper_sol"] = (slice(self.g["imp"]-1, self.g["upper_break"]), yid)
 
         
         if name in selections.keys():
             return selections[name]
         else:
-            raise Exception(f"Region {name} not supported. \n Try outer, outer_lower, outer_upper, inner, inner_lower, inner_upper")
+            raise Exception(f"Region {name} not supported. \n Try outer_sol, outer_lower_sol, outer_upper_sol, inner_sol, inner_lower_sol, inner_upper_sol")
     
 
         
@@ -792,7 +792,7 @@ class SOLPScase():
         Parameters
         ----------
         params : list of str, parameters to extract
-        region : str, region name (inner_lower, inner_upper, outer_lower, outer_upper)
+        region : str, region name (inner_lower_sol, inner_upper_sol, outer_lower_sol, outer_upper_sol)
         sepdist : float, separatrix distance in [m]
 
         Returns
@@ -888,10 +888,10 @@ class SOLPScase():
         """
 
         if "lower" in region or "upper" in region:
-            raise ValueError("Region should be 'inner' or 'outer' for double leg data, not 'inner_lower' etc.")
+            raise ValueError("Region should be 'inner_sol' or 'outer_sol' for double leg data, not 'inner_lower_sol' etc.")
 
-        df_lower = self.get_1d_poloidal_data(params, region=f"{region}_lower", **kwargs)
-        df_upper = self.get_1d_poloidal_data(params, region=f"{region}_upper", **kwargs)
+        df_lower = self.get_1d_poloidal_data(params, region=f"{region}_lower_sol", **kwargs)
+        df_upper = self.get_1d_poloidal_data(params, region=f"{region}_upper_sol", **kwargs)
         fl = pd.concat([df_upper.iloc[::-1], df_lower.iloc[1:]], ignore_index = True)
 
         return fl
@@ -899,7 +899,7 @@ class SOLPScase():
     def get_1d_poloidal_data(
         self,
         params,
-        region="outer_lower",
+        region="outer_lower_sol",
         sepadd=None,
         sepdist=None,
         target_first=False,
@@ -911,7 +911,7 @@ class SOLPScase():
         Note that the balance file shape is a transpose of the geometry shape (e.g. crx)
         and contains guard cells, so R and Z are incorrect because they don't have guards
         R and Z are provided for checking field line location only.
-        only outer_lower region is provided at the moment.
+        only outer_lower_sol region is provided at the moment.
         sepadd is the ring index number with sepadd = 0 being the separatrix
         interpolate_radial: if True and sepdist is given, interpolate across rings to get
             data at the exact sepdist rather than snapping to the closest ring.
@@ -1012,7 +1012,7 @@ class SOLPScase():
             df["apar"] = vol / dSpar
 
 
-        if any([name in region for name in ["outer_upper", "inner_lower"]]):
+        if any([name in region for name in ["outer_upper_sol", "inner_lower_sol"]]):
             df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
             df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
             df = df.iloc[::-1].reset_index(drop = True)
@@ -1173,7 +1173,7 @@ class SOLPScase():
         """
         Extract cooling curve from a single SOL ring
         Inputs: species (e.g. Ar). Must calculate RAr and fAr first (get radiation stats)
-        region: string  like "outer_lower"
+        region: string  like "outer_lower_sol"
         sepadd: no. sol rings beyond separatrix
         order: order of polynomial fit
         plot: debug plot
@@ -1283,7 +1283,7 @@ class SOLPScase():
                                   sepadd = sepadd, region = region, target_first = target_first)
                                   
 
-        if "outer_upper" in region or "inner_lower" in region:
+        if "outer_upper_sol" in region or "inner_lower_sol" in region:
             mult = -1
         else:
             mult = 1
@@ -1349,7 +1349,7 @@ class SOLPScase():
         Inputs
         ------
         sepadd: no. of SOL rings beyond separatrix
-        region: string like "outer_lower"
+        region: string like "outer_lower_sol"
         impurity: string like "N"
         method: usually qpar_tot
         threshold: fraction of max value to define front
@@ -1397,7 +1397,7 @@ class SOLPScase():
         fline_right = self.get_1d_poloidal_data(fluxlist, sepadd = sepadd+1, region = region, target_first = True)
         
         for param in fluxlist:
-            if "inner_lower" in region or "outer_upper" in region:
+            if "inner_lower_sol" in region or "outer_upper_sol" in region:
                 fline[param] *= -1
                 fline_right[param] *= -1
                 
@@ -1478,7 +1478,7 @@ class SOLPScase():
         fline_div = fline.query(f"region == 'divertor' & Te > {Te_threshold}")   # Cells below X-point
         fline_right_div = fline_right.query(f"region == 'divertor' & Spar > {fline_div['Spar'].min()}")  # Same filter on RHS fline   
         
-        if any([x in region for x in ["inner_lower"]]):
+        if any([x in region for x in ["inner_lower_sol"]]):
             mult = -1
         else:
             mult = 1
