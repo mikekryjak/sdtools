@@ -480,8 +480,11 @@ def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None):
     Parameters:
         i : radial index
         sepdist : radial distance from the separatrix
-        region : inner, inner_lower, inner_upper, outer, outer_lower, outer_upper
+        region : inner_sol, inner_lower_sol, inner_upper_sol, outer_sol, outer_lower_sol, outer_upper_sol
     """
+
+    if region not in ["inner_sol", "inner_lower_sol", "inner_upper_sol", "outer_sol", "outer_lower_sol", "outer_upper_sol"]:
+        raise ValueError("Region must be one of: inner_sol, inner_lower_sol, inner_upper_sol, outer_sol, outer_lower_sol, outer_upper_sol")
 
     if "inner" in region:
         midplane_region = "imp"
@@ -504,7 +507,8 @@ def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None):
         
     radial_index = sepadd + m["ixseps1"]
 
-    selection = (radial_index, slice(*_get_poloidal_range(ds, region)))
+    # "extra" has an extra point before the midplane so you can interpolate to the midplane 
+    selection = (radial_index, ds.metadata["poloidal_slices"][f"{region}_extra"])
 
     
     return ds.isel(x = selection[0], theta = selection[1])
