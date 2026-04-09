@@ -2,7 +2,7 @@ from xarray import register_dataset_accessor, register_dataarray_accessor
 from xbout import BoutDatasetAccessor, BoutDataArrayAccessor
 from hermes3.plotting import *
 from hermes3.front_tracking import _get_front_position
-from hermes3.selectors import get_1d_radial_data, _get_poloidal_range
+from hermes3.selectors import get_1d_radial_data
 import numpy as np
 
 

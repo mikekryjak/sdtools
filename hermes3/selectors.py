@@ -6,50 +6,52 @@ import xhermes
 import numpy as np
 import scipy
 
-def _get_poloidal_range(ds, region):
-    """
-    Returns poloidal region start and end indices in a tuple.
-    Each region is a quarter of a CDN topology corresponding to a 
-    divertor. The regions are all in a positive index order.
-    The regions extend past the midplane by one point.
-    """
-    m = ds.metadata
+## Deprecated by xhermes
+# poloidal slices now found in ds.metadata["poloidal_slices"]
+# def _get_poloidal_range(ds, region):
+#     """
+#     Returns poloidal region start and end indices in a tuple.
+#     Each region is a quarter of a CDN topology corresponding to a 
+#     divertor. The regions are all in a positive index order.
+#     The regions extend past the midplane by one point.
+#     """
+#     m = ds.metadata
     
-    if m["topology"] == "connected-double-null":
+#     if m["topology"] == "connected-double-null":
 
-        ## This comes from _select_custom_sol_ring
-        if region == "inner_lower_sol":
-            start = m["MYG"]
-            end = m["imp_a"] + 1
-        elif region == "inner_upper_sol":
-            start = m["imp_b"]
-            end = m["ny_inner"] + m["MYG"]
-        elif region == "outer_lower_sol":
-            start = m["omp_a"]
-            end = m["nyg"] - m["MYG"]
-        elif region == "outer_upper_sol":
-            start = m["ny_inner"] + m["MYG"]*3
-            end = m["omp_b"]+1
-        elif region == "inner_sol":
-            start = m["MYG"]
-            end = m["ny_inner"] + m["MYG"]
-        elif region == "outer_sol":
-            start = m["ny_inner"] + m["MYG"] * 3
-            end = m["nyg"] - m["MYG"]
-        elif region == "inner_core":
-            start = m["j1_1g"]+1
-            end = m["j2_1g"]+1
-        elif region == "outer_core":
-            start = m["j1_2g"]+1
-            end = m["j2_2g"]+1
+#         ## This comes from _select_custom_sol_ring
+#         if region == "inner_lower_sol":
+#             start = m["MYG"]
+#             end = m["imp_a"] + 1
+#         elif region == "inner_upper_sol":
+#             start = m["imp_b"]
+#             end = m["ny_inner"] + m["MYG"]
+#         elif region == "outer_lower_sol":
+#             start = m["omp_a"]
+#             end = m["nyg"] - m["MYG"]
+#         elif region == "outer_upper_sol":
+#             start = m["ny_inner"] + m["MYG"]*3
+#             end = m["omp_b"]+1
+#         elif region == "inner_sol":
+#             start = m["MYG"]
+#             end = m["ny_inner"] + m["MYG"]
+#         elif region == "outer_sol":
+#             start = m["ny_inner"] + m["MYG"] * 3
+#             end = m["nyg"] - m["MYG"]
+#         elif region == "inner_core":
+#             start = m["j1_1g"]+1
+#             end = m["j2_1g"]+1
+#         elif region == "outer_core":
+#             start = m["j1_2g"]+1
+#             end = m["j2_2g"]+1
 
-        else:
-            raise ValueError(f"Unknown region {region} for poloidal range")
+#         else:
+#             raise ValueError(f"Unknown region {region} for poloidal range")
         
-    else:
-        raise ValueError(f"Topology {m['topology']} not yet supported")
+#     else:
+#         raise ValueError(f"Topology {m['topology']} not yet supported")
     
-    return (start,end)
+#     return (start,end)
 
 def get_1d_radial_data(ds, 
                        params, 
@@ -116,11 +118,17 @@ def get_1d_radial_data(ds,
     
     # Interpolate to Z = 0 for IMP or OMP
     if region == "omp" or region == "imp":
+
+        omp_a = m["poloidal_slices"]["outer_upper_midplane"]
+        omp_b = m["poloidal_slices"]["outer_lower_midplane"]
+        imp_a = m["poloidal_slices"]["inner_upper_midplane"]
+        imp_b = m["poloidal_slices"]["inner_lower_midplane"]
+        
         # slice a narrow band around the midplane
         if region == "omp":
-            reg = ds.isel(x=xslice, theta=slice(m["omp_a"] - 2, m["omp_b"] + 2))
+            reg = ds.isel(x=xslice, theta=slice(omp_a - 2, omp_b + 2))
         else:
-            reg = ds.isel(x=xslice, theta=slice(m["imp_a"] - 2, m["imp_b"] + 2))
+            reg = ds.isel(x=xslice, theta=slice(imp_a - 2, imp_b + 2))
 
         # Ensure a single chunk along the core dim for gufunc
         # (cheap here since theta band is small)
@@ -158,15 +166,20 @@ def get_1d_radial_data(ds,
         df = df.drop(columns=["t"], errors="ignore")
 
     else:
-        # Take region directly from named selection
-        if region in ["inner_lower_target", "inner_upper_target", "outer_lower_target", "outer_upper_target"]:
-            reg = ds.hermesm.select_region(region).squeeze()
-        
-        # Get data by poloidal index
-        elif poloidal_index is None:
-            raise Exception("If not requesting midplane, please pass poloidal_index")
-        else:
+
+        if poloidal_index is not None and region is not None:
+            raise Exception("Please specify only one of region or poloidal_index, not both")
+
+        if poloidal_index is not None:
             reg = ds.isel(x=xslice, theta=poloidal_index).squeeze()
+
+        # Take region directly from named selection
+        if region is not None:
+            if region in m["poloidal_slices"]:
+                reg = ds.hermes.select_region(region).squeeze()
+            else:
+                raise ValueError(f"Unknown region {region}.")
+            
     
         df["dr"] = reg["dr"].values
 
@@ -542,7 +555,7 @@ def get_1d_poloidal_data(
 
     if "sol" in region:
         xpoint_index_name = f"{region.replace("_sol", "")}_xpoint"
-        global_xpoint_index = xhermes.slice_poloidal(ds, xpoint_index_name)
+        global_xpoint_index = m["poloidal_slices"][xpoint_index_name]
 
         Xpoint_index = df[df["theta_idx"] == global_xpoint_index].index[0]
 
