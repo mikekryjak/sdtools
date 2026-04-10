@@ -336,12 +336,13 @@ def get_1d_radial_data_old(ds,
         
     return df
 
-def _interpolate_exact_sol_ring(
+def _interpolate_exact_poloidal_ring(
     ds,
     params,
     region,
-    sepdist,
-    radial_start_region=None,
+    sepadd = None,
+    sepdist = None,
+    radial_start_region="auto",
     debug = False,
     ):
     """
@@ -358,7 +359,8 @@ def _interpolate_exact_sol_ring(
     params : list of parameters to extract
     region : string, region to extract data from (inner_lower, inner_upper, outer_lower, outer_upper)
     radial_start_region : string, region to use for the radial slice on which separatrix distance is defined
-    sepdist : float, distance from separatrix to extract data from
+    sepdist : float, distance from separatrix to extract data from (use either this or sepadd, not both)
+    sepadd : int, SOL ring index to extract data from (starting from one after separatrix)
     
     Returns
     -------
@@ -366,10 +368,10 @@ def _interpolate_exact_sol_ring(
     """
 
     if "sol" in region:
-        if sepdist < 0:
+        if sepdist < 0 or sepadd < 0:
             raise ValueError("sepdist must be positive for SOL regions")
     else:
-        if sepdist > 0:
+        if sepdist > 0 or sepadd > 0:
             raise ValueError("sepdist must be negative for core or PFR regions")
 
     
@@ -383,7 +385,7 @@ def _interpolate_exact_sol_ring(
     poloidal_indices = ds["theta_idx"].values[poloidal_selection]
 
     ## Get radial slice to figure out field line starting point based on sepdist
-    if radial_start_region is None:
+    if radial_start_region == "auto":
         if "outer" in region:
             radial_start_region = "omp"
         elif "inner" in region:
@@ -394,7 +396,12 @@ def _interpolate_exact_sol_ring(
     radial_slice = get_1d_radial_data(ds, params = all_params, region = radial_start_region, core = True)
 
     # Find exact psi at chosen separatrix distance
-    psi = scipy.interpolate.interp1d(radial_slice["Srad"], radial_slice["psi_poloidal"])(sepdist)
+    if sepdist is not None:
+        psi = scipy.interpolate.interp1d(radial_slice["Srad"], radial_slice["psi_poloidal"])(sepdist)
+    elif sepadd is not None:
+        psi = radial_slice.loc[radial_slice.index[sepadd], "psi_poloidal"]
+    else:
+        raise ValueError("Either sepdist or sepadd must be provided")
 
     ## Interpolate data on the same psi and return
     df = pd.DataFrame()
@@ -484,6 +491,9 @@ def get_1d_poloidal_data(
     if "core" in region and any([target_first, interpolate_midplane]):
         raise Exception("target_first and interpolate_midplane are incompatible with region=core")
     
+    if region in ["pfr", "core"] and interpolate_midplane:
+        raise ValueError("Interpolate midplane should not be used for PFR or core regions!")
+    
 
     ## Select SOL region
     # This is always in index ascending order, and goes one point past the midplane
@@ -493,7 +503,7 @@ def get_1d_poloidal_data(
         if sepdist is None:
             raise Exception("sepdist must be specified if interpolate_radial is True")
         
-        df = _interpolate_exact_sol_ring(
+        df = _interpolate_exact_poloidal_ring(
             ds, 
             params, 
             region, 
