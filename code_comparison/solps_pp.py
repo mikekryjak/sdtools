@@ -605,6 +605,9 @@ class SOLPScase():
         
         if grid_only is True:
             data = np.zeros_like(self.bal["te"])
+
+        if grid_only is True and linewidth == 0:
+            linewidth = 0.1
         
         if absolute:
             data = np.abs(data)
