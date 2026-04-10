@@ -70,8 +70,19 @@ class SOLPScase():
         You can get the species indeces from the string matrix "species" 
         (for Ryoko's case I think it's 4:21 for the neon ions but do check)
         numbers are in W, so divide by "vol" to get W/m3
+
+        GEOMETRY NOTES
+        -----------
+        psi is not the same COCOS and format as Hermes-3:
+        - Hermes-3 has revesed Bpol and Btor which means the psi gradient is reversed
+        - There is also a 2pi factor in SOLPS due to different cocos
+        - There is also a different offset
+        - The above shouldn't matter, so below we align the two
+
+        There is a routine for this in sdtools.code_comparison.grid_interp.TransplantFromSOLPS.align_psi
         
         Balance file variables
+        ------------
         
         FLUXES
         ------------
@@ -311,6 +322,10 @@ class SOLPScase():
             if key not in self.g:
                 self.g[key] = value
                 added_fields[key] = value
+
+
+        # Get psi at cell centres instead of corners
+        self.g["fpsi"] = self.g["fpsi"].mean(axis=2).squeeze()
 
         if verbose:
             print(f"Loaded b2fgmtry from {gmtry_path}")
