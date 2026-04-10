@@ -15,6 +15,11 @@ import pickle
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+try:
+    from code_comparison.solps_helpers import read_ifield, read_rfield
+except ImportError:
+    from solps_helpers import read_ifield, read_rfield
+
 onedrive_path = onedrive_path = str(os.getcwd()).split("OneDrive")[0] + "OneDrive"
 sys.path.append(os.path.join(onedrive_path, r"Project\python-packages\gridtools"))
 sys.path.append(os.path.join(onedrive_path, r"Project\python-packages\sdtools"))
@@ -198,9 +203,119 @@ class SOLPScase():
         # First SOL rings
         for name in ["outer_sol", "outer_lower_sol", "outer_upper_sol", "inner_sol", "inner_lower_sol", "inner_upper_sol"]:
             s[name] = self.make_custom_sol_ring(name, i = 0)
+
+        self.read_b2fgmtry()
             
         self.get_species()
         self.derive_data()
+
+    def read_b2fgmtry(self, path = None, verbose = False, strict = False):
+        """
+        Read b2fgmtry and merge supplemental geometry data into self.g.
+
+        This preserves the existing geometry fields already initialised from
+        balance.nc and only adds fields that are not present yet. Guard cells
+        are kept intact so the extra topology arrays remain consistent with the
+        rest of SOLPScase.
+
+        Parameters
+        ----------
+        path : str or None
+            Explicit path to a b2fgmtry file. If omitted, search in the case
+            directory and then in ../baserun.
+        verbose : bool
+            If True, print the path that was loaded.
+        strict : bool
+            If True, raise FileNotFoundError when no b2fgmtry file is found.
+
+        Returns
+        -------
+        dict
+            Mapping of the fields that were newly added to self.g.
+
+        Based on code from Wouter Dekeyser (2016) and Matteo Moscheni (2022)
+        """
+
+        candidates = []
+        if path is not None:
+            candidates.append(path)
+        else:
+            candidates.append(os.path.join(self.path, "b2fgmtry"))
+            candidates.append(os.path.join(self.path, "../baserun/b2fgmtry"))
+
+        gmtry_path = next((candidate for candidate in candidates if os.path.exists(candidate)), None)
+        if gmtry_path is None:
+            if strict:
+                raise FileNotFoundError(f"b2fgmtry not found in {candidates}")
+            return {}
+
+        with open(gmtry_path, "r") as fid:
+            version = fid.readline()[7:17]
+            dim = read_ifield(fid, "nx,ny", [2])
+            nx = int(dim[0])
+            ny = int(dim[1])
+
+            qcdim = [nx + 2, ny + 2]
+            if version >= "03.001.000":
+                qcdim = [nx + 2, ny + 2, 2]
+
+            specs = [
+                ("isymm", read_ifield, 1),
+                ("crx", read_rfield, [nx + 2, ny + 2, 4]),
+                ("cry", read_rfield, [nx + 2, ny + 2, 4]),
+                ("fpsi", read_rfield, [nx + 2, ny + 2, 4]),
+                ("ffbz", read_rfield, [nx + 2, ny + 2, 4]),
+                ("bb", read_rfield, [nx + 2, ny + 2, 4]),
+                ("vol", read_rfield, [nx + 2, ny + 2]),
+                ("hx", read_rfield, [nx + 2, ny + 2]),
+                ("hy", read_rfield, [nx + 2, ny + 2]),
+                ("qz", read_rfield, [nx + 2, ny + 2, 2]),
+                ("qc", read_rfield, qcdim),
+                ("gs", read_rfield, [nx + 2, ny + 2, 3]),
+                ("nlreg", read_ifield, 1),
+                ("nlxlo", read_ifield, None),
+                ("nlxhi", read_ifield, None),
+                ("nlylo", read_ifield, None),
+                ("nlyhi", read_ifield, None),
+                ("nlloc", read_ifield, None),
+                ("nncut", read_ifield, 1),
+                ("leftcut", read_ifield, None),
+                ("rightcut", read_ifield, None),
+                ("topcut", read_ifield, None),
+                ("bottomcut", read_ifield, None),
+                ("leftix", read_ifield, [nx + 2, ny + 2]),
+                ("rightix", read_ifield, [nx + 2, ny + 2]),
+                ("topix", read_ifield, [nx + 2, ny + 2]),
+                ("bottomix", read_ifield, [nx + 2, ny + 2]),
+                ("leftiy", read_ifield, [nx + 2, ny + 2]),
+                ("rightiy", read_ifield, [nx + 2, ny + 2]),
+                ("topiy", read_ifield, [nx + 2, ny + 2]),
+                ("bottomiy", read_ifield, [nx + 2, ny + 2]),
+                ("region", read_ifield, [nx + 2, ny + 2, 3]),
+                ("nnreg", read_ifield, 3),
+                ("resignore", read_ifield, [nx + 2, ny + 2, 2]),
+                ("periodic_bc", read_ifield, 1),
+                ("pbs", read_rfield, [nx + 2, ny + 2, 2]),
+                ("parg", read_rfield, 100),
+            ]
+
+            gmtry = {"nx": nx, "ny": ny}
+            for fieldname, reader, dims in specs:
+                if dims is None:
+                    source = gmtry["nlreg"] if fieldname.startswith("nl") else gmtry["nncut"]
+                    dims = int(np.asarray(source).squeeze())
+                gmtry[fieldname] = reader(fid, fieldname, dims)
+
+        added_fields = {}
+        for key, value in gmtry.items():
+            if key not in self.g:
+                self.g[key] = value
+                added_fields[key] = value
+
+        if verbose:
+            print(f"Loaded b2fgmtry from {gmtry_path}")
+
+        return added_fields
         
     def get_species(self):
         """
