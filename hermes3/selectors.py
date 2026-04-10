@@ -341,18 +341,23 @@ def _interpolate_exact_sol_ring(
     params,
     region,
     sepdist,
+    radial_start_region=None,
     debug = False,
     ):
     """
     This returns poloidal data radially interpolated to the same psi value as a desired
     separatrix distance at the midplane. This means the data is not affected by radial resolution.
     Good for code comparisons.
+
+    NOTE: Only poloidally contiguous regions are supported, i.e. those that you can get with
+    _get_poloidal_range.
     
     Parameters
     ----------
     ds : Dataset to use (must be loaded with guards)
     params : list of parameters to extract
     region : string, region to extract data from (inner_lower, inner_upper, outer_lower, outer_upper)
+    radial_start_region : string, region to use for the radial slice on which separatrix distance is defined
     sepdist : float, distance from separatrix to extract data from
     
     Returns
@@ -360,42 +365,59 @@ def _interpolate_exact_sol_ring(
     df : DataFrame with data along the field line to be used by get_1d_poloidal_data
     """
 
+    if "sol" in region:
+        if sepdist < 0:
+            raise ValueError("sepdist must be positive for SOL regions")
+    else:
+        if sepdist > 0:
+            raise ValueError("sepdist must be negative for core or PFR regions")
+
     
     m = ds.metadata
     extra_params = ["R", "Z", "psi_poloidal", "dpol", "Bxy", "Bpxy"]  # Needed in get_1d_poloidal_data
     all_params = extra_params + params
 
     ## This comes from _select_custom_sol_ring
-    start, end = _get_poloidal_range(ds, region)   
+    # start, end = _get_poloidal_range(ds, region)   
+    poloidal_selection = m["poloidal_slices"][region]
+    poloidal_indices = ds["theta_idx"].values[poloidal_selection]
 
-    ## Need to choose the psi we want based on an accurate midplane slice
-    if "outer" in region:
-        start_region = "omp"
-    elif "inner" in region:
-        start_region = "imp"
-    else:
-        raise Exception("Region not recognised, needs to mention inner or outer")
+    ## Get radial slice to figure out field line starting point based on sepdist
+    if radial_start_region is None:
+        if "outer" in region:
+            radial_start_region = "omp"
+        elif "inner" in region:
+            radial_start_region = "imp"
+        else:
+            raise Exception(f"Radial start region must be provided for region {region}")
 
-    midplane = get_1d_radial_data(ds, params = all_params, region = start_region, core = False)
+    radial_slice = get_1d_radial_data(ds, params = all_params, region = radial_start_region, core = True)
 
     # Find exact psi at chosen separatrix distance
-    psi = scipy.interpolate.interp1d(midplane["Srad"], midplane["psi_poloidal"])(sepdist)
+    psi = scipy.interpolate.interp1d(radial_slice["Srad"], radial_slice["psi_poloidal"])(sepdist)
 
     ## Interpolate data on the same psi and return
     df = pd.DataFrame()
     if debug:
-        fig, ax = plt.subplots()
-    for i in range(start,end):
-        radial = get_1d_radial_data(ds, params = all_params, poloidal_index = i, core = False)
+        fig, ax = plt.subplots(dpi = 150)
+        ds["Td"].bout.polygon(ax = ax, grid_only = True, linecolor = "k", linewidth = 0.1, antialias = True, separatrix = False, add_colorbar = False)
+
+    # For every poloidal index, get the radial data, interpolate to the correct sepdist and append to dataframe
+    for i in poloidal_indices:
+        radial = get_1d_radial_data(ds, params = all_params, poloidal_index = i, core = True)
         
         if debug:
-            ds["Td"].bout.polygon(ax = ax, grid_only = True, linecolor = "k", linewidth = 0.1, antialias = True, separatrix = False, add_colorbar = False)
             ax.plot(radial["R"], radial["Z"], "o", markersize = 3, alpha = 0.5)
         
         for param in all_params:
             df.loc[i, param] = scipy.interpolate.interp1d(radial["psi_poloidal"], radial[param])(psi)
             
     df = df.reset_index(drop=True)
+
+    if debug:
+        ax.plot(df["R"], df["Z"], c = "deeppink")
+        ax.set_title("")
+        
     
     return df
 
@@ -434,6 +456,7 @@ def get_1d_poloidal_data(
     target_first = False,
     interpolate_midplane = True,
     interpolate_radial = False,
+    radial_start_region = None,
     interpolate_poloidal = False,
     interpolate_poloidal_resolution = 100):
     """
@@ -453,10 +476,15 @@ def get_1d_poloidal_data(
     target_first : bool, if True, reverse the dataframe so that 0 distance is at the target
 
     """
+    m = ds.metadata
+
     if "t" in ds.sizes:
         raise Exception("get_1d_poloidal_data doesn't support multiple time slices")
     
+    if "core" in region and any([target_first, interpolate_midplane]):
+        raise Exception("target_first and interpolate_midplane are incompatible with region=core")
     
+
     ## Select SOL region
     # This is always in index ascending order, and goes one point past the midplane
     
@@ -470,6 +498,7 @@ def get_1d_poloidal_data(
             params, 
             region, 
             sepdist = sepdist, 
+            radial_start_region = radial_start_region,
             debug = False
         )
     
@@ -532,14 +561,15 @@ def get_1d_poloidal_data(
         df = df.iloc[::-1].reset_index(drop = True)
         
     # Check and delete any extraneous points upstream of the midplane
-    signs = np.sign(df["Z"])
-    sign_changes = signs != signs.shift()
-    change_indices = df.index[sign_changes][1:]
-    if len(change_indices) > 1:
-        raise Exception("Multiple sign changes in Z. Haven't considered this yet")
+    if interpolate_midplane:
+        signs = np.sign(df["Z"])
+        sign_changes = signs != signs.shift()
+        change_indices = df.index[sign_changes][1:]
+        if len(change_indices) > 1:
+            raise Exception("Multiple sign changes in Z. Haven't considered this yet")
 
-    idx_before_mp = change_indices[0]-1
-    df = df.iloc[idx_before_mp:].reset_index(drop = True)
+        idx_before_mp = change_indices[0]-1
+        df = df.iloc[idx_before_mp:].reset_index(drop = True)
 
     # Interpolate start of field line onto Z = 0  (between midplane_a and midplane_b)
     # Assumes only one point upstream of midplane
