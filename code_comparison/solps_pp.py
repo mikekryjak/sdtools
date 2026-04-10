@@ -670,8 +670,8 @@ class SOLPScase():
 
         R = self.g["crx"][:,:,0]
         Z = self.g["cry"][:,:,0]
-        ax.plot(R[self.s["inner"]], Z[self.s["inner"]], **kwargs)
-        ax.plot(R[self.s["outer"]], Z[self.s["outer"]], **kwargs)
+        ax.plot(R[self.s["inner_sol"]], Z[self.s["inner_sol"]], **kwargs)
+        ax.plot(R[self.s["outer_sol"]], Z[self.s["outer_sol"]], **kwargs)
         
     def get_1d_radial_data(
         self,
