@@ -1242,15 +1242,18 @@ class SOLPScase():
         df["Spar"] -= df["Spar"].iloc[0]   # Now 0 is at Z = 0
         
         
-        ## Value of X-point column will be 1 in the cell just downstream of X-point
-        # df["Xpoint"] = ""
-        Xpoint_index = df.index[-self.psel[f"{region}_xpoint_fromtarget"]+1]
-        
-        df.loc[:Xpoint_index, "region"] = "upstream"
-        df.loc[Xpoint_index:, "region"] = "divertor"
-        
-        df["Xpoint"] = 0
-        df.loc[Xpoint_index, "Xpoint"] = 1
+        if "sol" in region:
+            ## Value of X-point column will be 1 in the cell just downstream of X-point
+            Xpoint_index = df.index[-self.psel[f"{region.replace("_sol", "")}_xpoint_fromtarget"]+1]
+            
+            df.loc[:Xpoint_index, "region"] = "upstream"
+            df.loc[Xpoint_index:, "region"] = "divertor"
+            
+            df["Xpoint"] = 0
+            df.loc[Xpoint_index, "Xpoint"] = 1
+
+        else:
+            df["region"] = "core"
         
         # df.loc[Xpoint_index + 1, "Xpoint"] = "before"
         # df.loc[Xpoint_index, "Xpoint"] = "after"
