@@ -1128,17 +1128,18 @@ class SOLPScase():
         if region == "outer" or region == "inner":
             raise ValueError("Only one divertor leg at a time is supported for now, specify upper or lower")
         
-        if type(params) == str:
+        if isinstance(params, str):
             params = [params]
             
-        if sepadd == None and sepdist == None:
+        if sepadd is None and sepdist is None:
             raise ValueError("Must use either index i or separatrix distance sepdist")
         
-        elif sepadd != None and sepdist != None:
+        elif sepadd is not None and sepdist is not None:
             raise ValueError("Must use either index i or separatrix distance sepdist, not both")
         
-        if region in ["pfr", "core"] and interpolate_midplane:
-            raise ValueError("Interpolate midplane should not be used for PFR or core regions!")
+        print(region)
+        if any([x in region for x in ["pfr", "core"]]) and interpolate_midplane:
+            raise ValueError("Interpolate midplane = true should not be used for PFR or core regions!")
 
         # Radial interpolation path: interpolate across rings for exact sepdist
         if interpolate_radial:
