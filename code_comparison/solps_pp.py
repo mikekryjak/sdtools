@@ -964,7 +964,13 @@ class SOLPScase():
         
         return df
 
-    def _interpolate_exact_sol_ring(self, params, region, sepdist):
+    def _interpolate_exact_sol_ring(
+            self, 
+            params, 
+            region,
+            sepdist,
+            radial_start_region=None, 
+            debug = False):
         """
         Returns poloidal data radially interpolated to an exact separatrix distance.
         Uses the midplane radial profile to determine the target flux surface,
@@ -980,25 +986,37 @@ class SOLPScase():
         -------
         df : DataFrame with R, Z, hx, Btot, Bpol, vol and requested params
         """
-        if "outer" in region:
-            mp_region = "omp"
-        elif "inner" in region:
-            mp_region = "imp"
+
+        if "sol" in region:
+            if sepdist < 0:
+                raise ValueError("sepdist must be positive for SOL regions")
         else:
-            raise ValueError("Region must contain 'inner' or 'outer'")
+            if sepdist > 0:
+                raise ValueError("sepdist must be negative for core or PFR regions")
+        
+        ## Get radial slice to figure out field line starting point based on sepdist
+        if radial_start_region is None:
+            if "outer" in region:
+                radial_start_region = "omp"
+            elif "inner" in region:
+                radial_start_region = "imp"
+            else:
+                raise Exception(f"Radial start region must be provided for region {region}")
 
         # Get midplane radial profile to find fractional ring index for desired sepdist
-        radial_df = self.get_1d_radial_data(
-            [], region=mp_region, keep_geometry=True, guards=True
+        radial_slice = self.get_1d_radial_data(
+            ["fpsi"], region=radial_start_region, keep_geometry=True, guards=True
         )
 
+
         # Interpolate to find fractional ring index at the desired separatrix distance
-        y_frac = float(
+        psi = float(
             scipy.interpolate.interp1d(
-                radial_df["dist"].values,
-                np.arange(len(radial_df), dtype=float),
+                radial_slice["dist"].values,
+                radial_slice["fpsi"].values,
             )(sepdist)
         )
+
 
         # Get poloidal indices for the region (use sepadd=0 just to get the slice)
         test_selector = self.make_custom_sol_ring(region, i=0)
@@ -1013,7 +1031,7 @@ class SOLPScase():
         ny = self.g["ny"]
         y_indices = np.arange(ny, dtype=float)
 
-        geom_params = ["R", "Z", "hx", "Btot", "Bpol", "vol"]
+        geom_params = ["R", "Z", "hx", "Btot", "Bpol", "vol", "fpsi"]
         all_param_names = list(
             dict.fromkeys(geom_params + params)
         )  # deduplicate, preserve order
@@ -1041,16 +1059,29 @@ class SOLPScase():
             lookup[param_name] = arr
 
         # Interpolate across rings at each poloidal position
-        results = {p: np.empty(len(pol_indices)) for p in all_param_names}
+        
+        df = pd.DataFrame()
 
-        for i, pol_i in enumerate(pol_indices):
+        if debug:
+            fig, ax = plt.subplots(dpi = 150)
+            self.plot_2d("Te", ax = ax, grid_only = True)
+        for _, pol_i in enumerate(pol_indices):
+
+            radial = self.get_1d_radial_data(params = all_param_names, poloidal_index = pol_i)
+            
+            if debug:
+                ax.plot(radial["R"], radial["Z"], "o", markersize = 3, alpha = 0.5)
             for param_name in all_param_names:
-                radial_values = lookup[param_name][pol_i, :]
-                results[param_name][i] = float(
-                    scipy.interpolate.interp1d(y_indices, radial_values)(y_frac)
-                )
+                # radial_values = lookup[param_name][pol_i, :]
 
-        return pd.DataFrame(results)
+                df.loc[pol_i, param_name] = float(
+                    scipy.interpolate.interp1d(radial["fpsi"], radial[param_name])(psi)
+                )
+            
+            if debug:
+                ax.plot(df["R"], df["Z"], c = "deeppink")
+
+        return df
 
     def get_1d_poloidal_data_double(
         self,
