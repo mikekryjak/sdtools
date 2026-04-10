@@ -1112,9 +1112,12 @@ class SOLPScase():
         region="outer_lower_sol",
         sepadd=None,
         sepdist=None,
+        radial_start_region="auto",
         target_first=False,
         guards=False,
+        interpolate_midplane=True,
         interpolate_radial=True,
+        debug=False,
     ):
         """
         Returns field line data from the balance file
@@ -1141,6 +1144,9 @@ class SOLPScase():
         
         elif sepadd != None and sepdist != None:
             raise ValueError("Must use either index i or separatrix distance sepdist, not both")
+        
+        if region in ["pfr", "core"] and interpolate_midplane:
+            raise ValueError("Interpolate midplane should not be used for PFR or core regions!")
 
         # Radial interpolation path: interpolate across rings for exact sepdist
         if interpolate_radial:
@@ -1149,7 +1155,13 @@ class SOLPScase():
                     "sepdist must be specified if interpolate_radial is True"
                 )
 
-            df = self._interpolate_exact_sol_ring(params, region, sepdist)
+            df = self._interpolate_exact_sol_ring(
+                params,
+                region,
+                sepdist,
+                radial_start_region=radial_start_region,
+                debug=debug,
+            )
 
             hx = df["hx"].values
             Btot = df["Btot"].values
@@ -1173,9 +1185,6 @@ class SOLPScase():
                     - sepind
                 )
 
-            yind = self.g["sep"] + sepadd  # Ring index
-            omp = self.g["omp"]
-            imp = self.g["imp"]
 
             selector = self.make_custom_sol_ring(region, i=sepadd)
 
