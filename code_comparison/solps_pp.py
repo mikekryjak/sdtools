@@ -171,17 +171,19 @@ class SOLPScase():
         psel["inner_lower_target"] = 1
         psel["inner_upper_target"] = upper_break -2
         psel["outer_upper_target"] = upper_break+1
-        psel["outer_lower_target"] = -2
+        psel["outer_lower_target"] = self.g["nx"] - 1
 
         psel["inner_lower_target_guard"] = 0
         psel["inner_upper_target_guard"] = upper_break -1
         psel["outer_upper_target_guard"] = upper_break
-        psel["outer_lower_target_guard"] = -1
+        psel["outer_lower_target_guard"] = self.g["nx"]
 
-        psel["outer_upper_leg"] = slice(self.g["upper_break"]+1, self.g["rightcut"][1]+2)
-        psel["inner_upper_leg"] = slice(self.g["leftcut"][1]-2, self.g["upper_break"]-1)
-        psel["outer_lower_leg"] = slice(self.g["rightcut"][0]+2, -1)
-        psel["inner_lower_leg"] = slice(0, self.g["leftcut"][0]+2)
+        psel["outer_upper_divertor"] = slice(self.g["upper_break"]+1, self.g["rightcut"][1]+2)
+        psel["inner_upper_divertor"] = slice(self.g["leftcut"][1]-2, self.g["upper_break"]-1)
+        psel["outer_lower_divertor"] = slice(self.g["rightcut"][0]+2, self.g["nx"])
+        psel["inner_lower_divertor"] = slice(0, self.g["leftcut"][0]+2)
+        psel["upper_pfr"] = np.r_[psel["inner_upper_divertor"], psel["outer_upper_divertor"]]
+        psel["lower_pfr"] = np.r_[psel["inner_lower_divertor"], psel["outer_lower_divertor"]]
         psel["omp"] = omp
         psel["imp"] = imp
         
@@ -202,18 +204,11 @@ class SOLPScase():
         s = self.s = {}
         for location in psel.keys():
             s[location] = (psel[location], slice(None, None))
-        # s["inner_lower_target"] = (1, slice(None,None))
-        # s["inner_lower_target_guard"] = (0, slice(None,None))
-        # s["inner_upper_target"] = (upper_break-2, slice(None,None))
-        # s["inner_upper_target_guard"] = (upper_break-1, slice(None,None))
-        # s["outer_upper_target"] = (upper_break+1, slice(None,None))
-        # s["outer_upper_target_guard"] = (upper_break, slice(None,None))
-        # s["outer_lower_target"] = (-2, slice(None,None))
-        # s["outer_lower_target_guard"] = (-1, slice(None,None))
         
         # First SOL rings
         for name in ["outer_sol", "outer_lower_sol", "outer_upper_sol", "inner_sol", "inner_lower_sol", "inner_upper_sol"]:
             s[name] = self.make_custom_sol_ring(name, i = 0)
+            self.psel[name] = self.make_custom_sol_ring(name, i = 0)[0]
 
         self.read_b2fgmtry()
             
