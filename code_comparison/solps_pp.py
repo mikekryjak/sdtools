@@ -806,42 +806,86 @@ class SOLPScase():
     def get_1d_radial_data(
         self,
         params,
-        region = "omp",
+        region = None,
+        poloidal_index = None,
         verbose = False,
         guards = False,
-        keep_geometry = False,
-        interpolate = True
+        keep_geometry = True,
+        interpolate_midplane = True
     ):
         """
-        Returns OMP, IMP or target data from the balance file
-        Note that the balance file shape is a transpose of the geometry shape (e.g. crx)
-        and contains guard cells.        
-        Target data is obtained from the guard cells which are very close to the wall.
+        Return a 1D radial profile at the inner/outer midplane or at a target.
+
+        The profile is assembled from SOLPS balance-file data, which already
+        includes guard cells and uses the same indexing convention as the rest
+        of ``SOLPScase``. For ``omp`` and ``imp`` the default behaviour is to
+        interpolate each ring onto ``Z = 0`` using a small poloidal stencil
+        around the midplane. For target regions, the value is taken from the
+        adjacent guard cell because that cell is the closest available point to
+        the wall.
+
+        Parameters
+        ----------
+        params : str or list[str]
+            Additional balance or geometry fields to include in the returned
+            profile.
+        region : str, default "omp"
+            One of ``"omp"``, ``"imp"``, ``"outer_lower_target"``,
+            ``"inner_lower_target"``, ``"outer_upper_target"`` or
+            ``"inner_upper_target"``.
+        verbose : bool, default False
+            Reserved for debugging output. Currently unused.
+        guards : bool, default False
+            If False, drop the first and last radial points before returning.
+            If True, keep the guard cells in the output.
+        keep_geometry : bool, default False
+            If False, drop geometry helper columns such as ``R``, ``hx``,
+            ``hy``, ``Btot`` and ``Bpol`` before returning.
+        interpolate_midplane : bool, default True
+            If True, interpolate OMP/IMP profiles to the exact midplane.
+            Target profiles are taken directly from the selected guard cells.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Radial profile containing the requested parameters together with
+            derived columns ``dist``, ``sep``, ``apar`` and ``vol``. The
+            ``dist`` coordinate is shifted so that zero corresponds to the
+            separatrix.
         """
         
         bal = self.bal
+
+        if poloidal_index is None and region is None:
+            raise ValueError("Must specify either poloidal_index or region")
+        if poloidal_index is not None and region is not None:
+            raise ValueError("Must specify either poloidal_index or region, not both")
 
         if type(params) == str:
             params = [params]
         
         # Poloidal selector
-        if any([region in name for name in [
-            "omp", "imp"]]):
+        if region is not None:
+            if any([region in name for name in [
+                "omp", "imp"]]):
 
-            p = self.s[region] 
-            selector = self.s[region]
+                p = self.s[region] 
+                selector = self.s[region]
+                
+            elif any([region in name for name in [
+                "outer_lower_target", "inner_lower_target",
+                "outer_upper_target", "inner_upper_target"]]):
+                
+                selector = self.s[region+"_guard"] # For targets take guard cell which is tiny & close to wall value
+                
+            else:
+                raise Exception(f"Unrecognised region: {region}")
             
-        elif any([region in name for name in [
-            "outer_lower_target", "inner_lower_target",
-            "outer_upper_target", "inner_upper_target"]]):
-            
-            selector = self.s[region+"_guard"] # For targets take guard cell which is tiny & close to wall value
-            
-        else:
-            raise Exception(f"Unrecognised region: {region}")
+        elif poloidal_index is not None:
+            selector = (poloidal_index, slice(None))
         
         ## Interpolate to Z = 0 for OMP and IMP
-        if (region == "omp" or region == "imp") and interpolate == True:
+        if (region == "omp" or region == "imp") and interpolate_midplane:
             ## Select a couple of cells on each side of the midplane
             if region == "omp":
                 pol_selector = slice(self.psel["omp"]-3, self.psel["omp"]+5)
@@ -864,6 +908,8 @@ class SOLPScase():
                 for param in ["Z", "R", "hx", "hy", "vol", "Btot", "Bpol"] + params:
                     if param in bal:
                         df_pol_slice[param] = bal[param][pol_selector, ring_id]
+                    elif param in self.g:
+                        df_pol_slice[param] = self.g[param][pol_selector, ring_id]
                     else:
                         print(f"Parameter {param} not found")
                     
@@ -877,7 +923,12 @@ class SOLPScase():
         else:
             df = pd.DataFrame()
             for param in ["hx", "hy", "R", "Z", "hx", "Btot", "Bpol", "vol"] + params:
-                df[param] = bal[param][selector]
+                if param in bal:
+                    df[param] = bal[param][selector]
+                elif param in self.g:
+                    df[param] = self.g[param][selector]
+                else:
+                    print(f"Parameter {param} not found")
                 
         
         # Interpolate between cells to get separatrix distance
