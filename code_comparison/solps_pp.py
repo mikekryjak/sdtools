@@ -506,7 +506,7 @@ class SOLPScase():
         ------
             name, str:
                 "outer_sol", "outer_lower_sol", "outer_upper_sol", "inner_sol", "inner_lower_sol", "inner_upper_sol"
-                "inner_upper_leg", "outer_upper_leg", "inner_lower_leg", "outer_lower_leg"
+                "inner_upper_divertor", "outer_upper_divertor", "inner_lower_divertor", "outer_lower_divertor"
             i, int: 
                 SOL ring index (0 = first inside SOL) 
             sep_dist, int
@@ -538,7 +538,7 @@ class SOLPScase():
         selections["outer_lower_sol"] = (slice(self.g["omp"]+1-1,None), yid)
         selections["outer_upper_sol"] = (slice(self.g["upper_break"], self.g["omp"]+1+1), yid)
         
-        for leg_name in ["inner_upper_leg", "outer_upper_leg", "inner_lower_leg", "outer_lower_leg"]:
+        for leg_name in ["inner_upper_divertor", "outer_upper_divertor", "inner_lower_divertor", "outer_lower_divertor"]:
             selections[leg_name] = (self.psel[leg_name], yid)
         
         
