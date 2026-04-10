@@ -1228,13 +1228,14 @@ class SOLPScase():
             df = df.iloc[::-1].reset_index(drop = True)
 
         # Interpolate onto Z = 0
-        for param in df.columns.drop("Z"):
-            interp = scipy.interpolate.interp1d(df["Z"], df[param], kind = "linear")
-            df.loc[0, param] = interp(0)
-        df.loc[0,"Z"] = 0  
+        if interpolate_midplane:
+            for param in df.columns.drop("Z"):
+                interp = scipy.interpolate.interp1d(df["Z"], df[param], kind = "linear")
+                df.loc[0, param] = interp(0)
+            df.loc[0,"Z"] = 0  
 
-        df["Spol"] -= df["Spol"].iloc[0]   # Now 0 is at Z = 0
-        df["Spar"] -= df["Spar"].iloc[0]   # Now 0 is at Z = 0
+            df["Spol"] -= df["Spol"].iloc[0]   # Now 0 is at Z = 0
+            df["Spar"] -= df["Spar"].iloc[0]   # Now 0 is at Z = 0
         
         
         if "sol" in region:
@@ -1247,16 +1248,14 @@ class SOLPScase():
             df["Xpoint"] = 0
             df.loc[Xpoint_index, "Xpoint"] = 1
 
+        elif "pfr" in region:
+            df["region"] = "pfr"
         else:
             df["region"] = "core"
         
-        # df.loc[Xpoint_index + 1, "Xpoint"] = "before"
-        # df.loc[Xpoint_index, "Xpoint"] = "after"
-        # df["Xpoint"] = 1
 
         if not guards:
             df = df.iloc[:-1]
-
 
         if target_first:
             df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
@@ -1266,7 +1265,6 @@ class SOLPScase():
         df = df.reset_index(drop = True)
         
         return df
-        # return df[::-1]
     
     def find_param(self, name):
         """
