@@ -1003,7 +1003,7 @@ class SOLPScase():
 
         # Get midplane radial profile to find fractional ring index for desired sepdist
         radial_slice = self.get_1d_radial_data(
-            ["fpsi"], region=radial_start_region, keep_geometry=True, guards=True
+            ["fpsi"], region=radial_start_region, keep_geometry=True, guards=False
         )
 
 
@@ -1015,19 +1015,8 @@ class SOLPScase():
             )(sepdist)
         )
 
-
-        # Get poloidal indices for the region (use sepadd=0 just to get the slice)
-        test_selector = self.make_custom_sol_ring(region, i=0)
-        pol_slice = test_selector[0]
-
-        nx = self.g["nx"]
-        if isinstance(pol_slice, slice):
-            pol_indices = list(range(*pol_slice.indices(nx)))
-        else:
-            pol_indices = [pol_slice]
-
-        ny = self.g["ny"]
-        y_indices = np.arange(ny, dtype=float)
+        # Get poloidal indices for the region 
+        pol_indices = np.arange(self.g["nx"])[self.psel[region]]
 
         geom_params = ["R", "Z", "hx", "Btot", "Bpol", "vol", "fpsi"]
         all_param_names = list(
