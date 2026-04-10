@@ -822,6 +822,9 @@ class SOLPScase():
         adjacent guard cell because that cell is the closest available point to
         the wall.
 
+        TODO: Implement guard replacement. Here this is basically already done,
+        the guards are tiny and have the wall value for target stuff?
+
         Parameters
         ----------
         params : str or list[str]
@@ -874,14 +877,14 @@ class SOLPScase():
                 "outer_lower_target", "inner_lower_target",
                 "outer_upper_target", "inner_upper_target"]]):
                 
-                selector = self.s[region+"_guard"] # For targets take guard cell which is tiny & close to wall value
+                selector = self.s[region]
                 
             else:
                 raise Exception(f"Unrecognised region: {region}")
             
         elif poloidal_index is not None:
             selector = (poloidal_index, slice(None))
-        
+
         ## Interpolate to Z = 0 for OMP and IMP
         if (region == "omp" or region == "imp") and interpolate_midplane:
             ## Select a couple of cells on each side of the midplane
