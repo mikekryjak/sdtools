@@ -49,39 +49,45 @@ class interpolateSOLPStoHermes:
                     f"Invalid region {region}, must contain 'inner' or 'outer'"
                 )
 
-            # Get radial slice at target to get separatrix distances
+            # Origin radial slice to define sepdist
             radial = get_1d_radial_data(
                 self.ds, params=["R", "Z"], guards=True, region=midplane_region
             )
             radial_sol = radial[radial["region"] == "sol"]
             num_solrings = len(radial_sol) - 2
 
-            ## Get poloidal slices
+            ## For each Hermes-3 SOL ring, find the corresponding interpolated SOLPS
+            ## SOL ring
             for sepadd in range(num_solrings):
-                # for sepadd in [0]:
+
                 radial_index = sepadd + m["ixseps1"]
                 sepdist = radial_sol.loc[radial_index, "Srad"]
                 print(f"{sepadd}/{sepdist:4f}, ", end="")
 
                 # Fetch field lines once per SOL ring, shared across divertor/sol subregions
-                flh = get_1d_poloidal_data(
-                    ds, params=params + ["theta_idx"], region=region, sepadd=sepadd
-                )
-                fls = solps.get_1d_poloidal_data(
-                    params=params, region=region, sepdist=sepdist
-                )
-
-                for subregion in ["divertor", "sol"]:
-                    poloidal_indices, param_interp = self._get_interpolated(
-                        flh,
-                        fls,
-                        param,
-                        subregion=subregion,
-                        interp_debug=plot_interp_debug,
-                        plot_line_ax=plot_line_ax if plot_lines else None,
+                try:
+                    flh = get_1d_poloidal_data(
+                        ds, params=params + ["theta_idx"], region=region, sepadd=sepadd
+                    )
+                    fls = solps.get_1d_poloidal_data(
+                        params=params, region=region, sepdist=sepdist
                     )
 
-                    param_values[radial_index, poloidal_indices] = param_interp
+                    for subregion in ["divertor", "sol"]:
+                        poloidal_indices, param_interp = self._get_interpolated(
+                            flh,
+                            fls,
+                            param,
+                            subregion=subregion,
+                            interp_debug=plot_interp_debug,
+                            plot_line_ax=plot_line_ax if plot_lines else None,
+                        )
+
+                        param_values[radial_index, poloidal_indices] = param_interp
+                except Exception as e:
+                    print(f"\nError interpolating {param} for region {region}, sepadd {sepadd}: {e}")
+                    pass
+
 
             print("")
 
