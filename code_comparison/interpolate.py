@@ -188,3 +188,50 @@ class interpolateSOLPStoHermes:
         poloidal_indices = flh["theta_idx"].values.astype(int)
 
         return poloidal_indices, out
+    
+    def check_1d(self, ds_interp, param):
+
+        lw = 1
+        style_SOLPS = dict(c="k", marker="o", linewidth = lw, label="SOLPS")
+        style_Hermes = dict(c="darkorange", marker="+", linewidth = lw, label="Hermes")
+        style_interp = dict(c="deeppink", marker="X", linewidth = lw, label="Hermes interpolated")
+
+        def plot_radial_result(ax, param, solps_region, hermes_region):
+
+            hermes = get_1d_radial_data(ds_interp, params = [param], region = hermes_region)
+            hermes_interp = get_1d_radial_data(ds_interp, params = [f"{param}_interp"], region = hermes_region)
+            solps = self.solps.get_1d_radial_data(params = [param], region = solps_region)
+
+            ax.plot(solps["dist"], solps[param], **style_SOLPS)
+            ax.plot(hermes["Srad"], hermes[param], **style_Hermes)
+            ax.plot(hermes_interp["Srad"], hermes_interp[f"{param}_interp"], **style_interp)
+            
+            ax.set_title(hermes_region)
+            ax.legend(fontsize = "x-small")
+
+        def plot_parallel_result(ax, param, sepdist, solps_region, hermes_region):
+            
+            hermes = get_1d_poloidal_data(ds_interp, params = [param], sepdist = sepdist, region = hermes_region)
+            hermes_interp = get_1d_poloidal_data(ds_interp, params = [f"{param}_interp"], sepdist = sepdist, region = hermes_region)
+            solps = self.solps.get_1d_poloidal_data(params = [param], sepdist = sepdist, region = solps_region)
+
+            ax.plot(solps["Spar"], solps[param], **style_SOLPS)
+            ax.plot(hermes["Spar"], hermes[param], **style_Hermes)
+            ax.plot(hermes_interp["Spar"], hermes_interp[f"{param}_interp"], **style_interp)
+            
+            ax.set_title(f"{hermes_region}, sepdist={sepdist}")
+            ax.legend(fontsize = "x-small")
+
+        num_plots = 5
+        fig, axes = plt.subplots(2,num_plots, figsize=(num_plots*5,10))
+
+        plot_radial_result(axes[0,0], "Ne", "omp", "omp")
+        plot_radial_result(axes[0,1], "Ne", "imp", "imp")
+        plot_radial_result(axes[0,2], "Ne", "inner_lower_target", "inner_lower_target")
+        plot_radial_result(axes[0,3], "Ne", "outer_lower_target", "outer_lower_target")
+
+        # These sepdist values are at Hermes-3 cell centres
+        plot_parallel_result(axes[1,0], "Ne", 0.000202, "outer_lower_sol", "outer_lower_sol")
+        plot_parallel_result(axes[1,1], "Ne", 0.014630, "outer_lower_sol", "outer_lower_sol")
+        plot_parallel_result(axes[1,2], "Ne", 0.000202, "inner_lower_sol", "inner_lower_sol")
+        plot_parallel_result(axes[1,3], "Ne", 0.014630, "inner_lower_sol", "inner_lower_sol")
