@@ -13,81 +13,144 @@ class interpolateSOLPStoHermes:
         self.ds = ds
         self.solps = solps
 
-    def interpolate(self, param, regions, plot_lines=False, plot_interp_debug=False):
-        m = self.ds.metadata
-        ds = self.ds
-        solps = self.solps
+        self.region_settings = {
+            "inner_lower_sol": dict(
+                radial_start_region="imp",
+                radial_subset="sol",
+                segments=("divertor", "sol"),
+                interpolate_midplane=True,
+            ),
+            "inner_upper_sol": dict(
+                radial_start_region="imp",
+                radial_subset="sol",
+                segments=("divertor", "sol"),
+                interpolate_midplane=True,
+            ),
+            "outer_lower_sol": dict(
+                radial_start_region="omp",
+                radial_subset="sol",
+                segments=("divertor", "sol"),
+                interpolate_midplane=True,
+            ),
+            "outer_upper_sol": dict(
+                radial_start_region="omp",
+                radial_subset="sol",
+                segments=("divertor", "sol"),
+                interpolate_midplane=True,
+            ),
+            "core": dict(
+                radial_start_region="omp",
+                radial_subset="core",
+                segments=(None,),
+                interpolate_midplane=False,
+            ),
+            "lower_pfr": dict(
+                radial_start_region="outer_lower_target",
+                radial_subset="core",
+                segments=(None,),
+                interpolate_midplane=False,
+            ),
+            "upper_pfr": dict(
+                radial_start_region="outer_upper_target",
+                radial_subset="core",
+                segments=(None,),
+                interpolate_midplane=False,
+            ),
+            "inner_lower_pfr": dict(
+                radial_start_region="inner_lower_target",
+                radial_subset="core",
+                segments=(None,),
+                interpolate_midplane=False,
+            ),
+            "outer_lower_pfr": dict(
+                radial_start_region="outer_lower_target",
+                radial_subset="core",
+                segments=(None,),
+                interpolate_midplane=False,
+            ),
+            "inner_upper_pfr": dict(
+                radial_start_region="inner_upper_target",
+                radial_subset="core",
+                segments=(None,),
+                interpolate_midplane=False,
+            ),
+            "outer_upper_pfr": dict(
+                radial_start_region="outer_upper_target",
+                radial_subset="core",
+                segments=(None,),
+                interpolate_midplane=False,
+            ),
+        }
 
-        if plot_lines:
-            fig, plot_line_ax = plt.subplots(figsize=(10, 20), dpi=100)
-            ds["Ne"].hermesm.clean_guards().bout.polygon(
-                ax=plot_line_ax,
-                grid_only=True,
+        self.polygon_settings = dict(grid_only=True,
                 linecolor="k",
                 linewidth=0.3,
                 antialias=True,
-                separatrix=False,
+                separatrix=False,)
+        
+        self.polygon_xlim = (0.1, 0.65)
+        self.polygon_ylim = (0.5, 0.9)
+
+        print("\n\n CHECK GUARDS \n\n")
+
+    def interpolate_sol(self, param, regions, plot_lines=False, plot_interp_debug=False):
+        return self.interpolate(
+            param,
+            regions,
+            plot_lines=plot_lines,
+            plot_interp_debug=plot_interp_debug,
+        )
+    
+    def interpolate_core_pfr(self, param, regions, plot_lines=False, plot_interp_debug=False):
+        return self.interpolate(
+            param,
+            regions,
+            plot_lines=plot_lines,
+            plot_interp_debug=plot_interp_debug,
+        )
+
+    def interpolate(self, param, regions, plot_lines=False, plot_interp_debug=False):
+        ds = self.ds
+
+        if plot_lines:
+            _, plot_line_ax = plt.subplots(figsize=(10, 20), dpi=100)
+            ds["Ne"].hermesm.clean_guards().bout.polygon(
+                ax=plot_line_ax,
+                **self.polygon_settings,
             )
-            plot_line_ax.set_xlim(0.1, 0.65)
-            # plot_line_ax.set_ylim(-0.9, -0.5)
-            plot_line_ax.set_ylim(0.5, 0.9)
-            plot_line_ax.set_title("Lines=hermes, points=solps")
+            plot_line_ax.set_xlim(*self.polygon_xlim)
+            plot_line_ax.set_ylim(*self.polygon_ylim)
+        else:
+            plot_line_ax = None
 
         params = ["R", "Z", param]
         param_values = np.zeros_like(ds[param].values)
 
         for region in regions:
+            spec = self._get_region_settings(region)
             print(region, "\n")
 
-            ## Get radial slice to determine sepdist for a given sepadd
-            if "inner" in region:
-                midplane_region = "imp"
-            elif "outer" in region:
-                midplane_region = "omp"
-            else:
-                raise ValueError(
-                    f"Invalid region {region}, must contain 'inner' or 'outer'"
-                )
+            for radial_index, sepadd, sepdist in self._iter_region_rings(spec):
+                print(f"{radial_index}/{sepadd}/{sepdist:4f}, ", end="")
 
-            # Origin radial slice to define sepdist
-            radial = get_1d_radial_data(
-                self.ds, params=["R", "Z"], guards=True, region=midplane_region
-            )
-            radial_sol = radial[radial["region"] == "sol"]
-            num_solrings = len(radial_sol) - 2
-
-            ## For each Hermes-3 SOL ring, find the corresponding interpolated SOLPS
-            ## SOL ring
-            for sepadd in range(num_solrings):
-
-                radial_index = sepadd + m["ixseps1"]
-                sepdist = radial_sol.loc[radial_index, "Srad"]
-                print(f"{sepadd}/{sepdist:4f}, ", end="")
-
-                # Fetch field lines once per SOL ring, shared across divertor/sol subregions
                 try:
-                    flh = get_1d_poloidal_data(
-                        ds, params=params + ["theta_idx"], region=region, sepadd=sepadd
-                    )
-                    fls = solps.get_1d_poloidal_data(
-                        params=params, region=region, sepdist=sepdist
-                    )
+                    flh, fls = self._get_field_lines(region, spec, params, sepadd, sepdist)
 
-                    for subregion in ["divertor", "sol"]:
+                    for subregion in spec["segments"]:
                         poloidal_indices, param_interp = self._get_interpolated(
                             flh,
                             fls,
                             param,
                             subregion=subregion,
                             interp_debug=plot_interp_debug,
-                            plot_line_ax=plot_line_ax if plot_lines else None,
+                            plot_line_ax=plot_line_ax,
                         )
-
                         param_values[radial_index, poloidal_indices] = param_interp
-                except Exception as e:
-                    print(f"\nError interpolating {param} for region {region}, sepadd {sepadd}: {e}")
-                    pass
 
+                except Exception as e:
+                    print(
+                        f"\nError interpolating {param} for region {region}, sepadd {sepadd}: {e}"
+                    )
 
             print("")
 
@@ -95,8 +158,62 @@ class interpolateSOLPStoHermes:
 
         return ds
 
+    def _get_region_settings(self, region):
+        if region not in self.region_settings:
+            raise ValueError(f"Invalid region {region}")
+
+        return self.region_settings[region]
+
+    def _iter_region_rings(self, spec):
+        m = self.ds.metadata
+        radial = get_1d_radial_data(
+            self.ds,
+            params=["R", "Z"],
+            guards=True,
+            region=spec["radial_start_region"],
+        )
+        radial_subset = radial[radial["region"] == spec["radial_subset"]]
+
+        for radial_index in radial_subset.index.values:
+            sepadd = radial_index - m["ixseps1"]
+            sepdist = radial_subset.loc[radial_index, "Srad"]
+            yield radial_index, sepadd, sepdist
+
+    def _get_field_lines(self, region, spec, params, sepadd, sepdist):
+        interpolate_midplane = spec["interpolate_midplane"]
+
+        flh = get_1d_poloidal_data(
+            self.ds,
+            params=params + ["theta_idx"],
+            region=region,
+            sepadd=sepadd,
+            interpolate_midplane=interpolate_midplane,
+        )
+        fls = self.solps.get_1d_poloidal_data(
+            params=params,
+            region=region,
+            sepdist=sepdist,
+            interpolate_midplane=interpolate_midplane,
+            radial_start_region=spec["radial_start_region"],
+        )
+
+        return flh, fls
+
+    def _interpolate_values(self, x_source, y_source, x_target):
+        x_source = np.asarray(x_source)
+        y_source = np.asarray(y_source)
+        x_target = np.asarray(x_target)
+
+        if len(x_source) < 2:
+            raise ValueError("Need at least two points for interpolation")
+
+        spline_order = min(3, len(x_source) - 1)
+        return scipy.interpolate.make_interp_spline(x_source, y_source, k=spline_order)(
+            x_target
+        )
+
     def _get_interpolated(
-        self, flh, fls, param, subregion, interp_debug=False, plot_line_ax=None
+        self, flh, fls, param, subregion=None, interp_debug=False, plot_line_ax=None
     ):
         """
         Interpolates a specified SOLPS parameter onto the Hermes-3 grid by performing
@@ -138,7 +255,7 @@ class interpolateSOLPStoHermes:
         def flip(df):
             df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
             df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
-            df = df.iloc[::-1]
+            df = df.iloc[::-1].reset_index(drop=True)
             return df
 
         if subregion == "divertor":
@@ -152,9 +269,6 @@ class interpolateSOLPStoHermes:
             flh = flip(flh)
             fls = flip(fls)
 
-            out = scipy.interpolate.make_interp_spline(fls["Spol"], fls[param])(
-                flh["Spol"]
-            )
 
         elif subregion == "sol":
             # Do not flip, interpolate from midplane to X-point
@@ -166,7 +280,7 @@ class interpolateSOLPStoHermes:
             flh = flh[flh["region"] == "upstream"]
             fls = fls[fls["region"] == "upstream"]
 
-            out = np.interp(flh["Spol"], fls["Spol"], fls[param])
+        out = self._interpolate_values(fls["Spol"], fls[param], flh["Spol"])
 
         if interp_debug:
             fig, ax = plt.subplots()
@@ -188,6 +302,8 @@ class interpolateSOLPStoHermes:
         poloidal_indices = flh["theta_idx"].values.astype(int)
 
         return poloidal_indices, out
+    
+
     
     def check_1d(self, ds_interp, param):
 
