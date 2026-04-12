@@ -189,6 +189,7 @@ def get_1d_radial_data(ds,
             else:
                 print(f"Parameter {param} not found")
     
+
     # Calculate radial distance from separatrix (vectorized)
     dr = df["dr"].to_numpy()
     df["Srad"] = np.cumsum(dr) - 0.5 * dr
@@ -206,6 +207,8 @@ def get_1d_radial_data(ds,
     df["region"] = ""
     df.loc[df["Srad"] > 0, "region"] = "sol"
     df.loc[df["Srad"] < 0, "region"] = "core"
+
+    df["radial_index"] = df.index.values
 
     # Remove guards if necessary
     # NOTE: you must preserve the original index here!
