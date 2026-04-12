@@ -377,6 +377,14 @@ def _select_region(ds, name):
     slices["upper_pfr"] = (slice(0, ixseps1), slice(j2_1g + 1, j1_2g + 1))
 
     if "single-null" not in m["topology"]:
+        slices["inner_upper_pfr"] = (
+            slice(0, ixseps1),
+            slice(j2_1g + 1, ny_inner + MYG),
+        )
+        slices["outer_upper_pfr"] = (
+            slice(0, ixseps1),
+            slice(ny_inner + MYG * 3, j1_2g + 1),
+        )
         slices["inner_upper_pfr_edge"] = (
             slice(MXG, MXG + 1),
             slice(j2_1g + 1, ny_inner),
@@ -471,7 +479,7 @@ def _select_custom_core_ring(ds, i):
     return ds.isel(x=selection[0], theta=selection[1])
 
 
-def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None):
+def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None, radial_start_region="auto"):
     """
     Creates custom SOL ring slice beyond the separatrix. 
     Can use SOL ring index sepadd OR radial distance from the separatrix sepdist.
@@ -483,13 +491,23 @@ def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None):
         region : inner_sol, inner_lower_sol, inner_upper_sol, outer_sol, outer_lower_sol, outer_upper_sol
     """
 
-    if region not in ["inner_sol", "inner_lower_sol", "inner_upper_sol", "outer_sol", "outer_lower_sol", "outer_upper_sol"]:
-        raise ValueError("Region must be one of: inner_sol, inner_lower_sol, inner_upper_sol, outer_sol, outer_lower_sol, outer_upper_sol")
-
-    if "inner" in region:
-        midplane_region = "imp"
-    elif "outer" in region:
-        midplane_region = "omp"
+    if radial_start_region == "auto":
+        if region == "outer_lower_pfr":
+            radial_start_region = "outer_lower_target"
+        elif region == "outer_upper_pfr":
+            radial_start_region = "outer_upper_target"
+        elif region == "inner_lower_pfr":
+            radial_start_region = "inner_lower_target"
+        elif region == "inner_upper_pfr":
+            radial_start_region = "inner_upper_target"
+        elif "outer" in region:
+            radial_start_region = "omp"
+        elif "inner" in region:
+            radial_start_region = "imp"
+        elif region == "lower_pfr":
+            radial_start_region = "outer_lower_target"
+        elif region == "upper_pfr":
+            radial_start_region = "outer_upper_target"
     
     m = ds.metadata
     
@@ -499,18 +517,19 @@ def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None):
     elif sepadd != None and sepdist != None:
         raise ValueError("Must use either index i or separatrix distance sepdist, not both")
     
-    # FIXME: This currently assumes that OMP distances are the same as IMP.
     elif sepdist != None:
-        df = get_1d_radial_data(ds, [], midplane_region)
+        df = get_1d_radial_data(ds, [], radial_start_region)
         sepind = df[df["sep"] == 1].index[0]
         sepadd = df.loc[(df["Srad"] - sepdist).abs().idxmin()].name - sepind
         
     radial_index = sepadd + m["ixseps1"]
 
     # "extra" has an extra point before the midplane so you can interpolate to the midplane 
-    selection = (radial_index, ds.metadata["poloidal_slices"][f"{region}_extra"])
+    if "sol" in region and "extra" not in region:
+        region = f"{region}_extra"
 
-    
+    selection = (radial_index, ds.metadata["poloidal_slices"][region])
+
     return ds.isel(x = selection[0], theta = selection[1])
 
 
