@@ -159,10 +159,12 @@ class interpolateSOLPStoHermes:
             spec = self._get_region_settings(region)
             print(region, "\n")
 
+            if plot_line_ax is not None:
+                self._plot_invalid_rings(region, spec, plot_line_ax)
+
             for radial_index, sepadd, sepdist in self._iter_region_rings(spec):
                 print(f"{radial_index}/{sepadd}/{sepdist:4f}, ", end="")
 
-                # try:
                 flh, fls = self._get_field_lines(region, spec, params, sepadd, sepdist)
 
                 poloidal_indices, param_interp = self._get_interpolated(
@@ -175,11 +177,6 @@ class interpolateSOLPStoHermes:
                     plot_line_ax=plot_line_ax,
                 )
                 param_values[radial_index, poloidal_indices] = param_interp
-
-                # except Exception as e:
-                #     print(
-                #         f"\nError interpolating {param} for region {region}, sepadd {sepadd}: {e}"
-                #     )
 
             print("")
 
@@ -205,20 +202,76 @@ class interpolateSOLPStoHermes:
 
         return expanded
 
-    def _iter_region_rings(self, spec):
-        m = self.ds.metadata
-        radial = get_1d_radial_data(
+    def _get_region_ring_sets(self, spec):
+        hermes_radial_slice = get_1d_radial_data(
             self.ds,
             params=["R", "Z"],
             guards=False,
             region=spec["radial_start_region"],
         )
 
-        radial_subset = radial[radial["region"] == spec["radial_subset"]]
+        solps_radial_slice = self.solps.get_1d_radial_data(
+            ["R", "Z"],
+            guards=False,
+            region=spec["radial_start_region"],
+        )
 
-        for radial_index in radial_subset.index.values:
+        if spec["radial_subset"] == "sol":
+            hermes_candidate_rings = hermes_radial_slice[hermes_radial_slice["Srad"] > 0]
+            solps_available_rings = solps_radial_slice[solps_radial_slice["dist"] > 0]
+        elif spec["radial_subset"] == "core":
+            hermes_candidate_rings = hermes_radial_slice[hermes_radial_slice["Srad"] < 0]
+            solps_available_rings = solps_radial_slice[solps_radial_slice["dist"] < 0]
+        else:
+            raise ValueError(f"Unsupported radial subset {spec['radial_subset']}")
+
+        solps_min_sepdist = solps_available_rings["dist"].min()
+        solps_max_sepdist = solps_available_rings["dist"].max()
+
+        valid_hermes_rings = hermes_candidate_rings[
+            hermes_candidate_rings["Srad"].between(
+                solps_min_sepdist,
+                solps_max_sepdist,
+            )
+        ]
+        invalid_hermes_rings = hermes_candidate_rings[
+            ~hermes_candidate_rings.index.isin(valid_hermes_rings.index)
+        ]
+
+        return valid_hermes_rings, invalid_hermes_rings
+
+    def _plot_invalid_rings(self, region, spec, plot_line_ax):
+        m = self.ds.metadata
+        _, invalid_hermes_rings = self._get_region_ring_sets(spec)
+
+        for radial_index in invalid_hermes_rings.index.values:
             sepadd = radial_index - m["ixseps1"]
-            sepdist = radial_subset.loc[radial_index, "Srad"]
+            invalid_field_line = get_1d_poloidal_data(
+                self.ds,
+                params=["R", "Z", "theta_idx"],
+                region=region,
+                sepadd=sepadd,
+                radial_start_region=spec["radial_start_region"],
+                interpolate_midplane=spec["interpolate_midplane"],
+                debug=False,
+            )
+            plot_line_ax.plot(
+                invalid_field_line["R"],
+                invalid_field_line["Z"],
+                lw=2,
+                marker="o",
+                ms=6,
+                c="yellow",
+                markerfacecolor = "black"
+            )
+
+    def _iter_region_rings(self, spec):
+        m = self.ds.metadata
+        valid_hermes_rings, _ = self._get_region_ring_sets(spec)
+
+        for radial_index in valid_hermes_rings.index.values:
+            sepadd = radial_index - m["ixseps1"]
+            sepdist = valid_hermes_rings.loc[radial_index, "Srad"]
             yield radial_index, sepadd, sepdist
 
     def _get_field_lines(self, region, spec, params, sepadd, sepdist):
