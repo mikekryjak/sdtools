@@ -318,8 +318,25 @@ class interpolateSOLPStoHermes:
         if len(x_source) < 2:
             raise ValueError("Need at least two points for interpolation")
 
-        spline_order = min(3, len(x_source) - 1)
-        return scipy.interpolate.make_interp_spline(x_source, y_source, k=spline_order)(
+        x_min = x_source.min()
+        x_max = x_source.max()
+        below_source = x_target < x_min
+        above_source = x_target > x_max
+        num_extrapolated = np.count_nonzero(below_source | above_source)
+
+        if num_extrapolated > 0:
+            print(
+                "Extrapolating poloidal interpolation for "
+                f"{num_extrapolated} target points outside the source range "
+                f"[{x_min}, {x_max}]")
+
+        return scipy.interpolate.interp1d(
+            x_source,
+            y_source,
+            kind="linear",
+            bounds_error=False,
+            fill_value="extrapolate",
+        )(
             x_target
         )
 
