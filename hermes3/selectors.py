@@ -176,7 +176,7 @@ def get_1d_radial_data(ds,
         # Take region directly from named selection
         if region is not None:
             if region in m["poloidal_slices"]:
-                reg = ds.hermes.select_region(region).squeeze()
+                reg = ds.hermes.select_region(region, guards = True).squeeze()
             else:
                 raise ValueError(f"Unknown region {region}.")
             
