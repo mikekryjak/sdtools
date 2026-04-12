@@ -382,10 +382,10 @@ class interpolateSOLPStoHermes:
         out = self._interpolate_values(fls["Spol"], fls[param], flh["Spol"])
 
         if interp_debug:
-            ax = interp_debug_ax
+            fig, ax = plt.subplots()
             ax.plot(flh["Spol"], flh[param], label="Hermes", marker="o")
-            ax.plot(fls["Spol"], fls[param], label="SOLPS", marker="x")
-            ax.plot(flh["Spol"], out, label="Interpolated", marker="o")
+            ax.plot(fls["Spol"], fls[param], label="SOLPS", marker="x", c= "k", markeredgewidth = 10)
+            ax.plot(flh["Spol"], out, label="Interpolated",  c = "darkorange", marker="o")
             ax.legend()
 
             if "upstream" in region:
