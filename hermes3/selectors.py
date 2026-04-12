@@ -367,12 +367,16 @@ def _interpolate_exact_poloidal_ring(
     df : DataFrame with data along the field line to be used by get_1d_poloidal_data
     """
 
-    if "sol" in region:
-        if sepdist < 0 or sepadd < 0:
+    if any([name in region for name in ["sol", "upstream", "divertor"]]):
+        if sepdist is not None and sepdist < 0:
             raise ValueError("sepdist must be positive for SOL regions")
+        if sepadd is not None and sepadd < 0:
+            raise ValueError("sepadd must be positive for SOL regions")
     else:
-        if sepdist > 0 or sepadd > 0:
+        if sepdist is not None and sepdist > 0:
             raise ValueError("sepdist must be negative for core or PFR regions")
+        if sepadd is not None and sepadd > 0:
+            raise ValueError("sepadd must be negative for core or PFR regions")
 
     
     m = ds.metadata
@@ -386,12 +390,22 @@ def _interpolate_exact_poloidal_ring(
 
     ## Get radial slice to figure out field line starting point based on sepdist
     if radial_start_region == "auto":
-        if "outer" in region:
+        if region == "outer_lower_pfr":
+            radial_start_region = "outer_lower_target"
+        elif region == "outer_upper_pfr":
+            radial_start_region = "outer_upper_target"
+        elif region == "inner_lower_pfr":
+            radial_start_region = "inner_lower_target"
+        elif region == "inner_upper_pfr":
+            radial_start_region = "inner_upper_target"
+        elif "outer" in region:
             radial_start_region = "omp"
         elif "inner" in region:
             radial_start_region = "imp"
-        else:
-            raise Exception(f"Radial start region must be provided for region {region}")
+        elif region == "lower_pfr":
+            radial_start_region = "outer_lower_target"
+        elif region == "upper_pfr":
+            radial_start_region = "outer_upper_target"
 
     radial_slice = get_1d_radial_data(ds, params = all_params, region = radial_start_region, core = True)
 
@@ -460,12 +474,14 @@ def get_1d_poloidal_data(
     region, 
     sepdist = None, 
     sepadd = None,
+    guards = False, 
     target_first = False,
     interpolate_midplane = True,
     interpolate_radial = False,
     radial_start_region = None,
     interpolate_poloidal = False,
-    interpolate_poloidal_resolution = 100):
+    interpolate_poloidal_resolution = 100,
+    debug = False):
     """
     Return a dataframe with data along a field line as well as poloidal and parallel connection lengths.
     Refer to get_custom_sol_ring for the indexing routine. 
@@ -491,7 +507,10 @@ def get_1d_poloidal_data(
     if "core" in region and any([target_first, interpolate_midplane]):
         raise Exception("target_first and interpolate_midplane are incompatible with region=core")
     
-    if region in ["pfr", "core"] and interpolate_midplane:
+    if "divertor" in region and interpolate_midplane:
+        raise ValueError("Interpolate midplane should not be used for divertor regions!")
+
+    if any([x in region for x in ["pfr", "core"]]) and interpolate_midplane:
         raise ValueError("Interpolate midplane should not be used for PFR or core regions!")
     
 
@@ -564,8 +583,14 @@ def get_1d_poloidal_data(
         df = df_interp
         
         
-    # Flip outer upper and inner lower so that they start at midplane
-    if any([x in region for x in ["outer_upper", "inner_lower"]]):
+    # Flip outer upper and inner lower so that the regions have a
+    # consistent orientation across all legs.
+    if any([name in region for name in [
+        "outer_upper_sol", "inner_lower_sol",
+        "outer_upper_upstream", "inner_lower_upstream",
+        "outer_upper_divertor", "inner_lower_divertor",
+        "outer_upper_pfr", "inner_lower_pfr"
+        ]]):
         df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
         df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
         df = df.iloc[::-1].reset_index(drop = True)
@@ -604,8 +629,20 @@ def get_1d_poloidal_data(
 
         df.loc[:Xpoint_index, "region"] = "upstream"
         df.loc[Xpoint_index:, "region"] = "divertor"
-    else:
+    elif "upstream" in region:
+        df["region"] = "upstream"
+    elif "divertor" in region:
+        df["region"] = "divertor"
+    elif "pfr" in region:
+        df["region"] = "pfr"
+    elif "core" in region:
         df["region"] = "core"
+    else:
+        raise ValueError(f"Unknown region {region} for region labeling")
+    
+    # Take out guard cell if needed
+    if not guards and any([x in region for x in ["sol", "divertor", "pfr"]]):
+        df = df.iloc[:-1]
             
     # Flip data so target is first if needed
     if target_first:
