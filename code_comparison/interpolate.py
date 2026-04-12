@@ -14,28 +14,28 @@ class interpolateSOLPStoHermes:
         self.solps = solps
 
         self.region_settings = {
-            "inner_lower_upstream_extra": dict(
+            "inner_lower_upstream": dict(
                 radial_start_region="imp",
                 radial_subset="sol",
-                interpolate_midplane=True,
+                interpolate_midplane=False,
                 flip=True,
             ),
-            "inner_upper_upstream_extra": dict(
+            "inner_upper_upstream": dict(
                 radial_start_region="imp",
                 radial_subset="sol",
-                interpolate_midplane=True,
+                interpolate_midplane=False,
                 flip=False,
             ),
-            "outer_lower_upstream_extra": dict(
+            "outer_lower_upstream": dict(
                 radial_start_region="omp",
                 radial_subset="sol",
-                interpolate_midplane=True,
+                interpolate_midplane=False,
                 flip=False,
             ),
-            "outer_upper_upstream_extra": dict(
+            "outer_upper_upstream": dict(
                 radial_start_region="omp",
                 radial_subset="sol",
-                interpolate_midplane=True,
+                interpolate_midplane=False,
                 flip=True,
             ),
             "inner_lower_divertor": dict(
@@ -210,9 +210,10 @@ class interpolateSOLPStoHermes:
         radial = get_1d_radial_data(
             self.ds,
             params=["R", "Z"],
-            guards=True,
+            guards=False,
             region=spec["radial_start_region"],
         )
+
         radial_subset = radial[radial["region"] == spec["radial_subset"]]
 
         for radial_index in radial_subset.index.values:
@@ -223,26 +224,24 @@ class interpolateSOLPStoHermes:
     def _get_field_lines(self, region, spec, params, sepadd, sepdist):
         interpolate_midplane = spec["interpolate_midplane"]
 
-        print(region, sepadd, sepdist, interpolate_midplane)
-
-        # flh = get_1d_poloidal_data(
-        #     self.ds,
-        #     params=params + ["theta_idx"],
-        #     region=region,
-        #     sepadd=sepadd,
-        #     radial_start_region=spec["radial_start_region"],
-        #     interpolate_midplane=interpolate_midplane,
-        #     debug = True
-        # )
+        flh = get_1d_poloidal_data(
+            self.ds,
+            params=params + ["theta_idx"],
+            region=region,
+            sepadd=sepadd,
+            radial_start_region=spec["radial_start_region"],
+            interpolate_midplane=interpolate_midplane,
+            debug = False
+        )
         fls = self.solps.get_1d_poloidal_data(
             params=params,
             region=region,
             sepdist=sepdist,
             interpolate_midplane=interpolate_midplane,
             radial_start_region=spec["radial_start_region"],
-            debug = True
+            debug = False
         )
-        raise SystemExit
+        # raise SystemExit
 
         return flh, fls
 
