@@ -122,25 +122,9 @@ class interpolateSOLPStoHermes:
 
         print("\n\n CHECK GUARDS \n\n")
 
-    def interpolate_sol(self, param, regions, plot_lines=False, plot_interp_debug=False):
-        return self.interpolate(
-            param,
-            regions,
-            plot_lines=plot_lines,
-            plot_interp_debug=plot_interp_debug,
-        )
-    
-    def interpolate_core_pfr(self, param, regions, plot_lines=False, plot_interp_debug=False):
-        return self.interpolate(
-            param,
-            regions,
-            plot_lines=plot_lines,
-            plot_interp_debug=plot_interp_debug,
-        )
-
     def interpolate(self, param, regions, plot_lines=False, plot_interp_debug=False):
         ds = self.ds
-
+        self.plot_lines = plot_lines
 
         if plot_lines:
             _, plot_line_ax = plt.subplots(figsize=(10, 20), dpi=100)
@@ -150,7 +134,6 @@ class interpolateSOLPStoHermes:
             )
 
             self.plot_line_ax = plot_line_ax
-            self.plot_lines = True
 
             self.solps.plot_2d("Ne", ax =plot_line_ax, grid_only = True, linecolor = "red")
             plot_line_ax.set_xlim(*self.polygon_xlim)
