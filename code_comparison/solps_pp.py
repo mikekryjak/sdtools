@@ -991,6 +991,7 @@ class SOLPScase():
             region,
             sepdist,
             radial_start_region=None, 
+            extrapolate_radial = False,
             debug = False):
         """
         Returns poloidal data radially interpolated to an exact separatrix distance.
@@ -1002,6 +1003,8 @@ class SOLPScase():
         params : list of str, parameters to extract
         region : str, region name (inner_lower_sol, inner_upper_sol, outer_lower_sol, outer_upper_sol)
         sepdist : float, separatrix distance in [m]
+        radial_start_region : str, optional, radial region defining sepdist, ideally at start of field line
+        extrapolate_radial : bool, optional, whether to allow extrapolation beyond available psi on each radial slice
 
         Returns
         -------
@@ -1092,12 +1095,26 @@ class SOLPScase():
             if debug:
                 ax.plot(radial["R"], radial["Z"], "o", markersize = 1, alpha = 0.5)
 
-            for param_name in all_param_names:
-                # radial_values = lookup[param_name][pol_i, :]
+            if psi < radial["fpsi"].min() or psi > radial["fpsi"].max():
+                print(f"Warning: desired psi {psi} is outside the range of available psi values ({radial['fpsi'].min()} to {radial['fpsi'].max()}) at poloidal index {pol_i}.")
+            
+                if extrapolate_radial:
+                    print("Extrapolating...")
 
-                df.loc[pol_i, param_name] = float(
-                    scipy.interpolate.interp1d(radial["fpsi"], radial[param_name])(psi)
-                )
+            for param_name in all_param_names:
+
+                if extrapolate_radial:
+                    
+                    df.loc[pol_i, param_name] = float(
+                        scipy.interpolate.interp1d(radial["fpsi"], radial[param_name],
+                                                bounds_error = False,
+                                                fill_value = "extrapolate")(psi)
+                    )
+                
+                else:
+                    df.loc[pol_i, param_name] = float(
+                        scipy.interpolate.interp1d(radial["fpsi"], radial[param_name])(psi)
+                    )
             
         # Plot field line
         if debug:
@@ -1143,6 +1160,7 @@ class SOLPScase():
         guards=False,
         interpolate_midplane=True,
         interpolate_radial=True,
+        extrapolate_radial=False,
         debug=False,
     ):
         """
@@ -1208,6 +1226,7 @@ class SOLPScase():
                 sepdist,
                 radial_start_region=radial_start_region,
                 debug=False,
+                extrapolate_radial = extrapolate_radial
             )
 
             hx = df["hx"].values
