@@ -178,8 +178,8 @@ class SOLPScase():
         psel["outer_upper_target_guard"] = upper_break
         psel["outer_lower_target_guard"] = self.g["nx"]
 
-        psel["outer_upper_divertor"] = slice(self.g["upper_break"]+1, self.g["rightcut"][1]+2)
-        psel["inner_upper_divertor"] = slice(self.g["leftcut"][1]-2, self.g["upper_break"]-1)
+        psel["outer_upper_divertor"] = slice(self.g["upper_break"], self.g["rightcut"][1]+2)
+        psel["inner_upper_divertor"] = slice(self.g["leftcut"][1]-2, self.g["upper_break"])
         psel["outer_lower_divertor"] = slice(self.g["rightcut"][0]+2, self.g["nx"])
         psel["inner_lower_divertor"] = slice(0, self.g["leftcut"][0]+2)
         # psel["upper_pfr"] = np.r_[psel["inner_upper_divertor"], psel["outer_upper_divertor"]]
@@ -199,7 +199,7 @@ class SOLPScase():
         psel["inner_lower_sol"] = slice(1, self.g["imp"] + 1)
         psel["inner_upper_sol"] = slice(self.g["imp"] - 1, self.g["upper_break"])
         
-        psel["inner_core"] = slice(self.g["leftcut"][0] + 2, self.g["leftcut"][1] - 1)
+        psel["inner_core"] = slice(self.g["leftcut"][0] + 2, self.g["leftcut"][1] - 2)
         psel["outer_core"] = slice(self.g["rightcut"][1] + 2, self.g["rightcut"][0] + 2)
         psel["core"] = np.r_[psel["outer_core"], psel["inner_core"]]
 
