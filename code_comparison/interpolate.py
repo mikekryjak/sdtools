@@ -50,13 +50,13 @@ class interpolateSOLPStoHermes:
                 radial_start_region="imp",
                 radial_subset="sol",
                 interpolate_midplane=False,
-                flip=False,
+                flip=True,
             ),
             "outer_lower_divertor": dict(
                 radial_start_region="omp",
                 radial_subset="sol",
                 interpolate_midplane=False,
-                flip=False,
+                flip=True,
             ),
             "outer_upper_divertor": dict(
                 radial_start_region="omp",
