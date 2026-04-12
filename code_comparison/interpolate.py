@@ -431,9 +431,10 @@ class interpolateSOLPStoHermes:
 
         def plot_parallel_result(ax, param, sepdist, solps_region, hermes_region):
             
-            hermes = get_1d_poloidal_data(ds_interp, params = [param], sepdist = sepdist, region = hermes_region)
-            hermes_interp = get_1d_poloidal_data(ds_interp, params = [f"{param}_interp"], sepdist = sepdist, region = hermes_region)
-            solps = self.solps.get_1d_poloidal_data(params = [param], sepdist = sepdist, region = solps_region)
+            hermes = get_1d_poloidal_data(ds_interp, params = [param], sepdist = sepdist, region = hermes_region, guards = False)
+            hermes_interp = get_1d_poloidal_data(ds_interp, params = [f"{param}_interp"], sepdist = sepdist, region = hermes_region, guards = False)
+            solps = self.solps.get_1d_poloidal_data(params = [param], sepdist = sepdist, region = solps_region, guards = False)
+
 
             ax.plot(solps["Spar"], solps[param], **style_SOLPS)
             ax.plot(hermes["Spar"], hermes[param], **style_Hermes)
@@ -453,10 +454,10 @@ class interpolateSOLPStoHermes:
         plot_radial_result(axes[0,5], "Ne", "outer_upper_target", "outer_upper_target")
 
         # These sepdist values are at Hermes-3 cell centres
-        plot_parallel_result(axes[1,2], "Ne", 0.000202, "inner_lower_sol", "inner_lower_sol")
-        plot_parallel_result(axes[1,3], "Ne", 0.000202, "inner_upper_sol", "inner_upper_sol")
-        plot_parallel_result(axes[1,4], "Ne", 0.000202, "outer_lower_sol", "outer_lower_sol")
-        plot_parallel_result(axes[1,5], "Ne", 0.000202, "outer_upper_sol", "outer_upper_sol")
+        plot_parallel_result(axes[1,2], "Ne", 0.000416, "inner_lower_sol", "inner_lower_sol")
+        plot_parallel_result(axes[1,3], "Ne", 0.000416, "inner_upper_sol", "inner_upper_sol")
+        plot_parallel_result(axes[1,4], "Ne", 0.000416, "outer_lower_sol", "outer_lower_sol")
+        plot_parallel_result(axes[1,5], "Ne", 0.000416, "outer_upper_sol", "outer_upper_sol")
 
         plot_parallel_result(axes[2,2], "Ne", 0.014630, "inner_lower_sol", "inner_lower_sol")
         plot_parallel_result(axes[2,3], "Ne", 0.014630, "inner_upper_sol", "inner_upper_sol")
