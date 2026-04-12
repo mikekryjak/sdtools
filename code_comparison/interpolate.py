@@ -14,71 +14,95 @@ class interpolateSOLPStoHermes:
         self.solps = solps
 
         self.region_settings = {
-            "inner_lower_sol": dict(
+            "inner_lower_upstream_extra": dict(
                 radial_start_region="imp",
                 radial_subset="sol",
-                segments=("divertor", "sol"),
                 interpolate_midplane=True,
+                flip=True,
             ),
-            "inner_upper_sol": dict(
+            "inner_upper_upstream_extra": dict(
                 radial_start_region="imp",
                 radial_subset="sol",
-                segments=("divertor", "sol"),
                 interpolate_midplane=True,
+                flip=False,
             ),
-            "outer_lower_sol": dict(
+            "outer_lower_upstream_extra": dict(
                 radial_start_region="omp",
                 radial_subset="sol",
-                segments=("divertor", "sol"),
                 interpolate_midplane=True,
+                flip=False,
             ),
-            "outer_upper_sol": dict(
+            "outer_upper_upstream_extra": dict(
                 radial_start_region="omp",
                 radial_subset="sol",
-                segments=("divertor", "sol"),
                 interpolate_midplane=True,
+                flip=True,
+            ),
+            "inner_lower_divertor": dict(
+                radial_start_region="imp",
+                radial_subset="sol",
+                interpolate_midplane=False,
+                flip=True,
+            ),
+            "inner_upper_divertor": dict(
+                radial_start_region="imp",
+                radial_subset="sol",
+                interpolate_midplane=False,
+                flip=False,
+            ),
+            "outer_lower_divertor": dict(
+                radial_start_region="omp",
+                radial_subset="sol",
+                interpolate_midplane=False,
+                flip=False,
+            ),
+            "outer_upper_divertor": dict(
+                radial_start_region="omp",
+                radial_subset="sol",
+                interpolate_midplane=False,
+                flip=True,
             ),
             "core": dict(
                 radial_start_region="omp",
                 radial_subset="core",
-                segments=(None,),
                 interpolate_midplane=False,
+                flip=False,
             ),
             "lower_pfr": dict(
                 radial_start_region="outer_lower_target",
                 radial_subset="core",
-                segments=(None,),
                 interpolate_midplane=False,
+                flip=False,
             ),
             "upper_pfr": dict(
                 radial_start_region="outer_upper_target",
                 radial_subset="core",
-                segments=(None,),
                 interpolate_midplane=False,
+                flip=False,
             ),
             "inner_lower_pfr": dict(
                 radial_start_region="inner_lower_target",
                 radial_subset="core",
-                segments=(None,),
                 interpolate_midplane=False,
+                flip=True,
             ),
             "outer_lower_pfr": dict(
                 radial_start_region="outer_lower_target",
                 radial_subset="core",
-                segments=(None,),
                 interpolate_midplane=False,
+                flip=True,
             ),
             "inner_upper_pfr": dict(
                 radial_start_region="inner_upper_target",
                 radial_subset="core",
-                segments=(None,),
                 interpolate_midplane=False,
+                flip=True,
             ),
             "outer_upper_pfr": dict(
                 radial_start_region="outer_upper_target",
                 radial_subset="core",
-                segments=(None,),
                 interpolate_midplane=False,
+                flip=True,
             ),
         }
 
@@ -88,8 +112,11 @@ class interpolateSOLPStoHermes:
                 antialias=True,
                 separatrix=False,)
         
-        self.polygon_xlim = (0.1, 0.65)
-        self.polygon_ylim = (0.5, 0.9)
+        # self.polygon_xlim = (0.1, 0.65)
+        # self.polygon_ylim = (0.5, 0.9)
+
+        self.polygon_xlim = (None, None)
+        self.polygon_ylim = (None, None)
 
         print("\n\n CHECK GUARDS \n\n")
 
@@ -118,6 +145,8 @@ class interpolateSOLPStoHermes:
                 ax=plot_line_ax,
                 **self.polygon_settings,
             )
+
+            self.solps.plot_2d("Ne", ax =plot_line_ax, grid_only = True, linecolor = "red")
             plot_line_ax.set_xlim(*self.polygon_xlim)
             plot_line_ax.set_ylim(*self.polygon_ylim)
         else:
@@ -126,31 +155,31 @@ class interpolateSOLPStoHermes:
         params = ["R", "Z", param]
         param_values = np.zeros_like(ds[param].values)
 
-        for region in regions:
+        for region in self._expand_regions(regions):
             spec = self._get_region_settings(region)
             print(region, "\n")
 
             for radial_index, sepadd, sepdist in self._iter_region_rings(spec):
                 print(f"{radial_index}/{sepadd}/{sepdist:4f}, ", end="")
 
-                try:
-                    flh, fls = self._get_field_lines(region, spec, params, sepadd, sepdist)
+                # try:
+                flh, fls = self._get_field_lines(region, spec, params, sepadd, sepdist)
 
-                    for subregion in spec["segments"]:
-                        poloidal_indices, param_interp = self._get_interpolated(
-                            flh,
-                            fls,
-                            param,
-                            subregion=subregion,
-                            interp_debug=plot_interp_debug,
-                            plot_line_ax=plot_line_ax,
-                        )
-                        param_values[radial_index, poloidal_indices] = param_interp
+                poloidal_indices, param_interp = self._get_interpolated(
+                    flh,
+                    fls,
+                    param,
+                    region=region,
+                    flip=spec["flip"],
+                    interp_debug=plot_interp_debug,
+                    plot_line_ax=plot_line_ax,
+                )
+                param_values[radial_index, poloidal_indices] = param_interp
 
-                except Exception as e:
-                    print(
-                        f"\nError interpolating {param} for region {region}, sepadd {sepadd}: {e}"
-                    )
+                # except Exception as e:
+                #     print(
+                #         f"\nError interpolating {param} for region {region}, sepadd {sepadd}: {e}"
+                #     )
 
             print("")
 
@@ -163,6 +192,18 @@ class interpolateSOLPStoHermes:
             raise ValueError(f"Invalid region {region}")
 
         return self.region_settings[region]
+
+    def _expand_regions(self, regions):
+        expanded = []
+
+        for region in regions:
+            if region.endswith("_sol"):
+                base = region[:-4]
+                expanded.extend([f"{base}_upstream", f"{base}_divertor"])
+            else:
+                expanded.append(region)
+
+        return expanded
 
     def _iter_region_rings(self, spec):
         m = self.ds.metadata
@@ -182,20 +223,26 @@ class interpolateSOLPStoHermes:
     def _get_field_lines(self, region, spec, params, sepadd, sepdist):
         interpolate_midplane = spec["interpolate_midplane"]
 
-        flh = get_1d_poloidal_data(
-            self.ds,
-            params=params + ["theta_idx"],
-            region=region,
-            sepadd=sepadd,
-            interpolate_midplane=interpolate_midplane,
-        )
+        print(region, sepadd, sepdist, interpolate_midplane)
+
+        # flh = get_1d_poloidal_data(
+        #     self.ds,
+        #     params=params + ["theta_idx"],
+        #     region=region,
+        #     sepadd=sepadd,
+        #     radial_start_region=spec["radial_start_region"],
+        #     interpolate_midplane=interpolate_midplane,
+        #     debug = True
+        # )
         fls = self.solps.get_1d_poloidal_data(
             params=params,
             region=region,
             sepdist=sepdist,
             interpolate_midplane=interpolate_midplane,
             radial_start_region=spec["radial_start_region"],
+            debug = True
         )
+        raise SystemExit
 
         return flh, fls
 
@@ -213,7 +260,7 @@ class interpolateSOLPStoHermes:
         )
 
     def _get_interpolated(
-        self, flh, fls, param, subregion=None, interp_debug=False, plot_line_ax=None
+        self, flh, fls, param, region, flip=False, interp_debug=False, plot_line_ax=None
     ):
         """
         Interpolates a specified SOLPS parameter onto the Hermes-3 grid by performing
@@ -248,38 +295,26 @@ class interpolateSOLPStoHermes:
         represents a midplane cell edge.
         """
 
-        # Work on copies so the caller's DataFrames are not mutated between subregion calls
+        # Work on copies so the caller's DataFrames are not mutated between calls.
         flh = flh.copy()
         fls = fls.copy()
 
-        def flip(df):
+        
+
+        def flip_field_line(df):
             df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
             df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
-            df = df.iloc[::-1].reset_index(drop=True)
-            return df
+            return df.iloc[::-1].reset_index(drop=True)
 
-        if subregion == "divertor":
-            # Flip the field line to start at the target and
-            # interpolate up to the X-point
-
-            flh = flh[flh["region"] == "divertor"]
-            fls = fls[fls["region"] == "divertor"]
-
-            # Now target first
-            flh = flip(flh)
-            fls = flip(fls)
+        if flip:
+            flh = flip_field_line(flh)
+            fls = flip_field_line(fls)
 
 
-        elif subregion == "sol":
-            # Do not flip, interpolate from midplane to X-point
+        if len(flh) < 2 or len(fls) < 2:
+            raise ValueError(f"Not enough points to interpolate {region}")
 
-            # Remove first point, it's at the midplane cell edge
-            flh = flh.loc[1:, :]
-            fls = fls.loc[1:, :]
-
-            flh = flh[flh["region"] == "upstream"]
-            fls = fls[fls["region"] == "upstream"]
-
+        
         out = self._interpolate_values(fls["Spol"], fls[param], flh["Spol"])
 
         if interp_debug:
@@ -289,11 +324,12 @@ class interpolateSOLPStoHermes:
             ax.plot(flh["Spol"], out, label="Interpolated", marker="o")
             ax.legend()
 
-            if subregion == "sol":
+            if "upstream" in region:
                 ax.set_xlabel("Poloidal distance from midplane")
-            elif subregion == "divertor":
-                ax.set_xlabel("Poloidal distance from target")
-            # ax.set_xlim(0.8, None)
+            elif "divertor" in region:
+                ax.set_xlabel("Poloidal distance from X-point")
+            else:
+                ax.set_xlabel("Poloidal distance")
 
         if plot_line_ax:
             plot_line_ax.plot(flh["R"], flh["Z"], lw=1)
