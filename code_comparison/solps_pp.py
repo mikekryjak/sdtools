@@ -182,8 +182,27 @@ class SOLPScase():
         psel["inner_upper_divertor"] = slice(self.g["leftcut"][1]-2, self.g["upper_break"]-1)
         psel["outer_lower_divertor"] = slice(self.g["rightcut"][0]+2, self.g["nx"])
         psel["inner_lower_divertor"] = slice(0, self.g["leftcut"][0]+2)
-        psel["upper_pfr"] = np.r_[psel["inner_upper_divertor"], psel["outer_upper_divertor"]]
+        # psel["upper_pfr"] = np.r_[psel["inner_upper_divertor"], psel["outer_upper_divertor"]]
+        psel["upper_pfr"] = np.r_[psel["outer_upper_divertor"], psel["inner_upper_divertor"]]
         psel["lower_pfr"] = np.r_[psel["inner_lower_divertor"], psel["outer_lower_divertor"]]
+
+        psel["outer_upper_pfr"] = psel["outer_upper_divertor"]
+        psel["inner_upper_pfr"] = psel["inner_upper_divertor"]
+        psel["outer_lower_pfr"] = psel["outer_lower_divertor"]
+        psel["inner_lower_pfr"] = psel["inner_lower_divertor"]
+
+        # These are the poloidal selections used to construct custom rings.
+        psel["outer_sol"] = slice(self.g["upper_break"], None)
+        psel["outer_lower_sol"] = slice(self.g["omp"], None)
+        psel["outer_upper_sol"] = slice(self.g["upper_break"], self.g["omp"] + 2)
+        psel["inner_sol"] = slice(1, self.g["upper_break"])
+        psel["inner_lower_sol"] = slice(1, self.g["imp"] + 1)
+        psel["inner_upper_sol"] = slice(self.g["imp"] - 1, self.g["upper_break"])
+        
+        psel["inner_core"] = slice(self.g["leftcut"][0] + 2, self.g["leftcut"][1] - 1)
+        psel["outer_core"] = slice(self.g["rightcut"][1] + 2, self.g["rightcut"][0] + 2)
+        psel["core"] = np.r_[psel["outer_core"], psel["inner_core"]]
+
         psel["omp"] = omp
         psel["imp"] = imp
         
@@ -192,6 +211,19 @@ class SOLPScase():
         psel["inner_upper_xpoint"] = g["xcut"][1]
         psel["outer_upper_xpoint"] = g["xcut"][3]
         psel["outer_lower_xpoint"] = g["xcut"][4]+1
+
+        # Upstream selections run from the midplane to the X-point and
+        # overlap with the divertor selections at the X-point cell.
+        psel["inner_lower_upstream"] = slice(psel["inner_lower_xpoint"]+1, self.g["imp"])
+        psel["inner_upper_upstream"] = slice(self.g["imp"], psel["inner_upper_xpoint"])
+        psel["outer_upper_upstream"] = slice(psel["outer_upper_xpoint"]+1, self.g["omp"] + 1)
+        psel["outer_lower_upstream"] = slice(self.g["omp"]+1, psel["outer_lower_xpoint"])
+
+        # Includes one cell beyond the midplane
+        psel["inner_lower_upstream_extra"] = slice(psel["inner_lower_xpoint"]+1, self.g["imp"]+1)
+        psel["inner_upper_upstream_extra"] = slice(self.g["imp"]-1, psel["inner_upper_xpoint"]+1)
+        psel["outer_upper_upstream_extra"] = slice(psel["outer_upper_xpoint"]+1, self.g["omp"] + 2)
+        psel["outer_lower_upstream_extra"] = slice(self.g["omp"], psel["outer_lower_xpoint"])
         
         # These are for 1d poloidal data getter
         psel["inner_lower_xpoint_fromtarget"] = psel["inner_lower_xpoint"] - psel["inner_lower_target_guard"] + 1
@@ -207,8 +239,7 @@ class SOLPScase():
         
         # First SOL rings
         for name in ["outer_sol", "outer_lower_sol", "outer_upper_sol", "inner_sol", "inner_lower_sol", "inner_upper_sol"]:
-            s[name] = self.make_custom_sol_ring(name, i = 0)
-            self.psel[name] = self.make_custom_sol_ring(name, i = 0)[0]
+            s[name] = (self.psel[name], self.g["sep"])
 
         self.read_b2fgmtry()
             
@@ -506,6 +537,7 @@ class SOLPScase():
         ------
             name, str:
                 "outer_sol", "outer_lower_sol", "outer_upper_sol", "inner_sol", "inner_lower_sol", "inner_upper_sol"
+                "outer_lower_upstream", "outer_upper_upstream", "inner_lower_upstream", "inner_upper_upstream"
                 "inner_upper_divertor", "outer_upper_divertor", "inner_lower_divertor", "outer_lower_divertor"
             i, int: 
                 SOL ring index (0 = first inside SOL) 
@@ -531,26 +563,14 @@ class SOLPScase():
             raise ValueError("Use i or sep_dist but not both")
         if i == None and sep_dist == None:
             raise ValueError("Provide either i or sep_dist")
-        
-        ## Note: all of these start beyond the midplane so that you can interpolate to Z=0 later
-        selections = {}
-        selections["outer_sol"] =       (slice(self.g["upper_break"],None), yid)
-        selections["outer_lower_sol"] = (slice(self.g["omp"]+1-1,None), yid)
-        selections["outer_upper_sol"] = (slice(self.g["upper_break"], self.g["omp"]+1+1), yid)
-        
-        for leg_name in ["inner_upper_divertor", "outer_upper_divertor", "inner_lower_divertor", "outer_lower_divertor"]:
-            selections[leg_name] = (self.psel[leg_name], yid)
-        
-        
-        selections["inner_sol"] =       (slice(1, self.g["upper_break"]), yid)
-        selections["inner_lower_sol"] = (slice(1, self.g["imp"]+1), yid)
-        selections["inner_upper_sol"] = (slice(self.g["imp"]-1, self.g["upper_break"]), yid)
 
-        
-        if name in selections.keys():
-            return selections[name]
-        else:
-            raise Exception(f"Region {name} not supported. \n Try outer_sol, outer_lower_sol, outer_upper_sol, inner_sol, inner_lower_sol, inner_upper_sol")
+        selector = self.psel.get(name)
+        if selector is None or np.isscalar(selector):
+            raise Exception(
+                f"Region {name} not supported for custom ring selection"
+            )
+
+        return (selector, yid)
     
 
         
@@ -988,7 +1008,7 @@ class SOLPScase():
         df : DataFrame with R, Z, hx, Btot, Bpol, vol and requested params
         """
 
-        if "sol" in region:
+        if any([name in region for name in ["sol", "upstream", "divertor"]]):
             if sepdist < 0:
                 raise ValueError("sepdist must be positive for SOL regions")
         else:
@@ -997,7 +1017,15 @@ class SOLPScase():
         
         ## Get radial slice to figure out field line starting point based on sepdist
         if radial_start_region is None:
-            if "outer" in region:
+            if region == "outer_lower_pfr":
+                radial_start_region = "outer_lower_target"
+            elif region == "outer_upper_pfr":
+                radial_start_region = "outer_upper_target"
+            elif region == "inner_lower_pfr":
+                radial_start_region = "inner_lower_target"
+            elif region == "inner_upper_pfr":
+                radial_start_region = "inner_upper_target"
+            elif "outer" in region:
                 radial_start_region = "omp"
             elif "inner" in region:
                 radial_start_region = "imp"
@@ -1052,6 +1080,7 @@ class SOLPScase():
         
         df = pd.DataFrame()
 
+        # Make figure, plot grid
         if debug:
             fig, ax = plt.subplots(dpi = 150)
             self.plot_2d("Te", ax = ax, grid_only = True)
@@ -1059,8 +1088,10 @@ class SOLPScase():
 
             radial = self.get_1d_radial_data(params = all_param_names, poloidal_index = pol_i)
             
+            # Plot radial slices
             if debug:
-                ax.plot(radial["R"], radial["Z"], "o", markersize = 3, alpha = 0.5)
+                ax.plot(radial["R"], radial["Z"], "o", markersize = 1, alpha = 0.5)
+
             for param_name in all_param_names:
                 # radial_values = lookup[param_name][pol_i, :]
 
@@ -1068,8 +1099,11 @@ class SOLPScase():
                     scipy.interpolate.interp1d(radial["fpsi"], radial[param_name])(psi)
                 )
             
-            if debug:
-                ax.plot(df["R"], df["Z"], c = "deeppink")
+        # Plot field line
+        if debug:
+            ax.plot(df["R"], df["Z"], c = "deeppink")
+            ax.plot(df.iloc[0]["R"], df.iloc[0]["Z"], "o", markersize = 5, c = "green")
+            ax.plot(df.iloc[-1]["R"], df.iloc[-1]["Z"], "o", markersize = 5, c = "red")
 
         return df
 
@@ -1137,9 +1171,29 @@ class SOLPScase():
         elif sepadd is not None and sepdist is not None:
             raise ValueError("Must use either index i or separatrix distance sepdist, not both")
         
-        print(region)
+        if "divertor" in region and interpolate_midplane:
+            raise ValueError("Interpolate midplane = true should not be used for divertor regions!")
+
         if any([x in region for x in ["pfr", "core"]]) and interpolate_midplane:
             raise ValueError("Interpolate midplane = true should not be used for PFR or core regions!")
+        
+        if radial_start_region == "auto":
+            if region == "outer_lower_pfr":
+                radial_start_region = "outer_lower_target"
+            elif region == "outer_upper_pfr":
+                radial_start_region = "outer_upper_target"
+            elif region == "inner_lower_pfr":
+                radial_start_region = "inner_lower_target"
+            elif region == "inner_upper_pfr":
+                radial_start_region = "inner_upper_target"
+            elif "outer" in region:
+                radial_start_region = "omp"
+            elif "inner" in region:
+                radial_start_region = "imp"
+            elif region == "lower_pfr":
+                radial_start_region = "outer_lower_target"
+            elif region == "upper_pfr":
+                radial_start_region = "outer_upper_target"
 
         # Radial interpolation path: interpolate across rings for exact sepdist
         if interpolate_radial:
@@ -1153,7 +1207,7 @@ class SOLPScase():
                 region,
                 sepdist,
                 radial_start_region=radial_start_region,
-                debug=debug,
+                debug=False,
             )
 
             hx = df["hx"].values
@@ -1223,8 +1277,13 @@ class SOLPScase():
             df["Spar"] = np.cumsum(dSpar)
             df["apar"] = vol / dSpar
 
-
-        if any([name in region for name in ["outer_upper_sol", "inner_lower_sol"]]):
+        # Flip certain regions to make sure we always end at a guard cell
+        if any([name in region for name in [
+            "outer_upper_sol", "inner_lower_sol",
+            "outer_upper_upstream", "inner_lower_upstream",
+            "outer_upper_divertor", "inner_lower_divertor",
+            "outer_upper_pfr", "inner_lower_pfr"
+            ]]):
             df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
             df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
             df = df.iloc[::-1].reset_index(drop = True)
@@ -1233,11 +1292,12 @@ class SOLPScase():
         if interpolate_midplane:
             for param in df.columns.drop("Z"):
                 interp = scipy.interpolate.interp1d(df["Z"], df[param], kind = "linear")
-                df.loc[0, param] = interp(0)
-            df.loc[0,"Z"] = 0  
+                df.loc[df.index[0], param] = interp(0)
+            df.loc[df.index[0],"Z"] = 0  
 
             df["Spol"] -= df["Spol"].iloc[0]   # Now 0 is at Z = 0
             df["Spar"] -= df["Spar"].iloc[0]   # Now 0 is at Z = 0
+
         
         
         if "sol" in region:
@@ -1250,21 +1310,34 @@ class SOLPScase():
             df["Xpoint"] = 0
             df.loc[Xpoint_index, "Xpoint"] = 1
 
+        elif "upstream" in region:
+            df["region"] = "upstream"
+
+        elif "divertor" in region:
+            df["region"] = "divertor"
+
         elif "pfr" in region:
             df["region"] = "pfr"
         else:
             df["region"] = "core"
         
 
-        if not guards:
+        if not guards and any([x in region for x in ["sol", "divertor", "pfr"]]):
             df = df.iloc[:-1]
 
-        if target_first:
+        if target_first and any([x in region for x in ["sol", "divertor", "pfr"]]):
             df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
             df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
             df = df.iloc[::-1]
         
         df = df.reset_index(drop = True)
+
+        if debug:
+            fig, ax = plt.subplots(dpi = 150)
+            self.plot_2d("Te", ax = ax, grid_only = True)
+            ax.plot(df["R"], df["Z"], "-", c = "deeppink", markersize = 3)
+            ax.plot(df.iloc[0]["R"], df.iloc[0]["Z"], "o", markersize = 5, c = "green")
+            ax.plot(df.iloc[-1]["R"], df.iloc[-1]["Z"], "o", markersize = 5, c = "red")
         
         return df
     
