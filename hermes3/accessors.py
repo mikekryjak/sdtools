@@ -23,19 +23,20 @@ class HermesDataArrayAccessor(BoutDataArrayAccessor):
         return _select_custom_core_ring(self.data, i)
 
     def clean_guards(self):
-        """
-        Set guard cell values to np.nan
-        Implemented for both 
-        """
-        xguards = _select_region(self.data, "xguards")
-        ds = self.data.copy()
-        ds[{"x": xguards[0], "theta": xguards[1]}] = np.nan
+        raise Exception("sdtools clean_guards is deprecated, use xHermes clear_guards instead")
+        # """
+        # Set guard cell values to np.nan
+        # Implemented for both 
+        # """
+        # xguards = _select_region(self.data, "xguards")
+        # ds = self.data.copy()
+        # ds[{"x": xguards[0], "theta": xguards[1]}] = np.nan
         
-        # Clear target guards if they are there
-        if self.data.metadata["MYG"] > 0:
-            for name in self.data.metadata["targets"]:
-                yguards = _select_region(self.data, f"{name}_target_guards")
-                ds[{"x": yguards[0], "theta": yguards[1]}] = np.nan
+        # # Clear target guards if they are there
+        # if self.data.metadata["MYG"] > 0:
+        #     for name in self.data.metadata["targets"]:
+        #         yguards = _select_region(self.data, f"{name}_target_guards")
+        #         ds[{"x": yguards[0], "theta": yguards[1]}] = np.nan
             
         return ds
     def guard_replace_1d(self):
