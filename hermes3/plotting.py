@@ -733,7 +733,7 @@ def lineplot(
     cases,
     colors = None,
     params = ["Td+", "Te", "Td", "Ne", "Nd"],
-    regions = ["imp", "omp", "outer_lower"],
+    regions = ["imp", "omp", "outer_lower_target"],
     ylims = (None,None),
     xlims = (None,None),
     markersize = 2,
@@ -786,17 +786,17 @@ def lineplot(
                 dfs[name] = get_1d_radial_data(ds, params, "omp")
             elif region == "imp":
                 dfs[name] = get_1d_radial_data(ds, params, "imp")
-            elif region == "outer_lower":
+            elif region == "outer_lower_target":
                 dfs[name] = get_1d_radial_data(ds, params, "outer_lower_target")
             elif region == "field_line":
-                dfs[name] = get_1d_poloidal_data(ds, params, "outer_lower", sepadd = 1)
+                dfs[name] = get_1d_poloidal_data(ds, params, "outer_lower_sol", sepadd = 1)
                 # region_ds[name] = ds.hermesm.select_custom_sol_ring("outer_lower", sepadd = 0).squeeze()
 
             elif region == "1d":
                 region_ds[name] = ds.squeeze()
                 xlabel = "Distance from midplane [m]"
             else:
-                raise Exception(f"Region {region} not found")
+                raise Exception(f"Region {region} not recognised in lineplot")
             
 
         for i, param in enumerate(params):
@@ -817,7 +817,7 @@ def lineplot(
                     xlabel = "Spar [m]"
                     # m = region_ds[name].metadata
                     # xplot = region_ds[name].coords["theta"] - region_ds[name].coords["theta"][0]
-                elif region in ["omp", "imp", "outer_lower"]:  
+                elif region in ["omp", "imp", "outer_lower_target"]:  
                     xplot = dfs[name]["Srad"].values
                     data = dfs[name][param]
                     xlabel = "Dist from sep [m]"
