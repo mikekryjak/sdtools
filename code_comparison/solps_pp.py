@@ -1041,13 +1041,34 @@ class SOLPScase():
         )
 
 
+        radial_dist_min = radial_slice["dist"].min()
+        radial_dist_max = radial_slice["dist"].max()
+        if sepdist < radial_dist_min or sepdist > radial_dist_max:
+            print(
+                f"Warning: desired sepdist {sepdist} is outside the range of available sepdist values "
+                f"({radial_dist_min} to {radial_dist_max}) in radial start region {radial_start_region}."
+            )
+
+            if extrapolate_radial:
+                print("Extrapolating sepdist to psi...")
+
         # Interpolate to find fractional ring index at the desired separatrix distance
-        psi = float(
-            scipy.interpolate.interp1d(
-                radial_slice["dist"].values,
-                radial_slice["fpsi"].values,
-            )(sepdist)
-        )
+        if extrapolate_radial:
+            psi = float(
+                scipy.interpolate.interp1d(
+                    radial_slice["dist"].values,
+                    radial_slice["fpsi"].values,
+                    bounds_error=False,
+                    fill_value="extrapolate",
+                )(sepdist)
+            )
+        else:
+            psi = float(
+                scipy.interpolate.interp1d(
+                    radial_slice["dist"].values,
+                    radial_slice["fpsi"].values,
+                )(sepdist)
+            )
 
         # Get poloidal indices for the region 
         pol_indices = np.arange(self.g["nx"])[self.psel[region]]

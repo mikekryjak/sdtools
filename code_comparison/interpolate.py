@@ -206,7 +206,7 @@ class interpolateSOLPStoHermes:
         )
 
     
-        if self.plot_lines:
+        if getattr(self, "plot_lines", False):
             self.plot_line_ax.plot(hermes_radial_slice["R"], hermes_radial_slice["Z"], lw=2, marker="o", c="cyan", ms=3)
 
         if spec["radial_subset"] == "sol":
@@ -218,18 +218,12 @@ class interpolateSOLPStoHermes:
         else:
             raise ValueError(f"Unsupported radial subset {spec['radial_subset']}")
 
-        solps_min_sepdist = solps_available_rings["dist"].min()
-        solps_max_sepdist = solps_available_rings["dist"].max()
-
-        valid_hermes_rings = hermes_candidate_rings[
-            hermes_candidate_rings["Srad"].between(
-                solps_min_sepdist,
-                solps_max_sepdist,
-            )
-        ]
-        invalid_hermes_rings = hermes_candidate_rings[
-            ~hermes_candidate_rings.index.isin(valid_hermes_rings.index)
-        ]
+        if len(solps_available_rings) == 0:
+            valid_hermes_rings = hermes_candidate_rings.iloc[0:0]
+            invalid_hermes_rings = hermes_candidate_rings
+        else:
+            valid_hermes_rings = hermes_candidate_rings
+            invalid_hermes_rings = hermes_candidate_rings.iloc[0:0]
 
         return valid_hermes_rings, invalid_hermes_rings
 
@@ -254,8 +248,8 @@ class interpolateSOLPStoHermes:
                 lw=2,
                 marker="o",
                 ms=6,
-                c="yellow",
-                markerfacecolor = "black"
+                c="red",
+                markerfacecolor="black",
             )
 
     def _iter_region_rings(self, spec):
@@ -354,9 +348,8 @@ class interpolateSOLPStoHermes:
                 1D array of interpolated parameter values on Hermes-3 grid coordinates.
         Notes
         -----
-        The function uses cubic spline interpolation (k=3) for divertor mode and linear
-        interpolation for SOL mode. The first point is removed in SOL mode as it
-        represents a midplane cell edge.
+        The function uses linear interpolation along the SOLPS field line onto the
+        Hermes-3 field line coordinates.
         """
 
         # Work on copies so the caller's DataFrames are not mutated between calls.
@@ -396,8 +389,7 @@ class interpolateSOLPStoHermes:
                 ax.set_xlabel("Poloidal distance")
 
         if plot_line_ax:
-            plot_line_ax.plot(flh["R"], flh["Z"], lw=1)
-            plot_line_ax.plot(fls["R"], fls["Z"], lw=0, marker="o", c="deeppink", ms=1)
+            plot_line_ax.plot(fls["R"], fls["Z"], marker="o", lw=2, ms = 3, c="deeppink")
 
         poloidal_indices = flh["theta_idx"].values.astype(int)
 
