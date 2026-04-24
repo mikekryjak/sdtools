@@ -385,7 +385,7 @@ class Monitor2D():
             
         elif self.mode == "field_line_history":
             norm = create_norm(logscale = settings["log"], norm = None, vmin = settings["vmin"], vmax = settings["vmax"])
-            self.case.select_custom_sol_ring(1, "outer_lower")[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
+            self.case.select_custom_sol_ring("outer_lower", sepadd = 1)[name].plot(x = "t", ax = ax, cmap = "Spectral_r", norm = norm, cbar_kwargs={"label":""})
             ax.set_title(f"1st SOL ring {name}")
             
         else:

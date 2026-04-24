@@ -624,7 +624,7 @@ class Hermesdata:
         id_omp = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"]
         fl = ds.isel(theta = slice(id_omp, -m["MYG"]), x = id_fl)
 
-        dist = np.cumsum(fl["dl"].values)
+        dist = np.cumsum(fl["dpol"].values)
         dist -= dist[0]
 
         df = pd.DataFrame(index = dist)

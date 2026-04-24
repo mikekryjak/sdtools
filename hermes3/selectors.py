@@ -4,7 +4,9 @@ from hermes3.plotting import *
 from hermes3.front_tracking import *
 import xhermes
 import numpy as np
+import pandas as pd
 import scipy
+import xarray as xr
 
 ## Deprecated by xhermes
 # poloidal slices now found in ds.metadata["poloidal_slices"]
@@ -119,10 +121,10 @@ def get_1d_radial_data(ds,
     # Interpolate to Z = 0 for IMP or OMP
     if region == "omp" or region == "imp":
 
-        omp_a = m["poloidal_slices"]["outer_upper_midplane"]
-        omp_b = m["poloidal_slices"]["outer_lower_midplane"]
-        imp_a = m["poloidal_slices"]["inner_upper_midplane"]
-        imp_b = m["poloidal_slices"]["inner_lower_midplane"]
+        omp_a = xhermes.selector_poloidal(ds, "outer_upper_midplane")
+        omp_b = xhermes.selector_poloidal(ds, "outer_lower_midplane")
+        imp_a = xhermes.selector_poloidal(ds, "inner_upper_midplane")
+        imp_b = xhermes.selector_poloidal(ds, "inner_lower_midplane")
         
         # slice a narrow band around the midplane
         if region == "omp":
@@ -175,8 +177,8 @@ def get_1d_radial_data(ds,
 
         # Take region directly from named selection
         if region is not None:
-            if region in m["poloidal_slices"]:
-                reg = ds.hermes.select_region(region, guards = True).squeeze()
+            if region in xhermes.selector_poloidal(ds, return_available = True):
+                reg = ds.hermes.select_region(radial_region = "domain_guards", poloidal_region = region).squeeze()
             else:
                 raise ValueError(f"Unknown region {region}.")
             
@@ -370,6 +372,11 @@ def _interpolate_exact_poloidal_ring(
     df : DataFrame with data along the field line to be used by get_1d_poloidal_data
     """
 
+    if region == "all":
+        region = "sol"
+    elif region in ["inner", "outer", "inner_lower", "inner_upper", "outer_lower", "outer_upper"]:
+        region = f"{region}_sol"
+
     if any([name in region for name in ["sol", "upstream", "divertor"]]):
         if sepdist is not None and sepdist < 0:
             raise ValueError("sepdist must be positive for SOL regions")
@@ -388,7 +395,7 @@ def _interpolate_exact_poloidal_ring(
 
     ## This comes from _select_custom_sol_ring
     # start, end = _get_poloidal_range(ds, region)   
-    poloidal_selection = m["poloidal_slices"][region]
+    poloidal_selection = xhermes.selector_poloidal(ds, region)
     poloidal_indices = ds["theta_idx"].values[poloidal_selection]
 
     ## Get radial slice to figure out field line starting point based on sepdist
@@ -502,6 +509,11 @@ def get_1d_poloidal_data(
     target_first : bool, if True, reverse the dataframe so that 0 distance is at the target
 
     """
+    if region == "all":
+        region = "sol"
+    elif region in ["inner", "outer", "inner_lower", "inner_upper", "outer_lower", "outer_upper"]:
+        region = f"{region}_sol"
+
     m = ds.metadata
 
     if "t" in ds.sizes:
@@ -623,7 +635,7 @@ def get_1d_poloidal_data(
 
     if "sol" in region:
         xpoint_index_name = f"{region.replace("_sol", "")}_xpoint"
-        global_xpoint_index = m["poloidal_slices"][xpoint_index_name]
+        global_xpoint_index = xhermes.selector_poloidal(ds, xpoint_index_name)
 
         Xpoint_index = df[df["theta_idx"] == global_xpoint_index].index[0]
 

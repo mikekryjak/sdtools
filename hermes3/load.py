@@ -982,146 +982,24 @@ class Case:
         return self.ds.isel(x = selection[0], theta = selection[1])
     
     def select_custom_core_ring(self, i):
-            """
-            Creates custom SOL ring slice within the core.
-            i = 0 is at first domain cell.
-            i = -2 is at first inner guard cell.
-            i = ixseps - MXG is the separatrix.
-            """
-            
-            if i > self.ixseps1 - self.MXG:
-                raise Exception("i is too large!")
-            
-            selection = (slice(0+self.MXG+i,1+self.MXG+i), np.r_[slice(self.j1_2g + 1, self.j2_2g + 1), slice(self.j1_1g + 1, self.j2_1g + 1)])
-            
-            return self.ds.isel(x = selection[0], theta = selection[1])
+            return self.ds.hermesm.select_custom_core_ring(i)
         
         
         
         
         
-    def select_custom_sol_ring(self, i, region):
-            """
-            Creates custom SOL ring slice beyond the separatrix.
-            args[0] = i = index of SOL ring (0 is separatrix, 1 is first SOL ring)
-            args[1] = region = all, inner, inner_lower, inner_upper, outer, outer_lower, outer_upper
-            
-            NOTE: INDEX HERE IS THE ACTUAL INDEX AS OPPOSED TO THE CUSTOM CORE RING
-            
-            TODO: CHECK THE OFFSETS ON X AXIS, THEY ARE POTENTIALLY WRONG
-            """
-            
-            # if i < self.ixseps1 - self.MXG*2 :
-            #     raise Exception("i is too small!")
-            if i > self.nx - self.MXG*2 :
-                raise Exception("i is too large!")
-            
-            if self.ds.metadata["topology"] == "connected-double-null":
-                
-                outer_midplane_a = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g
-                outer_midplane_b = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1     
-                inner_midplane_a = int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g 
-                inner_midplane_b = int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g + 1               
-                
-                
-                
-                if region == "all":
-                    selection = (slice(i+1,i+2), np.r_[slice(0+self.MYG, self.j2_2g + 1), slice(self.j1_1g + 1, self.nyg - self.MYG)])
-                
-                if region == "inner":
-                    selection = (slice(i+1,i+2), slice(0+self.MYG, self.ny_inner + self.MYG))
-                if region == "inner_lower":
-                    selection = (slice(i+1,i+2), slice(0+self.MYG, inner_midplane_a +1))
-                if region == "inner_upper":
-                    selection = (slice(i+1,i+2), slice(inner_midplane_b, self.ny_inner + self.MYG))
-                
-                if region == "outer":
-                    selection = (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, self.nyg - self.MYG))
-                if region == "outer_lower":
-                    selection = (slice(i+1,i+2), slice(outer_midplane_b, self.nyg - self.MYG))
-                if region == "outer_upper":
-                    selection = (slice(i+1,i+2), slice(self.ny_inner + self.MYG*3, outer_midplane_a+1))
-                    
-            elif self.ds.metadata["topology"] == "single-null":
-                
-                if region == "all":
-                    selection = (slice(i+0,i+1), slice(0+self.MYG, self.nyg - self.MYG))
-            
-            return self.ds.isel(x = selection[0], theta = selection[1])
+    def select_custom_sol_ring(self, region, sepadd = None, sepdist = None, radial_start_region="auto"):
+            return self.ds.hermesm.select_custom_sol_ring(
+                region,
+                sepadd = sepadd,
+                sepdist = sepdist,
+                radial_start_region = radial_start_region,
+            )
 
 
 
     def select_region(self, name):
-        """
-        DOUBLE NULL ONLY
-        Pass this tuple to a field of any parameter spanning the grid
-        to select points of the appropriate region.
-        Each slice is a tuple: (x slice, y slice)
-        Use it as: selected_array = array[slice] where slice = (x selection, y selection) = output from this method.
-        Returns sliced xarray dataset
-        NOTE: Everything is optimised for reading the case with guard cells 
-        """
-
-        slices = dict()
-
-        slices["all"] = (slice(None,None), slice(None,None))
-        slices["all_noguards"] = (slice(self.MXG,-self.MXG), np.r_[slice(self.MYG,self.ny_inner-self.MYG*2), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
-
-        slices["core"] = (slice(0,self.ixseps1), np.r_[slice(self.j1_1g + 1, self.j2_1g+1), slice(self.j1_2g + 1, self.j2_2g + 1)])
-        slices["core_noguards"] = (slice(self.MXG,self.ixseps1), np.r_[slice(self.j1_1g + 1, self.j2_1g+1), slice(self.j1_2g + 1, self.j2_2g + 1)])
-        slices["sol"] = (slice(self.ixseps1, None), slice(0, self.nyg))
-        slices["sol_noguards"] = (slice(self.ixseps1, -self.MYG), np.r_[slice(self.MYG,self.ny_inner-self.MYG*2), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
-
-        slices["outer_core_edge"] = (slice(0+self.MXG,1+self.MXG), slice(self.j1_2g + 1, self.j2_2g + 1))
-        slices["inner_core_edge"] = (slice(0+self.MXG,1+self.MXG), slice(self.j1_1g + 1, self.j2_1g + 1))
-        slices["core_edge"] = (slice(0+self.MXG,1+self.MXG), np.r_[slice(self.j1_2g + 1, self.j2_2g + 1), slice(self.j1_1g + 1, self.j2_1g + 1)])
-        
-        if self.MXG != 0:
-            
-            slices["outer_sol_edge"] = (slice(-1 - self.MXG, - self.MXG), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG))
-            slices["inner_sol_edge"] = (slice(-1 - self.MXG, - self.MXG), slice(self.MYG, self.ny_inner+self.MYG))
-            slices["sol_edge"] = (slice(-1 - self.MXG, - self.MXG), np.r_[slice(self.j1_1g + 1, self.j2_1g + 1), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
-            
-        else:
-            
-            slices["outer_sol_edge"] = (slice(-1, None), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG))
-            slices["inner_sol_edge"] = (slice(-1, None), slice(self.MYG, self.ny_inner+self.MYG))
-            slices["sol_edge"] = (slice(-1 - self.MXG, - self.MXG), np.r_[slice(self.j1_1g + 1, self.j2_1g + 1), slice(self.ny_inner+self.MYG*3, self.nyg - self.MYG)])
-        
-        slices["inner_lower_target"] = (slice(None,None), slice(self.MYG, self.MYG + 1))
-        slices["inner_upper_target"] = (slice(None,None), slice(self.ny_inner+self.MYG -1, self.ny_inner+self.MYG))
-        slices["outer_upper_target"] = (slice(None,None), slice(self.ny_inner+self.MYG*3, self.ny_inner+self.MYG*3+1))
-        slices["outer_lower_target"] = (slice(None,None), slice(self.nyg-self.MYG-1, self.nyg - self.MYG))
-        
-        slices["inner_lower_target_guard"] = (slice(None,None), slice(self.MYG -1, self.MYG))
-        slices["inner_upper_target_guard"] = (slice(None,None), slice(self.ny_inner+self.MYG , self.ny_inner+self.MYG+1))
-        slices["outer_upper_target_guard"] = (slice(None,None), slice(self.ny_inner+self.MYG*3-1, self.ny_inner+self.MYG*3))
-        slices["outer_lower_target_guard"] = (slice(None,None), slice(self.nyg-self.MYG, self.nyg - self.MYG+1))
-        
-        slices["inner_lower_pfr"] = (slice(0, self.ixseps1), slice(None, self.j1_1g))
-        slices["outer_lower_pfr"] = (slice(0, self.ixseps1), slice(self.j2_2g+1, self.nyg))
-
-        slices["lower_pfr"] = (slice(0, self.ixseps1), np.r_[slice(None, self.j1_1g+1), slice(self.j2_2g+1, self.nyg)])
-        slices["upper_pfr"] = (slice(0, self.ixseps1), slice(self.j2_1g+1, self.j1_2g+1))
-        slices["pfr"] = (slice(0, self.ixseps1), np.r_[ 
-                                                        np.r_[slice(None, self.j1_1g+1), slice(self.j2_2g+1, self.nyg)], 
-                                                        slice(self.j2_1g+1, self.j1_2g+1)])
-        
-        slices["lower_pfr_edge"] = (slice(self.MXG, self.MXG+1), np.r_[slice(None, self.j1_1g+1), slice(self.j2_2g+1, self.nyg)])
-        slices["upper_pfr_edge"] = (slice(self.MXG, self.MXG+1), slice(self.j2_1g+1, self.j1_2g+1))
-        slices["pfr_edge"] = (slice(self.MXG, self.MXG+1), np.r_[
-                                                                    np.r_[slice(None, self.j1_1g+1), slice(self.j2_2g+1, self.nyg)],
-                                                                    slice(self.j2_1g+1, self.j1_2g+1)])
-        
-        slices["outer_midplane_a"] = (slice(None, None), int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g)
-        slices["outer_midplane_b"] = (slice(None, None), int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1)
-
-        slices["inner_midplane_a"] = (slice(None, None), int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g + 1)
-        slices["inner_midplane_b"] = (slice(None, None), int((self.j2_1g - self.j1_1g) / 2) + self.j1_1g)
-
-        selection = slices[name]
-        
-        return self.ds.isel(x = selection[0], theta = selection[1])
+        return self.ds.hermesm.select_region(name)
     
     def select_domain_boundary(self):
         """
@@ -1254,8 +1132,12 @@ class Case:
         m["j2_2g"] = m["j2_2"] + m["MYG"] * (num_targets - 1)
         
         # Separatrix index accounting for guard cells
-        m["ixseps1g"] = m["ixseps1"] - m["MXG"]
-        m["ixseps2g"] = m["ixseps2"] - m["MXG"]
+        if m["MXG"] == 0:
+            m["ixseps1g"] = m["ixseps1"] - 2
+            m["ixseps2g"] = m["ixseps2"] - 2
+        else:
+            m["ixseps1g"] = m["ixseps1"]
+            m["ixseps2g"] = m["ixseps2"]
         
         # Poloidal midplane indices
         m["omp_a"] = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"]

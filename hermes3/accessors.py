@@ -3,6 +3,7 @@ from xbout import BoutDatasetAccessor, BoutDataArrayAccessor
 from hermes3.plotting import *
 from hermes3.front_tracking import _get_front_position
 from hermes3.selectors import get_1d_radial_data
+import xhermes
 import numpy as np
 
 
@@ -492,6 +493,11 @@ def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None, radial_st
         region : inner_sol, inner_lower_sol, inner_upper_sol, outer_sol, outer_lower_sol, outer_upper_sol
     """
 
+    if region == "all":
+        region = "sol"
+    elif region in ["inner", "outer", "inner_lower", "inner_upper", "outer_lower", "outer_upper"]:
+        region = f"{region}_sol"
+
     if radial_start_region == "auto":
         if region == "outer_lower_pfr":
             radial_start_region = "outer_lower_target"
@@ -529,7 +535,10 @@ def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None, radial_st
     if "sol" in region and "extra" not in region:
         region = f"{region}_extra"
 
-    selection = (radial_index, ds.metadata["poloidal_slices"][region])
+    if "sol" in region and "extra" not in region:
+        region = f"{region}_extra"
+
+    selection = (radial_index, xhermes.selector_poloidal(ds, region))
 
     return ds.isel(x = selection[0], theta = selection[1])
 
