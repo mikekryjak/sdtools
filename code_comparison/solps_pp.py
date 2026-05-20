@@ -173,15 +173,16 @@ class SOLPScase():
         psel["outer_upper_target"] = upper_break+1
         psel["outer_lower_target"] = self.g["nx"] - 1
 
-        psel["inner_lower_target_guard"] = 0
+        psel["inner_lower_target_guard"] = 1
         psel["inner_upper_target_guard"] = upper_break -1
         psel["outer_upper_target_guard"] = upper_break
-        psel["outer_lower_target_guard"] = self.g["nx"]
+        psel["outer_lower_target_guard"] = self.g["nx"]-1
 
         psel["outer_upper_divertor"] = slice(self.g["upper_break"], self.g["rightcut"][1]+2)
         psel["inner_upper_divertor"] = slice(self.g["leftcut"][1]-2, self.g["upper_break"])
         psel["outer_lower_divertor"] = slice(self.g["rightcut"][0]+2, self.g["nx"])
         psel["inner_lower_divertor"] = slice(0, self.g["leftcut"][0]+2)
+
         # psel["upper_pfr"] = np.r_[psel["inner_upper_divertor"], psel["outer_upper_divertor"]]
         psel["upper_pfr"] = np.r_[psel["outer_upper_divertor"], psel["inner_upper_divertor"]]
         psel["lower_pfr"] = np.r_[psel["inner_lower_divertor"], psel["outer_lower_divertor"]]
@@ -193,11 +194,19 @@ class SOLPScase():
 
         # These are the poloidal selections used to construct custom rings.
         psel["outer_sol"] = slice(self.g["upper_break"], None)
-        psel["outer_lower_sol"] = slice(self.g["omp"], None)
-        psel["outer_upper_sol"] = slice(self.g["upper_break"], self.g["omp"] + 2)
-        psel["inner_sol"] = slice(1, self.g["upper_break"])
-        psel["inner_lower_sol"] = slice(1, self.g["imp"] + 1)
-        psel["inner_upper_sol"] = slice(self.g["imp"] - 1, self.g["upper_break"])
+        psel["inner_sol"] = slice(0, self.g["upper_break"])
+
+        psel["outer_lower_sol"] = slice(self.g["omp"]+1, None)
+        psel["outer_upper_sol"] = slice(self.g["upper_break"], self.g["omp"] + 1)
+
+        psel["outer_lower_sol_extra"] = slice(self.g["omp"], None)
+        psel["outer_upper_sol_extra"] = slice(self.g["upper_break"], self.g["omp"] + 2)
+
+        psel["inner_lower_sol"] = slice(0, self.g["imp"])
+        psel["inner_upper_sol"] = slice(self.g["imp"], self.g["upper_break"])
+
+        psel["inner_lower_sol_extra"] = slice(0, self.g["imp"] + 1)
+        psel["inner_upper_sol_extra"] = slice(self.g["imp"] - 1, self.g["upper_break"])
         
         psel["inner_core"] = slice(self.g["leftcut"][0] + 2, self.g["leftcut"][1] - 2)
         psel["outer_core"] = slice(self.g["rightcut"][1] + 2, self.g["rightcut"][0] + 2)
@@ -1212,6 +1221,9 @@ class SOLPScase():
         
         if "divertor" in region and interpolate_midplane:
             raise ValueError("Interpolate midplane = true should not be used for divertor regions!")
+        
+        if "extra" not in region and interpolate_midplane:
+            raise ValueError("Region doesn't go beyond the midplane, can't interpolate to midplane! Try regions with suffix _extra")
 
         if any([x in region for x in ["pfr", "core"]]) and interpolate_midplane:
             raise ValueError("Interpolate midplane = true should not be used for PFR or core regions!")
@@ -1234,6 +1246,11 @@ class SOLPScase():
             elif region == "upper_pfr":
                 radial_start_region = "outer_upper_target"
 
+        if debug:
+            print(f"Region: {region}")
+            print(f"Sepdist: {sepdist}")
+            print(f"Sepadd: {sepadd}")
+            print(f"Radial start region: {radial_start_region}")
         # Radial interpolation path: interpolate across rings for exact sepdist
         if interpolate_radial:
             if sepdist is None:
@@ -1342,7 +1359,7 @@ class SOLPScase():
         
         if "sol" in region:
             ## Value of X-point column will be 1 in the cell just downstream of X-point
-            Xpoint_index = df.index[-self.psel[f"{region.replace("_sol", "")}_xpoint_fromtarget"]+1]
+            Xpoint_index = df.index[-self.psel[region.split("_sol")[0]+"_xpoint_fromtarget"]+1]
             
             df.loc[:Xpoint_index, "region"] = "upstream"
             df.loc[Xpoint_index:, "region"] = "divertor"
@@ -1459,7 +1476,7 @@ class SOLPScase():
 
         # return xpoints
     
-    def plot_selection(self, sel, ax = None, **kwargs):
+    def plot_selection(self, sel, ax = None, title = None, **kwargs):
         """
         Plots scatter of selected points according to the tuple sel
         which contains slices in (X, Y)
@@ -1485,12 +1502,17 @@ class SOLPScase():
         if ax == None:
             fig, ax = plt.subplots(dpi = dpi)
 
+        
+
         self.plot_2d("", ax = ax, data = data, cmap = mpl.colors.ListedColormap(["lightgrey", "limegreen"]),
              antialias = True, 
              cbar = False,
              **plot_kwargs)
         
         ax.scatter(self.g["R"][sel], self.g["Z"][sel], c = "deeppink", s = 3)
+
+        if title:
+            ax.set_title(title)
         
     def extract_cooling_curve(self, species, region, sepadd, order = 10, 
                               plot = False, cz_effect = False,
