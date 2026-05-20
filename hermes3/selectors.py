@@ -3,6 +3,7 @@ from xbout import BoutDatasetAccessor, BoutDataArrayAccessor
 from hermes3.plotting import *
 from hermes3.front_tracking import *
 import xhermes
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scipy
@@ -61,7 +62,8 @@ def get_1d_radial_data(ds,
                        poloidal_index = None, 
                        guards = False,
                        sol = True,
-                       core = True
+                       core = True,
+                       debug = False
                        ):
     """
     Return a Pandas Dataframe with a radial slice of data in the given region
@@ -70,6 +72,9 @@ def get_1d_radial_data(ds,
     Regions = omp, imp, inner_lower, inner_upper, outer_lower, outer_upper.
     alternatively, you can specify a poloidal index to get data at that index.
     """
+
+    if debug:
+        print(f"Region: {region}")
 
     # ---- helpers ----
     def _quad_at_zero(Z1d, V1d):
@@ -509,24 +514,33 @@ def get_1d_poloidal_data(
     target_first : bool, if True, reverse the dataframe so that 0 distance is at the target
 
     """
-    if region == "all":
-        region = "sol"
-    elif region in ["inner", "outer", "inner_lower", "inner_upper", "outer_lower", "outer_upper"]:
-        region = f"{region}_sol"
+
 
     m = ds.metadata
 
     if "t" in ds.sizes:
         raise Exception("get_1d_poloidal_data doesn't support multiple time slices")
     
+    if "guards" in region or "extra" in region:
+        raise ValueError("Region should not include 'guards' or 'extra', these are added automatically based on the region and flags")
+    
     if "core" in region and any([target_first, interpolate_midplane]):
         raise Exception("target_first and interpolate_midplane are incompatible with region=core")
-    
-    if "divertor" in region and interpolate_midplane:
-        raise ValueError("Interpolate midplane should not be used for divertor regions!")
 
     if any([x in region for x in ["pfr", "core"]]) and interpolate_midplane:
-        raise ValueError("Interpolate midplane should not be used for PFR or core regions!")
+        raise ValueError("interpolate_midplane is incompatible with PFR/core as they don't include the midplane!")
+    
+    selector_region = region
+    
+    # Include guards if requested and if the region has guards
+    if any([name in region for name in ["sol", "divertor", "pfr"]]):
+        if guards:
+            selector_region = f"{region}_guards"
+    
+    # Include cell beyond the midplane if interpolating to midplane
+    if any([name in region for name in ["sol", "upstream"]]):
+        if interpolate_midplane:
+            selector_region = f"{region}_extra"
     
 
     ## Select SOL region
@@ -540,7 +554,7 @@ def get_1d_poloidal_data(
         df = _interpolate_exact_poloidal_ring(
             ds, 
             params, 
-            region, 
+            selector_region, 
             sepdist = sepdist, 
             radial_start_region = radial_start_region,
             debug = False
@@ -548,7 +562,7 @@ def get_1d_poloidal_data(
     
     # 2. Or get it at a specific SOL ring index, or the closest SOL ring to a given sepdist
     else:
-        reg = ds.hermesm.select_custom_sol_ring(region, sepadd = sepadd, sepdist = sepdist).squeeze()
+        reg = ds.hermesm.select_custom_sol_ring(selector_region, sepadd = sepadd, sepdist = sepdist).squeeze()
 
         df = pd.DataFrame()
         df["R"] = reg["R"].values
@@ -575,8 +589,8 @@ def get_1d_poloidal_data(
         df_interp = pd.DataFrame()
         Z = df["Z"].values
         R = df["R"].values
-        ds = np.sqrt(np.diff(R)**2 + np.diff(Z)**2)
-        s = np.concatenate(([0], np.cumsum(ds)))  # shape (N,)
+        ds_pol = np.sqrt(np.diff(R)**2 + np.diff(Z)**2)
+        s = np.concatenate(([0], np.cumsum(ds_pol)))  # shape (N,)
         
         # R_spline = scipy.interpolate.UnivariateSpline(s, R, s=0)
         # Z_spline = scipy.interpolate.UnivariateSpline(s, Z, s=0)
@@ -634,7 +648,7 @@ def get_1d_poloidal_data(
 
 
     if "sol" in region:
-        xpoint_index_name = f"{region.replace("_sol", "")}_xpoint"
+        xpoint_index_name = f"{region.replace("_sol","")}_xpoint"
         global_xpoint_index = xhermes.selector_poloidal(ds, xpoint_index_name)
 
         Xpoint_index = df[df["theta_idx"] == global_xpoint_index].index[0]
@@ -656,13 +670,30 @@ def get_1d_poloidal_data(
         raise ValueError(f"Unknown region {region} for region labeling")
     
     # Take out guard cell if needed
-    if not guards and any([x in region for x in ["sol", "divertor", "pfr"]]):
-        df = df.iloc[:-1]
+    # NOTE: Shouldn't be necessary as now guard selection is at the selector level
+    # if not guards and "guards" in region:
+    #     df = df.iloc[:-2]
             
     # Flip data so target is first if needed
     if target_first:
         df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
         df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
         df = df.iloc[::-1]
+
+    if debug:
+        fig, ax = plt.subplots(dpi = 150)
+        ds["Td"].bout.polygon(
+            ax = ax,
+            grid_only = True,
+            linecolor = "k",
+            linewidth = 0.1,
+            antialias = True,
+            separatrix = False,
+            add_colorbar = False,
+        )
+        ax.plot(df["R"], df["Z"], "-", c = "deeppink", markersize = 3)
+        ax.plot(df.iloc[0]["R"], df.iloc[0]["Z"], "o", markersize = 5, c = "green")
+        ax.plot(df.iloc[-1]["R"], df.iloc[-1]["Z"], "o", markersize = 5, c = "red")
+        ax.set_title("")
         
     return df

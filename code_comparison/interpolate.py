@@ -128,7 +128,7 @@ class interpolateSOLPStoHermes:
 
         if plot_lines:
             _, plot_line_ax = plt.subplots(figsize=(10, 20), dpi=100)
-            ds["Ne"].hermesm.clean_guards().bout.polygon(
+            ds["Ne"].hermes.clear_guards().bout.polygon(
                 ax=plot_line_ax,
                 **self.polygon_settings,
             )
@@ -197,7 +197,9 @@ class interpolateSOLPStoHermes:
             params=["R", "Z"],
             guards=False,
             region=spec["radial_start_region"],
+            debug = False
         )
+
 
         solps_radial_slice = self.solps.get_1d_radial_data(
             ["R", "Z"],
@@ -253,15 +255,24 @@ class interpolateSOLPStoHermes:
             )
 
     def _iter_region_rings(self, spec):
+        """
+        Iterable to return valid Hermes-3 poloidal rings and the corresponding
+        sepadd and sepdist. Valid means there is SOLPS data available at the desired
+        Hermes-3 sepdist.
+        """
         m = self.ds.metadata
         valid_hermes_rings, _ = self._get_region_ring_sets(spec)
 
         for radial_index in valid_hermes_rings.index.values:
+        # for radial_index in [20]:
             sepadd = radial_index - m["ixseps1"]
             sepdist = valid_hermes_rings.loc[radial_index, "Srad"]
             yield radial_index, sepadd, sepdist
 
     def _get_field_lines(self, region, spec, params, sepadd, sepdist):
+        """
+        Return field line dataframes for Hermes-3 and SOLPS
+        """
         interpolate_midplane = spec["interpolate_midplane"]
 
         flh = get_1d_poloidal_data(
@@ -274,6 +285,8 @@ class interpolateSOLPStoHermes:
             
             debug = False
         )
+
+
         fls = self.solps.get_1d_poloidal_data(
             params=params,
             region=region,
@@ -281,8 +294,11 @@ class interpolateSOLPStoHermes:
             interpolate_midplane=interpolate_midplane,
             radial_start_region=spec["radial_start_region"],
             extrapolate_radial = True,
-            debug = False
+            debug = False,
+            guards = False
         )
+
+
         # raise SystemExit
 
         return flh, fls
@@ -312,7 +328,8 @@ class interpolateSOLPStoHermes:
             y_source,
             kind="linear",
             bounds_error=False,
-            fill_value="extrapolate",
+            # fill_value="extrapolate",
+            fill_value=(y_source[0], y_source[-1]),
         )(
             x_target
         )
@@ -371,7 +388,6 @@ class interpolateSOLPStoHermes:
         if len(flh) < 2 or len(fls) < 2:
             raise ValueError(f"Not enough points to interpolate {region}")
 
-        
         out = self._interpolate_values(fls["Spol"], fls[param], flh["Spol"])
 
         if interp_debug:
@@ -421,43 +437,42 @@ class interpolateSOLPStoHermes:
             ax.set_title(hermes_region)
             ax.legend(fontsize = "x-small")
 
-        def plot_parallel_result(ax, param, sepdist, solps_region, hermes_region):
+        def plot_parallel_result(ax, param, sepadd, solps_region, hermes_region):
             
+            radial_region = "omp" if "outer" in hermes_region else "imp"
+            radial_slice = get_1d_radial_data(ds_interp, params = ["R", "Z"], region = radial_region, guards = False)
+            radial_sol = radial_slice[radial_slice["region"] == "sol"]
+            sepdist = radial_sol.iloc[sepadd]["Srad"]
+
             hermes = get_1d_poloidal_data(ds_interp, params = [param], sepdist = sepdist, region = hermes_region, guards = False)
             hermes_interp = get_1d_poloidal_data(ds_interp, params = [f"{param}_interp"], sepdist = sepdist, region = hermes_region, guards = False)
-            solps = self.solps.get_1d_poloidal_data(params = [param], sepdist = sepdist, region = solps_region, guards = False)
+            solps = self.solps.get_1d_poloidal_data(params = [param], sepdist = sepdist, region = solps_region, guards = False, debug = True)
 
 
             ax.plot(solps["Spar"], solps[param], **style_SOLPS)
             ax.plot(hermes["Spar"], hermes[param], **style_Hermes)
             ax.plot(hermes_interp["Spar"], hermes_interp[f"{param}_interp"], **style_interp)
             
-            ax.set_title(f"{hermes_region}, sepdist={sepdist}")
+            ax.set_title(f"{hermes_region}, hermes sepadd={sepadd}")
             ax.legend(fontsize = "x-small")
 
         num_cols = 6
         fig, axes = plt.subplots(3,num_cols, figsize=(num_cols*5,15))
 
-        plot_radial_result(axes[0,0], "Ne", "omp", "omp")
-        plot_radial_result(axes[0,1], "Ne", "imp", "imp")
-        plot_radial_result(axes[0,2], "Ne", "inner_lower_target", "inner_lower_target")
-        plot_radial_result(axes[0,3], "Ne", "inner_upper_target", "inner_upper_target")
-        plot_radial_result(axes[0,4], "Ne", "outer_lower_target", "outer_lower_target")
-        plot_radial_result(axes[0,5], "Ne", "outer_upper_target", "outer_upper_target")
+        plot_radial_result(axes[0,0], param, "omp", "omp")
+        plot_radial_result(axes[0,1], param, "imp", "imp")
+        plot_radial_result(axes[0,2], param, "inner_lower_target", "inner_lower_target")
+        plot_radial_result(axes[0,3], param, "inner_upper_target", "inner_upper_target")
+        plot_radial_result(axes[0,4], param, "outer_lower_target", "outer_lower_target")
+        plot_radial_result(axes[0,5], param, "outer_upper_target", "outer_upper_target")
 
         # These sepdist values are at Hermes-3 cell centres
-        plot_parallel_result(axes[1,2], "Ne", 0.000416, "inner_lower_sol", "inner_lower_sol")
-        plot_parallel_result(axes[1,3], "Ne", 0.000416, "inner_upper_sol", "inner_upper_sol")
-        plot_parallel_result(axes[1,4], "Ne", 0.000416, "outer_lower_sol", "outer_lower_sol")
-        plot_parallel_result(axes[1,5], "Ne", 0.000416, "outer_upper_sol", "outer_upper_sol")
+        plot_parallel_result(axes[1,2], param, 0, "inner_lower_sol_extra", "inner_lower_sol")
+        plot_parallel_result(axes[1,3], param, 0, "inner_upper_sol_extra", "inner_upper_sol")
+        plot_parallel_result(axes[1,4], param, 0, "outer_lower_sol_extra", "outer_lower_sol")
+        plot_parallel_result(axes[1,5], param, 0, "outer_upper_sol_extra", "outer_upper_sol")
 
-        plot_parallel_result(axes[2,2], "Ne", 0.014630, "inner_lower_sol", "inner_lower_sol")
-        plot_parallel_result(axes[2,3], "Ne", 0.014630, "inner_upper_sol", "inner_upper_sol")
-        plot_parallel_result(axes[2,4], "Ne", 0.014630, "outer_lower_sol", "outer_lower_sol")
-        plot_parallel_result(axes[2,5], "Ne", 0.014630, "outer_upper_sol", "outer_upper_sol")
-
-
-
-        # plot_parallel_result(axes[1,2], "Ne", 0.014630, "outer_lower_sol", "outer_lower_sol")
-        # plot_parallel_result(axes[1,3], "Ne", 0.000202, "inner_lower_sol", "inner_lower_sol")
-        # plot_parallel_result(axes[1,4], "Ne", 0.014630, "inner_lower_sol", "inner_lower_sol")
+        plot_parallel_result(axes[2,2], param, 4, "inner_lower_sol_extra", "inner_lower_sol")
+        plot_parallel_result(axes[2,3], param, 4, "inner_upper_sol_extra", "inner_upper_sol")
+        plot_parallel_result(axes[2,4], param, 4, "outer_lower_sol_extra", "outer_lower_sol")
+        plot_parallel_result(axes[2,5], param, 4, "outer_upper_sol_extra", "outer_upper_sol")

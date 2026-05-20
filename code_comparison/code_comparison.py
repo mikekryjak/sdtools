@@ -334,22 +334,22 @@ class SOLPSdata:
             
             df = spc.get_1d_radial_data(list_params, region = name)
             df.index = df.pop("dist")
-            translate = dict(omp="omp", imp="imp", outer_lower_target="outer_lower_sol", inner_lower_target="inner_lower_sol")
+            translate = dict(omp="omp", imp="imp", outer_lower_target="outer_lower_sol_extra", inner_lower_target="inner_lower_sol_extra")
             
             regions[translate[name]] = df.copy()
 
             
-        regions["inner_fieldline_0.001"] = spc.get_1d_poloidal_data(list_params, region =  "inner_lower_sol", sepdist = 0.001)
-        regions["outer_fieldline"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower_sol", sepdist = 0.001)
-        regions["outer_fieldline_0.001"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower_sol", sepdist = 0.001)
-        regions["outer_fieldline_0.003"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower_sol", sepdist = 0.003)
-        regions["outer_fieldline_0.015"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower_sol", sepdist = 0.015)
-        regions["outer_fieldline_0.030"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower_sol", sepdist = 0.030)
+        regions["inner_fieldline_0.001"] = spc.get_1d_poloidal_data(list_params, region =  "inner_lower_sol_extra", sepdist = 0.001)
+        regions["outer_fieldline"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower_sol_extra", sepdist = 0.001)
+        regions["outer_fieldline_0.001"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower_sol_extra", sepdist = 0.001)
+        regions["outer_fieldline_0.003"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower_sol_extra", sepdist = 0.003)
+        regions["outer_fieldline_0.015"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower_sol_extra", sepdist = 0.015)
+        regions["outer_fieldline_0.030"] = spc.get_1d_poloidal_data(list_params, region =  "outer_lower_sol_extra", sepdist = 0.030)
         
-        regions["outer_upper_fieldline_0.001"] = spc.get_1d_poloidal_data(list_params, region =  "outer_upper_sol", sepdist = 0.001)
-        regions["outer_upper_fieldline_0.003"] = spc.get_1d_poloidal_data(list_params, region =  "outer_upper_sol", sepdist = 0.003)
+        regions["outer_upper_fieldline_0.001"] = spc.get_1d_poloidal_data(list_params, region =  "outer_upper_sol_extra", sepdist = 0.001)
+        regions["outer_upper_fieldline_0.003"] = spc.get_1d_poloidal_data(list_params, region =  "outer_upper_sol_extra", sepdist = 0.003)
         
-        regions["inner_fieldline"] = spc.get_1d_poloidal_data(list_params, region =  "inner_lower_sol", sepdist = 0.0014)
+        regions["inner_fieldline"] = spc.get_1d_poloidal_data(list_params, region =  "inner_lower_sol_extra", sepdist = 0.0014)
         
         for region in list(regions.keys()):
             if "fieldline" in region:
