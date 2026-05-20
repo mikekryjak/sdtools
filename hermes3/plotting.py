@@ -404,7 +404,7 @@ def plot_ddt(case,
              trim_timestep = 1,
              smoothing = 1, 
              dpi = 120, 
-             volume_weighted = True, 
+             volume_weighted = False, 
              normalised = True,
              ylims = (None,None), 
              xlims = (None,None)):
@@ -463,13 +463,13 @@ def plot_ddt(case,
 
 
     for param in list_params:
-        ax.plot(ds.coords["t"], res[param], label = param, lw = 1)
+        ax.plot(ds.coords["t"]*1000, res[param], label = param, lw = 1)
         
     ax.set_yscale("log")
     ax.grid(which = "major", lw = 1)
     ax.grid(which = "minor", lw = 1, alpha = 0.3)
     ax.legend(loc = "upper left", bbox_to_anchor=(1,1))
-    ax.set_xlabel("Time [s]")
+    ax.set_xlabel("Simulation time [ms]")
     ax.set_ylabel("Cell weighted residual RMS [-]")
     ax.set_title(f"Residual plot: {case.name}")
     
@@ -733,6 +733,7 @@ def lineplot(
     cases,
     colors = None,
     params = ["Td+", "Te", "Td", "Ne", "Nd"],
+    titles = None,
     regions = ["imp", "omp", "outer_lower_target"],
     ylims = (None,None),
     xlims = (None,None),
@@ -742,6 +743,7 @@ def lineplot(
     logscale = True,
     log_threshold = 10,  # Ratio of max to min required for logscale
     save_name = "",
+    combine_regions = True,
     guard_replace = False,
     auto_y_pad = 0.1,   # Padding on Y lims when automatically calculated (difference)
     auto_y_pad_log = 0.5,  # Same as above but logscale (factor)
@@ -752,6 +754,7 @@ def lineplot(
     Inputs
     --------
     cases: dict()
+    titles: optional list or dict of subplot titles. If not passed, uses params.
     """
     
     marker = "o"
@@ -765,15 +768,44 @@ def lineplot(
         if "t" in  cases[name].sizes.keys():
             cases[name] = cases[name].isel(t=-1)
 
+    mult = 0.8
+    ls = "-"
 
-    for region in regions:
-        mult = 0.8
-        fig, axes = plt.subplots(1,len(params), dpi = dpi, figsize = (4.6*len(params)*mult,5*mult), sharex = True)
-        fig.subplots_adjust(hspace = 0, wspace = 0.3, bottom = 0.25, left = 0.1, right = 0.9)
-        ls = "-"
-        
-        if type(axes) != np.ndarray:
-            axes = [axes]
+    if titles is None:
+        plot_titles = {param: param for param in params}
+    elif isinstance(titles, dict):
+        plot_titles = {param: titles.get(param, param) for param in params}
+    else:
+        if len(titles) != len(params):
+            raise ValueError("titles must have the same length as params")
+        plot_titles = dict(zip(params, titles))
+
+    if combine_regions:
+        fig, axes_grid = plt.subplots(
+            len(regions),
+            len(params),
+            dpi = dpi,
+            figsize = (4.6*len(params)*mult, 4.8*len(regions)*mult),
+            sharex = "row",
+            squeeze = False,
+        )
+        fig.subplots_adjust(hspace = 0.5, wspace = 0.3, bottom = 0.15, left = 0.1, right = 0.9, top = 0.9)
+        figure_regions = [(fig, axes_grid[row_index], region) for row_index, region in enumerate(regions)]
+    else:
+        figure_regions = []
+        for region in regions:
+            fig, axes = plt.subplots(
+                1,
+                len(params),
+                dpi = dpi,
+                figsize = (4.6*len(params)*mult,5*mult),
+                sharex = True,
+                squeeze = False,
+            )
+            fig.subplots_adjust(hspace = 0, wspace = 0.3, bottom = 0.25, left = 0.1, right = 0.9)
+            figure_regions.append((fig, axes[0], region))
+
+    for fig, axes, region in figure_regions:
             
         if region == "1d":
             print("Warning: 1D plot omitting target values")
@@ -883,8 +915,7 @@ def lineplot(
             axes[i].grid(which="both", alpha = 1)
             axes[i].grid(which="minor", visible = True)
             axes[i].set_xlabel(xlabel, fontsize=9)
-            axes[i].set_title(f"{param}", fontsize = "x-large")
-            fig.suptitle(f"{region} profiles", y=1.05)
+            axes[i].set_title(plot_titles[param], fontsize = "x-large")
             
             # print(f"{param}, datamin = {datamin:.3f}, datamax = {datamax:.3f}, datarange = {datarange:.3f}")            
             # print(f"       ymin: {ymin:.3f}, ymax: {ymax:.3f}")
@@ -893,13 +924,46 @@ def lineplot(
             #     print(f"Warning: {param} lower ylim below 0")
             axes[i].set_ylim(ymin, ymax)
 
+        if combine_regions:
+            row_left = axes[0].get_position().x0
+            row_right = axes[-1].get_position().x1
+            row_top = max(ax.get_position().y1 for ax in axes)
+            row_height = axes[0].get_position().height
+
+            fig.text(
+                (row_left + row_right) / 2,
+                row_top + 0.2 * row_height,
+                f"--- {region} ---",
+                transform = fig.transFigure,
+                ha = "center",
+                va = "bottom",
+                fontsize = "xx-large",
+                color = "black",
+                # fontweight = "bold"
+            )
+        else:
+            fig.suptitle(
+                f"--- {region}--- ",
+                x = 0.5,
+                y = 1.05,
+                ha = "center",
+                color = "black",
+                fontweight = "bold"
+            )
+
         legend_items = []
         for j, name in enumerate(cases.keys()):
             legend_items.append(mpl.lines.Line2D([0], [0], color=colors[j], lw=2, ls = ls))
-            
-        fig.legend(legend_items, cases.keys(), ncol = len(cases), loc = "upper center", bbox_to_anchor=(0.5,0.15))
+
+        if not combine_regions:
+            fig.legend(legend_items, cases.keys(), ncol = len(cases), loc = "upper center", bbox_to_anchor=(0.5,0.15))
+            if save_name != "":
+                fig.savefig(f"{save_name}_{region}.png", bbox_inches="tight", pad_inches=0.2)
+
+    if combine_regions:
+        fig.legend(legend_items, cases.keys(), ncol = len(cases), loc = "upper center", bbox_to_anchor=(0.5,0.08))
         if save_name != "":
-            fig.savefig(f"{save_name}_{region}.png", bbox_inches="tight", pad_inches=0.2)
+            fig.savefig(f"{save_name}.png", bbox_inches="tight", pad_inches=0.2)
         # fig.tight_layout()
         
 def create_norm(logscale, norm, vmin, vmax):
@@ -1274,7 +1338,7 @@ def plot_2d_timeslices(ds, param, tinds,
 
 def plot2d(
     toplot,
-    clean_guards=True,
+    clear_guards=True,
     ylim=(None, None),
     xlim=(None, None),
     title="",
@@ -1294,12 +1358,26 @@ def plot2d(
 ):
 
     """
-    User friendly plot of a number of dataarrays in a row.
+    Plot a row of 2D Hermes/BOUT data arrays.
 
-    subplot_size : width of each subplot in inches. Height is derived from the
-        R/Z aspect ratio of the data (or ylim/xlim if provided). Width is always
-        the same, so fonts/ticks/lines are always the same physical size regardless
-        of shape. Override with subplot_width or subplot_height (inches).
+    Parameters
+    ----------
+    toplot : list of dict
+        One entry per subplot. Each dict must contain:
+        - ``data``: the DataArray to plot.
+
+        Optional per-subplot keys include:
+        - ``title``: subplot title. Falls back to the data name when omitted.
+        - ``vmin``, ``vmax``, ``logscale``: forwarded to the polygon plotter.
+        - any other keyword accepted by ``data.bout.polygon()``.
+
+        Example:
+        ``[{"title": "Te", "data": ds["Te"], "vmin": 1, "vmax": 100}]``
+
+    subplot_size : float
+        Width of each subplot in inches. Height is derived from the R/Z aspect
+        ratio of the data, or from ``xlim``/``ylim`` if those are supplied.
+        Override directly with ``subplot_width`` or ``subplot_height``.
     """
 
     numplots = len(toplot)
@@ -1361,7 +1439,7 @@ def plot2d(
             figtitle = ""
             print("WARNING: Passed dataarray with no name or title")
         settings = {**defaults, **inputs, **kwargs}    
-        if clean_guards == True: data = data.hermesm.clean_guards() 
+        if clear_guards == True: data = data.hermes.clear_guards() 
 
         data.bout.polygon(ax = axes[i], **settings)
         axes[i].set_title(figtitle)
@@ -1504,7 +1582,7 @@ def plot_cvode_performance_single(ds):
 
     fig.tight_layout()
     
-def plot_fluctuations(ds, params, mode = "variable_max", ylims = (None,None), xlims = (None,None)):
+def plot_fluctuations(ds, params, mode = "variable_max", ylims = (None,None), xlims = (None,None), vmin = None, vmax = None):
     """
     Plot variable fluctuations over domain (defined in params as list).
     Mode:
@@ -1550,23 +1628,24 @@ def plot_fluctuations(ds, params, mode = "variable_max", ylims = (None,None), xl
         elif mode == "rel_ddt_rms":
             ddt_param = ds[f"ddt({param})"]
             rel_ddt_param = ddt_param / da_param
-            data = np.sqrt((rel_ddt_param)**2).mean(dim="t")
-            suptitle = "RMS relative ddt"
+            data = np.sqrt((rel_ddt_param**2).mean(dim="t"))
+            suptitle = r"$\sqrt{\left\langle \left(\frac{1}{x}\frac{dx}{dt}\right)^2 \right\rangle_t}$"
         elif mode == "ddt":
             ddt_param = ds[f"ddt({param})"]
             data = ddt_param
             suptitle = "ddt"
         else:
-            raise ValueError(f"Mode {mode} not recognised. Has to be variable_max, variable_rms, ddt_max or ddt_rms")
+            raise ValueError(f"Mode {mode} not recognised")
                 
         ax = axes[i]
-        data.hermesm.clean_guards().bout.polygon(ax = ax, cmap = "Spectral_r", targets = False, 
+        data.hermes.clear_guards().bout.polygon(ax = ax, cmap = "Spectral_r", targets = False, 
                                                                 separatrix_kwargs = dict(color="white", linestyle = "-", linewidth = 0),
-                                                                antialias = False,
+                                                                antialias = True,
                                                                 logscale = False,
+                                                                vmin = vmin, vmax = vmax
                                                                 # vmin = np.nanmin(data.values), vmax = np.nanmax(data.values),
                                                                 )
-        fig.suptitle(suptitle, y = 0.85)
+        fig.suptitle(suptitle)
     
         ax.set_title(param)
         ax.set_xlabel("")
