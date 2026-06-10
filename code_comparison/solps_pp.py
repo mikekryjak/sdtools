@@ -51,7 +51,7 @@ import ipywidgets as widgets
 
 
 class SOLPScase():
-    def __init__(self, path):
+    def __init__(self, path, path_b2fgmtry = None):
         
         """
         Note that everything in the balance file is in the Y, X convention unlike the
@@ -250,12 +250,13 @@ class SOLPScase():
         for name in ["outer_sol", "outer_lower_sol", "outer_upper_sol", "inner_sol", "inner_lower_sol", "inner_upper_sol"]:
             s[name] = (self.psel[name], self.g["sep"])
 
-        self.read_b2fgmtry()
-            
+        self.read_b2fgmtry(path_b2fgmtry)
+        # self.reverse_velocities()  # Positive velocity is towards outer target
         self.get_species()
         self.derive_data()
+        
 
-    def read_b2fgmtry(self, path = None, verbose = False, strict = False):
+    def read_b2fgmtry(self, path = None, verbose = False, strict = True):
         """
         Read b2fgmtry and merge supplemental geometry data into self.g.
 
@@ -435,8 +436,7 @@ class SOLPScase():
             
         
         print(f"Added total radiation, density and fraction for {species_name}")
-        
-    
+
     def derive_data(self):
         """
         Add new derived variables to the balance file
@@ -511,7 +511,7 @@ class SOLPScase():
         
         # flux = bal["fnax_D+1_tot"] / (bal["vol"] / bal["
         
-        bal["Vd+"] = bal["ua"][:,:,1]  # Note first species is fluid neutral
+        bal["Vd+"] = bal["ua"][:,:,1] * -1  # Note first species is fluid neutral
         bal["NVd+"] = bal["Vd+"] * bal["Ne"] * Mi  # Parallel momentum flux kg/m2/s
         bal["M"] = np.abs(bal["Vd+"] / np.sqrt((bal["Te"]*qe + bal["Td+"]*qe)/Mi))  # Mach number
         

@@ -446,12 +446,12 @@ class interpolateSOLPStoHermes:
 
             hermes = get_1d_poloidal_data(ds_interp, params = [param], sepdist = sepdist, region = hermes_region, guards = False)
             hermes_interp = get_1d_poloidal_data(ds_interp, params = [f"{param}_interp"], sepdist = sepdist, region = hermes_region, guards = False)
-            solps = self.solps.get_1d_poloidal_data(params = [param], sepdist = sepdist, region = solps_region, guards = False, debug = True)
+            solps = self.solps.get_1d_poloidal_data(params = [param], sepdist = sepdist, region = solps_region, guards = False, debug = False)
 
 
-            ax.plot(solps["Spar"], solps[param], **style_SOLPS)
-            ax.plot(hermes["Spar"], hermes[param], **style_Hermes)
-            ax.plot(hermes_interp["Spar"], hermes_interp[f"{param}_interp"], **style_interp)
+            ax.plot(solps["Spol"], solps[param], **style_SOLPS)
+            ax.plot(hermes["Spol"], hermes[param], **style_Hermes)
+            ax.plot(hermes_interp["Spol"], hermes_interp[f"{param}_interp"], **style_interp)
             
             ax.set_title(f"{hermes_region}, hermes sepadd={sepadd}")
             ax.legend(fontsize = "x-small")
