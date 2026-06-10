@@ -315,9 +315,13 @@ class SOLPSdata:
         self.imp = pd.DataFrame()
         self.code = "SOLPS"
         
-    def read_from_case(self, casepath):
+    def read_from_case(self, casepath_or_case, path_b2fgmtry = None):
         
-        spc = SOLPScase(casepath)
+        if isinstance(casepath_or_case, str):
+            spc = SOLPScase(casepath_or_case, path_b2fgmtry = path_b2fgmtry)
+        else:
+            spc = casepath_or_case
+            
         spc.derive_data()
         data = spc.bal
         
@@ -334,7 +338,7 @@ class SOLPSdata:
             
             df = spc.get_1d_radial_data(list_params, region = name)
             df.index = df.pop("dist")
-            translate = dict(omp="omp", imp="imp", outer_lower_target="outer_lower_sol_extra", inner_lower_target="inner_lower_sol_extra")
+            translate = dict(omp="omp", imp="imp", outer_lower_target="outer_lower", inner_lower_target="inner_lower")
             
             regions[translate[name]] = df.copy()
 
@@ -517,8 +521,8 @@ class Hermesdata:
         
         self.regions["omp"] = get_1d_radial_data(ds, self.params, region = "outer_midplane")
         self.regions["imp"] = get_1d_radial_data(ds, self.params, region = "inner_midplane")
-        self.regions["outer_lower_sol"] = get_1d_radial_data(ds, self.params, region = "outer_lower_target")
-        self.regions["inner_lower_sol"] = get_1d_radial_data(ds, self.params, region = "inner_lower_target")
+        self.regions["outer_lower"] = get_1d_radial_data(ds, self.params, region = "outer_lower_target")
+        self.regions["inner_lower"] = get_1d_radial_data(ds, self.params, region = "inner_lower_target")
         
         self.regions["inner_fieldline_0.001"] = get_1d_poloidal_data(ds, self.params, region =  "inner_lower_sol", sepdist = 0.001)
         self.regions["outer_fieldline_0.001"] = get_1d_poloidal_data(ds, self.params, region =  "outer_lower_sol", sepdist = 0.001)
@@ -568,75 +572,75 @@ class Hermesdata:
             self.regions[region]["Tn"] = self.regions[region]["Ta"]
 
         
-    def get_radial_data(self, dataset):
-        """
-        Deprecated
-        """
-        self.dataset = dataset
+    # def get_radial_data(self, dataset):
+    #     """
+    #     Deprecated
+    #     """
+    #     self.dataset = dataset
 
-        x = []
-        for param in self.params:
+    #     x = []
+    #     for param in self.params:
             
-            ds = self.dataset   
-            dr = np.cumsum(ds["dr"].values.flatten())
-            m = self.ds.metadata
-            sep_idx = m["ixseps1"] - m["MXG"]
-            dist = dr - dr[sep_idx]
+    #         ds = self.dataset   
+    #         dr = np.cumsum(ds["dr"].values.flatten())
+    #         m = self.ds.metadata
+    #         sep_idx = m["ixseps1"] - m["MXG"]
+    #         dist = dr - dr[sep_idx]
             
-            df = pd.DataFrame(index = dist)
-            df.index.name = "pos"
-            if param in ds.data_vars:
-                df[param] = ds[param]
-            else:
-                df[param] = np.nan
-            x.append(df)
+    #         df = pd.DataFrame(index = dist)
+    #         df.index.name = "pos"
+    #         if param in ds.data_vars:
+    #             df[param] = ds[param]
+    #         else:
+    #             df[param] = np.nan
+    #         x.append(df)
             
-        df = pd.concat(x, axis = 1)
+    #     df = pd.concat(x, axis = 1)
 
-        # Normalise to separatrix
-        sep_R = df.index[self.ds.metadata["ixseps1"]- self.ds.metadata["MXG"]]
-        df.index -= sep_R
+    #     # Normalise to separatrix
+    #     sep_R = df.index[self.ds.metadata["ixseps1"]- self.ds.metadata["MXG"]]
+    #     df.index -= sep_R
         
-        return df
+    #     return df
     
-    def get_poloidal_data(self):
-        """
-        Deprecated
-        """
-        ds = self.ds
-        m = ds.metadata
+    # def get_poloidal_data(self):
+    #     """
+    #     Deprecated
+    #     """
+    #     ds = self.ds
+    #     m = ds.metadata
     
-        # Find the right poloidal flux tube by looking at the midplane
-        sep_dist = 0   # Hardcoded to separatrix
-        omp = ds.hermesm.select_region("outer_midplane_a")
+    #     # Find the right poloidal flux tube by looking at the midplane
+    #     sep_dist = 0   # Hardcoded to separatrix
+    #     omp = ds.hermesm.select_region("outer_midplane_a")
         
-        if ds.dims["x"] == ds.metadata["nxg"]:
-            adder = 0
-        else:
-            adder = 2
+    #     if ds.dims["x"] == ds.metadata["nxg"]:
+    #         adder = 0
+    #     else:
+    #         adder = 2
         
-        id_sep = m["ixseps1"] - adder
+    #     id_sep = m["ixseps1"] - adder
 
-        r = np.cumsum(omp["dr"].values)
-        r = r - r[id_sep]
+    #     r = np.cumsum(omp["dr"].values)
+    #     r = r - r[id_sep]
 
-        id_fl = np.argmin(np.abs(r - sep_dist))
-        id_omp = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"]
-        fl = ds.isel(theta = slice(id_omp, -m["MYG"]), x = id_fl)
+    #     id_fl = np.argmin(np.abs(r - sep_dist))
+    #     id_omp = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"]
+    #     fl = ds.isel(theta = slice(id_omp, -m["MYG"]), x = id_fl)
 
-        dist = np.cumsum(fl["dpol"].values)
-        dist -= dist[0]
+    #     dist = np.cumsum(fl["dpol"].values)
+    #     dist -= dist[0]
 
-        df = pd.DataFrame(index = dist)
+    #     df = pd.DataFrame(index = dist)
 
 
-        for param in self.params:
-            if param in fl.data_vars:
-                df[param] = fl[param].values
-            else:
-                df[param] = np.nan
+    #     for param in self.params:
+    #         if param in fl.data_vars:
+    #             df[param] = fl[param].values
+    #         else:
+    #             df[param] = np.nan
             
-        return df
+    #     return df
     
 
         
