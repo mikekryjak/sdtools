@@ -2,7 +2,8 @@ from xarray import register_dataset_accessor, register_dataarray_accessor
 from xbout import BoutDatasetAccessor, BoutDataArrayAccessor
 from hermes3.plotting import *
 from hermes3.front_tracking import _get_front_position
-from hermes3.selectors import get_1d_radial_data, _get_poloidal_range
+from hermes3.selectors import get_1d_radial_data
+import xhermes
 import numpy as np
 
 
@@ -23,19 +24,20 @@ class HermesDataArrayAccessor(BoutDataArrayAccessor):
         return _select_custom_core_ring(self.data, i)
 
     def clean_guards(self):
-        """
-        Set guard cell values to np.nan
-        Implemented for both 
-        """
-        xguards = _select_region(self.data, "xguards")
-        ds = self.data.copy()
-        ds[{"x": xguards[0], "theta": xguards[1]}] = np.nan
+        raise Exception("sdtools clean_guards is deprecated, use xHermes clear_guards instead")
+        # """
+        # Set guard cell values to np.nan
+        # Implemented for both 
+        # """
+        # xguards = _select_region(self.data, "xguards")
+        # ds = self.data.copy()
+        # ds[{"x": xguards[0], "theta": xguards[1]}] = np.nan
         
-        # Clear target guards if they are there
-        if self.data.metadata["MYG"] > 0:
-            for name in self.data.metadata["targets"]:
-                yguards = _select_region(self.data, f"{name}_target_guards")
-                ds[{"x": yguards[0], "theta": yguards[1]}] = np.nan
+        # # Clear target guards if they are there
+        # if self.data.metadata["MYG"] > 0:
+        #     for name in self.data.metadata["targets"]:
+        #         yguards = _select_region(self.data, f"{name}_target_guards")
+        #         ds[{"x": yguards[0], "theta": yguards[1]}] = np.nan
             
         return ds
     def guard_replace_1d(self):
@@ -377,6 +379,14 @@ def _select_region(ds, name):
     slices["upper_pfr"] = (slice(0, ixseps1), slice(j2_1g + 1, j1_2g + 1))
 
     if "single-null" not in m["topology"]:
+        slices["inner_upper_pfr"] = (
+            slice(0, ixseps1),
+            slice(j2_1g + 1, ny_inner + MYG),
+        )
+        slices["outer_upper_pfr"] = (
+            slice(0, ixseps1),
+            slice(ny_inner + MYG * 3, j1_2g + 1),
+        )
         slices["inner_upper_pfr_edge"] = (
             slice(MXG, MXG + 1),
             slice(j2_1g + 1, ny_inner),
@@ -471,7 +481,7 @@ def _select_custom_core_ring(ds, i):
     return ds.isel(x=selection[0], theta=selection[1])
 
 
-def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None):
+def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None, radial_start_region="auto"):
     """
     Creates custom SOL ring slice beyond the separatrix. 
     Can use SOL ring index sepadd OR radial distance from the separatrix sepdist.
@@ -480,13 +490,31 @@ def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None):
     Parameters:
         i : radial index
         sepdist : radial distance from the separatrix
-        region : inner, inner_lower, inner_upper, outer, outer_lower, outer_upper
+        region : inner_sol, inner_lower_sol, inner_upper_sol, outer_sol, outer_lower_sol, outer_upper_sol
     """
 
-    if "inner" in region:
-        midplane_region = "imp"
-    elif "outer" in region:
-        midplane_region = "omp"
+    if region == "all":
+        region = "sol"
+    elif region in ["inner", "outer", "inner_lower", "inner_upper", "outer_lower", "outer_upper"]:
+        region = f"{region}_sol"
+
+    if radial_start_region == "auto":
+        if region == "outer_lower_pfr":
+            radial_start_region = "outer_lower_target"
+        elif region == "outer_upper_pfr":
+            radial_start_region = "outer_upper_target"
+        elif region == "inner_lower_pfr":
+            radial_start_region = "inner_lower_target"
+        elif region == "inner_upper_pfr":
+            radial_start_region = "inner_upper_target"
+        elif "outer" in region:
+            radial_start_region = "omp"
+        elif "inner" in region:
+            radial_start_region = "imp"
+        elif region == "lower_pfr":
+            radial_start_region = "outer_lower_target"
+        elif region == "upper_pfr":
+            radial_start_region = "outer_upper_target"
     
     m = ds.metadata
     
@@ -496,17 +524,22 @@ def _select_custom_sol_ring(ds, region, sepadd = None, sepdist = None):
     elif sepadd != None and sepdist != None:
         raise ValueError("Must use either index i or separatrix distance sepdist, not both")
     
-    # FIXME: This currently assumes that OMP distances are the same as IMP.
     elif sepdist != None:
-        df = get_1d_radial_data(ds, [], midplane_region)
+        df = get_1d_radial_data(ds, [], radial_start_region)
         sepind = df[df["sep"] == 1].index[0]
         sepadd = df.loc[(df["Srad"] - sepdist).abs().idxmin()].name - sepind
         
     radial_index = sepadd + m["ixseps1"]
 
-    selection = (radial_index, slice(*_get_poloidal_range(ds, region)))
+    # "extra" has an extra point before the midplane so you can interpolate to the midplane 
+    if "sol" in region and "extra" not in region:
+        region = f"{region}_extra"
 
-    
+    if "sol" in region and "extra" not in region:
+        region = f"{region}_extra"
+
+    selection = (radial_index, xhermes.selector_poloidal(ds, region))
+
     return ds.isel(x = selection[0], theta = selection[1])
 
 

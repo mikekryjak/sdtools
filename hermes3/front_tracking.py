@@ -13,7 +13,7 @@ def _get_front_position(ds, more_fronts = False):
     if "t" not in ds.dims:
         raise Exception("Dataset must contain more than one timestep")
     fl = ds.hermesm.select_custom_sol_ring("outer_lower", sepadd = 0).squeeze()
-    dist = np.cumsum(fl["dl"]).values
+    dist = np.cumsum(fl["dpol"]).values
     dist_from_target = dist[-1] - dist
 
     df = pd.DataFrame()

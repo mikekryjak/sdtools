@@ -99,7 +99,7 @@ class CoreRing():
         # Geometry properties
         self.dr = self.a["dr"].values/2 + self.b["dr"].values/2    # Distance between cell centres of rings 
         self.R = (self.a["R"].values + self.b["R"].values)/2    # Major radius of the edge in-between rings 
-        self.A = (self.a["dl"].values + self.b["dl"].values)/2 * 2*np.pi*self.R    # Surface area of the edge in-between rings
+        self.A = (self.a["dpol"].values + self.b["dpol"].values)/2 * 2*np.pi*self.R    # Surface area of the edge in-between rings
         self.diff = self.ds.diff(dim = "x")    # Difference the entire dataset for dN/dT calculations
         
     def calculate_fluxes(self):

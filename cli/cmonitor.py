@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # Reading with cache for extra speed
+import glob
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -14,8 +15,57 @@ from datetime import datetime
 
 
 
+def _is_case_path(path):
+    return os.path.isdir(path) and (
+        os.path.exists(os.path.join(path, "BOUT.inp"))
+        or bool(glob.glob(os.path.join(path, "BOUT.dmp*")))
+    )
 
-def cmonitor(path, save = False, plot = False, table = True, neutrals = False, logfile_plots = False, sep = True):
+
+def _expand_case_paths(path):
+    if isinstance(path, (str, os.PathLike)):
+        raw_paths = [os.fspath(path)]
+    else:
+        raw_paths = [os.fspath(item) for item in path]
+
+    case_paths = []
+    seen = set()
+
+    for raw_path in raw_paths:
+        matches = sorted(glob.glob(raw_path)) if glob.has_magic(raw_path) else [raw_path]
+        matches = [os.path.normpath(match) for match in matches if _is_case_path(match)]
+
+        if not matches:
+            raise FileNotFoundError(f"No case directories match '{raw_path}'")
+
+        for match in matches:
+            if match not in seen:
+                seen.add(match)
+                case_paths.append(match)
+
+    return case_paths
+
+
+def cmonitor(path, save = False, plot = False, table = True, neutrals = False, logfile_plots = False, sep = True, volavg = True):
+    case_paths = _expand_case_paths(path)
+
+    for index, case_path in enumerate(case_paths):
+        if index > 0:
+            print()
+
+        _cmonitor_case(
+            case_path,
+            save=save,
+            plot=plot,
+            table=table,
+            neutrals=neutrals,
+            logfile_plots=logfile_plots,
+            sep=sep,
+            volavg=volavg,
+        )
+
+
+def _cmonitor_case(path, save = False, plot = False, table = True, neutrals = False, logfile_plots = False, sep = True, volavg = True):
     """
     Produce convergence report of 2D Hermes-3 simulation
     Plots of process conditions at OMP and target 
@@ -24,7 +74,7 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False, l
     
     Inputs
     -----
-    path: path to case directory
+    path: case path, case paths, or wildcard pattern(s) resolving to case directories
     save: bool, save figure. saved by case name
     sep: bool, if true, show profiles at separatrix, otherwise  last sol ring
     plot: bool, show ploy
@@ -35,7 +85,7 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False, l
     if path == ".":
         casename = os.path.basename(os.getcwd())
     else:
-        casename = os.path.basename(path)
+        casename = os.path.basename(os.path.normpath(path))
     print(f"Reading {casename}")
     print("Calculating...", end = "")
 
@@ -162,7 +212,8 @@ def cmonitor(path, save = False, plot = False, table = True, neutrals = False, l
     # ddt
     for param in res:
 
-        res[param] = (res[param] * dv_noguards[None, :, :]) / np.sum(dv_noguards)   # Volume weighted
+        if volavg:
+            res[param] = (res[param] * dv_noguards[None, :, :]) / np.sum(dv_noguards)   # Volume weighted
         res[param] = np.sqrt(np.mean(res[param]**2, axis = (1,2)))  # RMS
         res[param] = np.convolve(res[param], np.ones(1), "same")    # Moving average with window of 1
 
@@ -415,20 +466,22 @@ if __name__ == "__main__":
     
     # Define arguments
     parser = argparse.ArgumentParser(description = "Case monitor")
-    parser.add_argument("path", type=str, help = "Path to case")
+    parser.add_argument("paths", nargs="+", help = "Case path(s) or wildcard pattern(s)")
     parser.add_argument("-p", action="store_true", help = "Plot?")
     parser.add_argument("-t", action="store_true", help = "Table?")
     parser.add_argument("-s", action="store_true", help = "Save figure?")
+    parser.add_argument("-a", action="store_true", help = "Make ddt() plots non-volume averaged?")
     parser.add_argument("-solverdiags", action="store_true", help = "Parse SNES console output?")
     parser.add_argument("-neutrals", action="store_true", help = "Alternative physics quantities")
     parser.add_argument("-sep", action="store_true", help = "Plot profiles at sep (T) or last sol ring (F)?")
     
     # Extract arguments and call function
     args = parser.parse_args()
-    cmonitor(args.path, 
+    cmonitor(args.paths, 
              plot = args.p, 
              table = args.t, 
              save = args.s, 
              neutrals = args.neutrals, 
              sep = args.sep,
-             logfile_plots = args.solverdiags)
+             logfile_plots = args.solverdiags,
+             volavg = not args.a)

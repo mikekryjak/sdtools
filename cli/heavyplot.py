@@ -39,6 +39,7 @@ def heavyplot(casename, save = True):
         
     ts = np.linspace(0, tlen-1, tres, dtype = int)
 
+
     colors = [plt.cm.get_cmap("Spectral_r", tres)(x) for x in range(tres)]
 
     toplot = {}
@@ -47,17 +48,23 @@ def heavyplot(casename, save = True):
         toplot[f"t={time_ms:.3f}ms"] = ds.isel(t=t, x = slice(2,-2))
 
     if save is True:
-        save_name = f"mon_{casename}"
+        save_name = f"mon_prof_{casename}"
     else:
         save_name = ""
+
+
 
     lineplot(
         toplot,
         params = ["Te", "Td",  "Ne", "Nd", "Rd+_ex"],
-        regions = ["omp", "outer_lower", "field_line"],
+        regions = ["omp", "outer_lower_target", "field_line"],
         colors = colors,
-        save_name = save_name
+        save_name = save_name,
+        combine_regions = True,
     )
+
+    if save is True:
+        print(f"Saved plot to {os.path.abspath(save_name)}.png")
 
     tend = tm.time()
     print(f"Executed in {tend-tstart:.1f} seconds")
