@@ -46,7 +46,7 @@ def _expand_case_paths(path):
     return case_paths
 
 
-def cmonitor(path, save = False, plot = False, table = True, neutrals = False, logfile_plots = False, sep = True, volavg = True):
+def cmonitor(path, save = True, plot = False, table = True, neutrals = False, logfile_plots = True, sep = True, volavg = False):
     case_paths = _expand_case_paths(path)
 
     for index, case_path in enumerate(case_paths):
