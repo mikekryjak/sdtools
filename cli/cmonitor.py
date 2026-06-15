@@ -469,19 +469,26 @@ if __name__ == "__main__":
     parser.add_argument("paths", nargs="+", help = "Case path(s) or wildcard pattern(s)")
     parser.add_argument("-p", action="store_true", help = "Plot?")
     parser.add_argument("-t", action="store_true", help = "Table?")
-    parser.add_argument("-s", action="store_true", help = "Save figure?")
+    parser.add_argument("-s", action="store_true", help = "Deprecated: saving is now on by default. Do not use.")
     parser.add_argument("-a", action="store_true", help = "Make ddt() plots non-volume averaged?")
-    parser.add_argument("-solverdiags", action="store_true", help = "Parse SNES console output?")
+    parser.add_argument("-solverdiags", action="store_true", help = "Deprecated: SNES console output is now parsed by default. Do not use.")
     parser.add_argument("-neutrals", action="store_true", help = "Alternative physics quantities")
     parser.add_argument("-sep", action="store_true", help = "Plot profiles at sep (T) or last sol ring (F)?")
     
     # Extract arguments and call function
     args = parser.parse_args()
-    cmonitor(args.paths, 
-             plot = args.p, 
-             table = args.t, 
-             save = args.s, 
-             neutrals = args.neutrals, 
+
+    # -s and -solverdiags are now on by default; warn if they are still used.
+    if args.s:
+        print("Note: -s is deprecated. Saving the figure is now on by default; please don't use -s.")
+    if args.solverdiags:
+        print("Note: -solverdiags is deprecated. SNES console output is now parsed by default; please don't use -solverdiags.")
+
+    cmonitor(args.paths,
+             plot = args.p,
+             table = args.t,
+             save = True,
+             neutrals = args.neutrals,
              sep = args.sep,
-             logfile_plots = args.solverdiags,
+             logfile_plots = True,
              volavg = not args.a)
