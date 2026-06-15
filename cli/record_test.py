@@ -10,7 +10,7 @@ import subprocess
 from datetime import datetime
 
 """
-record_run.py - Record one perftest run as a row in a CSV.
+record_test.py - Record one perftest run as a row in a CSV.
 
 For a case directory it reads run metadata from the case's BOUT.log file
 (originator, run start/finish time, wall-clock duration, Hermes-3 commit with
@@ -28,7 +28,7 @@ uninformative diffs against the partial recipes. Run metadata is read from
 BOUT.log.*.
 
 Usage:
-    record_run.py <case folder> --recipe SNES-MUMPS-1 [--csv path] [--note "..."]
+    record_test.py <case folder> --recipe SNES-MUMPS-1 [--csv path] [--note "..."]
 """
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -49,7 +49,7 @@ _LOG_TIME_FMT = "%a %b %d %H:%M:%S %Y"
 
 
 # ------------------------------------------------------------
-# Log parsing (from runstats.py)
+# Log parsing (from test_results.py)
 # ------------------------------------------------------------
 def find_log(casepath):
     logs = [f for f in os.listdir(casepath) if re.fullmatch(r"BOUT\.log\.\d+", f)]
@@ -247,7 +247,7 @@ def diff_recipe(recipe, case):
 # ------------------------------------------------------------
 # Record assembly
 # ------------------------------------------------------------
-def record_run(casepath, recipe_name, note=""):
+def record_test(casepath, recipe_name, note=""):
     casepath = os.path.abspath(casepath)
     logpath = find_log(casepath)
     if logpath is None:
@@ -320,7 +320,7 @@ if __name__ == "__main__":
                         help="Print the row but do not write to the CSV")
     args = parser.parse_args()
 
-    row = record_run(args.casepath, args.recipe, note=args.note)
+    row = record_test(args.casepath, args.recipe, note=args.note)
     print_row(row)
     if args.dry_run:
         print("\n(dry run: nothing written)")

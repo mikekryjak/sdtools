@@ -9,7 +9,7 @@ import subprocess
 from datetime import datetime
 
 """
-runstats.py - Summarise how/when/where a Hermes-3 run was produced.
+test_results.py - Summarise how/when/where a Hermes-3 run was produced.
 
 Reads metadata recorded in a simulation directory's BOUT.log.* file:
     - run start / finish time and wall-clock duration
@@ -33,8 +33,8 @@ from the binary path recorded in the log; BOUT++ is taken from
 as such in the output.
 
 Usage:
-    runstats.py [casepath]        # default: current directory
-    runstats.py [casepath] --git  # also resolve branches + commit dates
+    test_results.py [casepath]        # default: current directory
+    test_results.py [casepath] --git  # also resolve branches + commit dates
 """
 
 # Log datetime format, e.g. "Mon Jun 15 11:49:28 2026"
@@ -155,7 +155,7 @@ def _fmt_duration(seconds):
     return " ".join(parts)
 
 
-def runstats(casepath, use_git=True):
+def test_results(casepath, use_git=True):
     casepath = os.path.abspath(casepath)
     logpath = find_log(casepath)
     if logpath is None:
@@ -235,5 +235,5 @@ if __name__ == "__main__":
                         help="Use only information found in the simulation directory")
     args = parser.parse_args()
 
-    info = runstats(args.casepath, use_git=args.git)
+    info = test_results(args.casepath, use_git=args.git)
     print_report(info)
