@@ -32,8 +32,7 @@ Usage:
 """
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-# Default to the current working directory, not the script's own directory.
-DEFAULT_CSV = "run_records.csv"
+DEFAULT_CSV = os.path.join(SCRIPT_DIR, "run_records.csv")
 
 # Settings sections compared against the recipe.
 RECIPE_SECTIONS = ("solver", "petsc")
