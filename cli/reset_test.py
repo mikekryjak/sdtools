@@ -16,9 +16,21 @@ known set of BOUT++ restart files (BOUT.restart.*). This tool copies those
 restart files up into the case directory, overwriting any existing ones, so the
 case is reset to its baseline starting point ready to be re-run.
 
+It also deletes output dump files (BOUT.dmp.*), log files (BOUT.log.*) and
+any .pid files from the case directory, after asking for confirmation.
+
 Usage:
     reset_test.py <case folder>
 """
+
+
+def find_output_files(casepath):
+    """Return sorted list of dump, log and .pid files to delete from casepath."""
+    patterns = ["BOUT.dmp.*", "BOUT.log.*", "*.pid"]
+    files = []
+    for pattern in patterns:
+        files.extend(glob.glob(os.path.join(casepath, pattern)))
+    return sorted(set(files))
 
 
 def read_sim_time(path):
@@ -60,6 +72,23 @@ def reset_test(casepath):
 
     # Simulation time currently in the case (before we overwrite it).
     prev_time = read_sim_time(casepath)
+
+    # Warn about and confirm deletion of dump, log and .pid files.
+    output_files = find_output_files(casepath)
+    if output_files:
+        print(
+            f"WARNING: this will delete {len(output_files)} dump/log/.pid file(s) "
+            f"from '{casepath}':"
+        )
+        for path in output_files:
+            print(f"  {os.path.basename(path)}")
+        answer = input("Delete these files and reset the case? [yes/no] ").strip().lower()
+        if answer not in ("y", "yes"):
+            print("Aborted: no files were deleted or reset.")
+            return
+        for path in output_files:
+            os.remove(path)
+        print(f"Deleted {len(output_files)} dump/log/.pid file(s).")
 
     for src in restarts:
         shutil.copy2(src, os.path.join(casepath, os.path.basename(src)))
