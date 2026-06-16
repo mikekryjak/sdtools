@@ -4,7 +4,6 @@ import argparse
 import csv
 import getpass
 import os
-import platform
 import re
 import subprocess
 from datetime import datetime
@@ -122,29 +121,23 @@ def _git_ok(repo, *args):
         return False
 
 
-def git_lookup(repo, commit):
-    """Commit date and best-effort branch. A commit can live on many branches,
-    so prefer the currently checked-out branch when it contains the commit;
-    otherwise list (a few of) the branches that contain it."""
-    if not repo or not commit:
-        return {"branch": None, "date": None}
-    date = _git(repo, "show", "-s", "--format=%ci", commit)
+def git_commit_date(repo, commit):
+    """Author/commit date of a commit, or None if it can't be resolved.
 
-    branch = None
-    head_branch = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")  # branch name or "HEAD"
-    if head_branch and head_branch != "HEAD" \
-            and _git_ok(repo, "merge-base", "--is-ancestor", commit, "HEAD"):
-        branch = head_branch
-    if not branch:
-        contains = _git(repo, "branch", "--contains", commit, "--format=%(refname:short)")
-        if contains:
-            names = [b.strip() for b in contains.splitlines()
-                     if b.strip() and not b.strip().startswith("(")]
-            if len(names) > 3:
-                branch = ", ".join(names[:3]) + f", +{len(names) - 3} more"
-            elif names:
-                branch = ", ".join(names)
-    return {"branch": branch, "date": date}
+    The branch a run used is deliberately not inferred from the commit: a
+    commit can live on many branches and is the tip of none, so the branch
+    is taken from --branch (or the current checkout) instead."""
+    if not repo or not commit:
+        return None
+    return _git(repo, "show", "-s", "--format=%ci", commit)
+
+
+def current_branch(repo):
+    """The repo's currently checked-out branch, or None if detached/unknown."""
+    if not repo:
+        return None
+    head = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")  # branch name or "HEAD"
+    return head if head and head != "HEAD" else None
 
 
 # ------------------------------------------------------------
@@ -242,7 +235,7 @@ def diff_recipe(recipe, case):
 # ------------------------------------------------------------
 # Record assembly
 # ------------------------------------------------------------
-def record_test(casepath, recipe_path, note=""):
+def record_test(casepath, recipe_path, note="", branch=None):
     casepath = os.path.abspath(casepath)
     logpath = find_log(casepath)
     if logpath is None:
@@ -250,7 +243,10 @@ def record_test(casepath, recipe_path, note=""):
 
     info = parse_log(logpath)
     hermes_repo = find_repo_root(info["binary"])
-    hg = git_lookup(hermes_repo, info["hermes_commit"])
+    commit_date = git_commit_date(hermes_repo, info["hermes_commit"])
+    # The branch isn't recorded in BOUT.log, so it can't be recovered from the
+    # commit. Use the caller-supplied --branch, else the repo's current checkout.
+    hermes_branch = branch or current_branch(hermes_repo)
 
     recipe = load_recipe(recipe_path)
     # Identify the recipe in the CSV by its file name, without extension.
@@ -260,16 +256,16 @@ def record_test(casepath, recipe_path, note=""):
 
     row = {
         "case": os.path.basename(casepath.rstrip(os.sep)),
-        "originator": _originator(),
+        "originator": _originator(hermes_repo),
         "run_started": info["run_started"] or "",
         "run_time_str": info["run_time_str"] or "",
         "run_time_s": "" if info["wall_seconds"] is None else int(round(info["wall_seconds"])),
         "recipe": recipe_name,
         "diffs": "; ".join(diffs),
         "note": note,
-        "hermes_branch": hg["branch"] or "",
+        "hermes_branch": hermes_branch or "",
         "hermes_commit": info["hermes_commit"] or "",
-        "hermes_commit_date": hg["date"] or "",
+        "hermes_commit_date": commit_date or "",
         "bout_version": info["bout_version"] or "",
         "bout_commit": info["bout_commit"] or "",
         "recorded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -277,10 +273,13 @@ def record_test(casepath, recipe_path, note=""):
     return row
 
 
-def _originator():
-    user = getpass.getuser()
-    host = platform.node()
-    return f"{user}@{host}" if (user and host) else (user or host or "")
+def _originator(repo=None):
+    """Email of the active git account (repo-local config wins over global),
+    falling back to the OS login name if git has no email configured."""
+    email = _git(repo, "config", "user.email") if repo else None
+    if not email:
+        email = _git(os.getcwd(), "config", "user.email")  # global / cwd repo
+    return email or getpass.getuser()
 
 
 def append_csv(row, csv_path):
@@ -313,14 +312,27 @@ if __name__ == "__main__":
     parser.add_argument("--csv", default=DEFAULT_CSV,
                         help=f"CSV file to append to (default: ./{DEFAULT_CSV} in the current directory)")
     parser.add_argument("--note", default="", help="Optional free-text note for this run")
+    parser.add_argument("--branch",
+                        help="Hermes-3 branch the run was on (not recoverable from "
+                             "the log). Defaults to the hermes repo's current checkout.")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print the row but do not write to the CSV")
+    parser.add_argument("-y", "--yes", action="store_true",
+                        help="Skip the branch confirmation prompt")
     args = parser.parse_args()
 
-    row = record_test(args.casepath, args.recipe, note=args.note)
+    row = record_test(args.casepath, args.recipe, note=args.note, branch=args.branch)
     print_row(row)
     if args.dry_run:
         print("\n(dry run: nothing written)")
     else:
+        # Confirm the branch before writing: it can't be checked against the log,
+        # so a wrong --branch (or stale checkout) would silently be recorded.
+        if not args.yes:
+            shown = row["hermes_branch"] or "(unknown)"
+            reply = input(f"\nRecord this run as hermes branch '{shown}'? [y/N] ")
+            if reply.strip().lower() not in ("y", "yes"):
+                print("Aborted: nothing written.")
+                raise SystemExit(1)
         append_csv(row, args.csv)
         print(f"\nAppended to {os.path.abspath(args.csv)}")
