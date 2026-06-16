@@ -17,10 +17,11 @@ For a case directory it reads run metadata from the case's BOUT.log file
 branch and date from the local git repo, and BOUT++ version and commit), and
 describes the solver settings relative to a named base recipe.
 
-The base recipe is given with --recipe NAME (recipes live in ./recipes). Every
+The base recipe is given with --recipe PATH (a path to the recipe file). Every
 option under [solver] and [petsc] in the case's BOUT.inp is compared with that
 recipe; each option that differs, is missing, or is extra is recorded in the
-'diffs' column as "section:key: <recipe value> -> <case value>".
+'diffs' column as "section:key: <recipe value> -> <case value>". The recipe is
+identified in the CSV by its file name without extension.
 
 Solver settings are read from BOUT.inp (the input the run used) rather than
 BOUT.settings, which dumps every resolved default and so produces large,
@@ -28,12 +29,12 @@ uninformative diffs against the partial recipes. Run metadata is read from
 BOUT.log.*.
 
 Usage:
-    record_test.py <case folder> --recipe SNES-MUMPS-1 [--csv path] [--note "..."]
+    record_test.py <case folder> --recipe recipes/SNES-MUMPS-1.txt [--csv path] [--note "..."]
 """
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-RECIPES_DIR = os.path.join(SCRIPT_DIR, "recipes")
-DEFAULT_CSV = os.path.join(SCRIPT_DIR, "run_records.csv")
+# Default to the current working directory, not the script's own directory.
+DEFAULT_CSV = "run_records.csv"
 
 # Settings sections compared against the recipe.
 RECIPE_SECTIONS = ("solver", "petsc")
@@ -193,16 +194,10 @@ def _norm_val(val):
         return low
 
 
-def load_recipe(name):
-    path = os.path.join(RECIPES_DIR, name + ".txt")
-    if not os.path.isfile(path):
-        available = sorted(os.path.splitext(f)[0]
-                           for f in os.listdir(RECIPES_DIR) if f.endswith(".txt"))
-        raise FileNotFoundError(
-            f"Recipe '{name}' not found at {path}.\n"
-            f"Available recipes: {', '.join(available)}"
-        )
-    with open(path) as fh:
+def load_recipe(recipe_path):
+    if not os.path.isfile(recipe_path):
+        raise FileNotFoundError(f"Recipe file not found: {recipe_path}")
+    with open(recipe_path) as fh:
         return parse_ini(fh.read(), RECIPE_SECTIONS)
 
 
@@ -247,7 +242,7 @@ def diff_recipe(recipe, case):
 # ------------------------------------------------------------
 # Record assembly
 # ------------------------------------------------------------
-def record_test(casepath, recipe_name, note=""):
+def record_test(casepath, recipe_path, note=""):
     casepath = os.path.abspath(casepath)
     logpath = find_log(casepath)
     if logpath is None:
@@ -257,7 +252,9 @@ def record_test(casepath, recipe_name, note=""):
     hermes_repo = find_repo_root(info["binary"])
     hg = git_lookup(hermes_repo, info["hermes_commit"])
 
-    recipe = load_recipe(recipe_name)
+    recipe = load_recipe(recipe_path)
+    # Identify the recipe in the CSV by its file name, without extension.
+    recipe_name = os.path.splitext(os.path.basename(recipe_path))[0]
     case_opts = load_case_input(casepath)
     diffs = diff_recipe(recipe, case_opts)
 
@@ -312,9 +309,9 @@ if __name__ == "__main__":
     )
     parser.add_argument("casepath", help="Path to the case folder")
     parser.add_argument("--recipe", required=True,
-                        help="Name of the base solver recipe (see ./recipes)")
+                        help="Path to the base solver recipe file")
     parser.add_argument("--csv", default=DEFAULT_CSV,
-                        help=f"CSV file to append to (default: {DEFAULT_CSV})")
+                        help=f"CSV file to append to (default: ./{DEFAULT_CSV} in the current directory)")
     parser.add_argument("--note", default="", help="Optional free-text note for this run")
     parser.add_argument("--dry-run", action="store_true",
                         help="Print the row but do not write to the CSV")
@@ -326,4 +323,4 @@ if __name__ == "__main__":
         print("\n(dry run: nothing written)")
     else:
         append_csv(row, args.csv)
-        print(f"\nAppended to {args.csv}")
+        print(f"\nAppended to {os.path.abspath(args.csv)}")
