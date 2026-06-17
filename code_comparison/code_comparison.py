@@ -366,8 +366,9 @@ class SOLPSdata:
                 else:
                     regions[region].index = regions[region]["Spol"] 
                     
-                for param in ["Vd+", "NVd+"]:
-                    regions[region][param] = regions[region][param] * -1
+                # Now changed in case
+                # for param in ["Vd+", "NVd+"]:
+                #     regions[region][param] = regions[region][param] * -1
                     
             ## ABSOLUTE MOMENTUM AT RADIAL SURFACES
             if "outer_lower_sol" in region or "inner_lower_sol" in region:
@@ -650,6 +651,7 @@ class Hermesdata:
 
 def lineplot_compare(
     cases,
+    data_dicts = None,
     mode = "log",
     colors = ["black", "red", "black", "red", "navy", "limegreen", "firebrick",  "limegreen", "magenta","cyan", "navy"],
     params = ["Td+", "Te", "Ta", "Ne", "Nd"],
@@ -665,6 +667,36 @@ def lineplot_compare(
     title_append = ""
     
     ):
+
+    resolved_cases = {}
+    for case_label, entry in cases.items():
+        if "data" in entry:
+            resolved_cases[case_label] = dict(entry)
+            continue
+
+        if "name" not in entry:
+            raise ValueError(
+                f"Case '{case_label}' must define either 'data' or 'name'"
+            )
+        if data_dicts is None:
+            raise ValueError(
+                f"Case '{case_label}' uses 'name', but no data_dicts were provided"
+            )
+
+        if "SOLPS" in case_label:
+            data_key = "SOLPS"
+        elif "SOLEDGE" in case_label:
+            data_key = "SOLEDGE2D"
+        elif "Hermes" in case_label:
+            data_key = "Hermes-3"
+        else:
+            raise ValueError(f"Unknown case type for {case_label}")
+
+        resolved_entry = dict(entry)
+        resolved_entry["data"] = data_dicts[data_key][entry["name"]]
+        resolved_cases[case_label] = resolved_entry
+
+    cases = resolved_cases
     
     marker = "o"
     ms = 0
@@ -673,23 +705,83 @@ def lineplot_compare(
 
         
     set_yscales = {
-    "omp" : {
-        "Td+": "log", "Te": "log", "Ta" : "log", "Tm" : "log", "Tn": "log",
-        "Ne": "log", "Nd": "log", "Na": "log", "Nm": "log", "Nn": "log",
-        "Pe":"log", "Pd+":"log", "NVd+":"log", "Vd+": "log", "M": "linear",
+        "omp": {
+            "Td+": "log",
+            "Te": "log",
+            "Ta": "log",
+            "Tm": "log",
+            "Tn": "log",
+            "Ne": "log",
+            "Nd": "log",
+            "Na": "log",
+            "Nm": "log",
+            "Nn": "log",
+            "Pe": "log",
+            "Pd+": "log",
+            "NVd+": "log",
+            "Vd+": "linear",
+            "M": "linear",
         },
-    "imp" : {
-        "Td+": "log", "Te": "log", "Ta" : "log", "Tm" : "log",
-        "Ne": "log", "Nd": "log", "Na" : "log", "Nm": "log", 
-        "Pe":"log", "Pd+":"log", "NVd+":"log", "Vd+": "log", "M": "linear"},
-    "outer_lower_sol" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "linear", "Nd": "log"},
-    "outer_upper_sol" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "linear", "Nd": "log"},
-    "outer_fieldline" : {"Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Ne": "log", "Nd": "log"},
-    "outer_fieldline_parallel" : {
-        "Td+": "linear", "Te": "linear", "Td":"linear","Ta":"linear", "Tn":"linear","Tm":"linear",
-        "Ne": "log", "Nd": "log", "Na":"log", "Nm":"log", "Nn":"log",
-        "Pe": "linear", "Pd+": "linear", "Pa": "log", "Pn":"log", "Pm":"log",
-        "M": "linear", "NVd+": "linear", "Vd+": "linear"},
+        "imp": {
+            "Td+": "log",
+            "Te": "log",
+            "Ta": "log",
+            "Tm": "log",
+            "Ne": "log",
+            "Nd": "log",
+            "Na": "log",
+            "Nm": "log",
+            "Pe": "log",
+            "Pd+": "log",
+            "NVd+": "log",
+            "Vd+": "log",
+            "M": "linear",
+        },
+        "outer_lower_sol": {
+            "Td+": "linear",
+            "Te": "linear",
+            "Td": "linear",
+            "Ta": "linear",
+            "Ne": "linear",
+            "Nd": "log",
+        },
+        "outer_upper_sol": {
+            "Td+": "linear",
+            "Te": "linear",
+            "Td": "linear",
+            "Ta": "linear",
+            "Ne": "linear",
+            "Nd": "log",
+        },
+        "outer_fieldline": {
+            "Td+": "linear",
+            "Te": "linear",
+            "Td": "linear",
+            "Ta": "linear",
+            "Ne": "log",
+            "Nd": "log",
+        },
+        "outer_fieldline_parallel": {
+            "Td+": "linear",
+            "Te": "linear",
+            "Td": "linear",
+            "Ta": "linear",
+            "Tn": "linear",
+            "Tm": "linear",
+            "Ne": "log",
+            "Nd": "log",
+            "Na": "log",
+            "Nm": "log",
+            "Nn": "log",
+            "Pe": "linear",
+            "Pd+": "linear",
+            "Pa": "log",
+            "Pn": "log",
+            "Pm": "log",
+            "M": "linear",
+            "NVd+": "linear",
+            "Vd+": "linear",
+        },
     }
     set_yscales["inner_lower_sol"] = set_yscales["outer_lower_sol"]
     set_yscales["inner_upper_sol"] = set_yscales["outer_upper_sol"]
