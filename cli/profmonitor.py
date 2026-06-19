@@ -56,7 +56,7 @@ def heavyplot(casename, save = True):
 
     lineplot(
         toplot,
-        params = ["Te", "Td",  "Ne", "Nd", "Rd+_ex"],
+        params = ["Te", "Td",  "Ne", "Nd", "NVd+", "NVd"],
         regions = ["omp", "outer_lower_target", "field_line"],
         colors = colors,
         save_name = save_name,
