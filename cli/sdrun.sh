@@ -9,6 +9,7 @@ Usage: ./run.sh -s=1|2|3 CASE [-restart] [-append] [extra BOUT options...]
   -s=2      Run on cores 12-21
   -s=3      Run on cores 22-31
   -b=NAME   Hermes-3 build folder to use (default: build-mc-master)
+  -p=PATH   Path to the Hermes-3 executable to use (overrides -b)
   CASE      Case directory: a path relative to your current directory, or an absolute path
   -restart  Pass restart to Hermes/BOUT++
   -append   Pass append to Hermes/BOUT++ (implies restart)
@@ -17,6 +18,7 @@ EOF
 
 slot=""
 build="build-mc-master"
+exe_path=""
 case_arg=""
 pass_restart=false
 pass_append=false
@@ -48,6 +50,19 @@ while [[ $# -gt 0 ]]; do
         exit 1
       fi
       build="$2"
+      shift 2
+      ;;
+    -p=*|--path=*)
+      exe_path="${1#*=}"
+      shift
+      ;;
+    -p|--path)
+      if [[ $# -lt 2 ]]; then
+        echo "error: $1 requires a value" >&2
+        usage >&2
+        exit 1
+      fi
+      exe_path="$2"
       shift 2
       ;;
     -restart|restart)
@@ -121,11 +136,25 @@ fi
 
 case_name="$(basename "$case_dir")"
 hermes_root="${hermes:-/home/mike/work/hermes-3}"
-exe="$hermes_root/$build/hermes-3"
+
+if [[ -n "$exe_path" ]]; then
+  # Explicit executable path overrides the build folder.
+  if [[ "$exe_path" = /* ]]; then
+    exe="$exe_path"
+  else
+    exe="$PWD/$exe_path"
+  fi
+  build_dir="$(dirname "$exe")"
+  build_label="$exe"
+else
+  build_dir="$hermes_root/$build"
+  exe="$build_dir/hermes-3"
+  build_label="$build"
+fi
 
 # Report what the build was actually compiled against, not the repo's current
 # checkout. CMake's git-data mechanism regenerates these on every build.
-git_data="$hermes_root/$build/CMakeFiles/git-data"
+git_data="$build_dir/CMakeFiles/git-data"
 if [[ -f "$git_data/head-ref" ]]; then
   commit="$(cut -c1-7 "$git_data/head-ref" 2>/dev/null || echo '?')"
 else
@@ -194,7 +223,7 @@ printf '\n'
 printf '  %s┌─ %sRunning: %s%s%s\n' "$c" "${r}${d}" "${r}${c}${b}" "${case_name}" "$r"
 pathrow "Path" "${case_dir}"
 row "Cores"  "${cores} ${d}(slot ${slot})${r}"
-row "Build"  "${build} ${d}@${r} ${y}${branch}${r}, ${y}${commit}${r}"
+row "Build"  "${build_label} ${d}@${r} ${y}${branch}${r}, ${y}${commit}${r}"
 row "Flags"  "${flags}"
 printf '  %s└─%s\n' "$c" "$r"
 printf '\n'
