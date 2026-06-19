@@ -906,7 +906,7 @@ def lineplot_compare(
                         input_dict = cases[name]
                         custom_kwargs = {}
                         for val in input_dict:
-                            if val != "data": custom_kwargs[val] = input_dict[val]
+                            if val not in ("data", "name"): custom_kwargs[val] = input_dict[val]
                         style_kwargs = {**styles[code], **custom_kwargs, **atom_override}
                         style_kwargs = {**style_kwargs, **atom_override}
                         
