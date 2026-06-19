@@ -171,7 +171,7 @@ class SOLPScase():
         psel["inner_lower_target"] = 1
         psel["inner_upper_target"] = upper_break -2
         psel["outer_upper_target"] = upper_break+1
-        psel["outer_lower_target"] = self.g["nx"] - 1
+        psel["outer_lower_target"] = self.g["nx"] - 2  # last DOMAIN cell (nx-1 is the guard)
 
         psel["inner_lower_target_guard"] = 1
         psel["inner_upper_target_guard"] = upper_break -1
