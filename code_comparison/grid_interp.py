@@ -48,7 +48,6 @@ import ipywidgets as widgets
 
 
 class TransplantFromSOLPS:
-
     def __init__(self, hermes_ds, solps_path):
         self.hermes_ds = hermes_ds
         self.solps_case = SOLPScase(solps_path)
@@ -189,11 +188,11 @@ class TransplantFromSOLPS:
 
         self.hregion_sel = hregion_sel
         self.hgroup_sel = hgroup_sel
-        
+
     def get_flux_coordinates(self):
         ds = self.hermes_ds
         m = ds.metadata
-        
+
         ## Set up X and Y
         hx = ds["psi_poloidal"].values
         hy = ds["theta_idx"].values
@@ -202,13 +201,12 @@ class TransplantFromSOLPS:
         hy = np.repeat(hy, hx.shape[0], axis=0)
         hx = hx.squeeze()
         hy = hy.squeeze()
-        
 
     def plot_hermes_regions_poloidal(self, ax, regions):
 
         ds = self.hermes_ds
         m = ds.metadata
-        
+
         ## Set up X and Y
         x = ds["psi_poloidal"].values
         y = ds["theta_idx"].values
@@ -225,7 +223,7 @@ class TransplantFromSOLPS:
         for i, key in enumerate(regions):
             i += 1
             data.data[regions[key]] = i
-            
+
         ## Colormap
         colors = list(mpl.colormaps["turbo"](np.linspace(0, 1, len(regions.keys()))))
         cmap = mpl.colors.ListedColormap(["white"] + colors)
@@ -241,18 +239,17 @@ class TransplantFromSOLPS:
             vmin=0,
             vmax=len(regions.keys()),
         )
-        
+
         ax.set_xlim(0.12, 0.82)
         ax.set_ylim(-0.86, 0.86)
-        
+
     def plot_hermes_regions_flux(self, ax, regions):
-        
+
         ## Colormap
         colors = list(mpl.colormaps["turbo"](np.linspace(0, 1, len(regions.keys()))))
         cmap = mpl.colors.ListedColormap(["white"] + colors)
-        
-        for i, region in enumerate(regions):
 
+        for i, region in enumerate(regions):
             slices = regions[region]
             x_region = x[slices]
             y_region = y[slices]
@@ -270,4 +267,3 @@ class TransplantFromSOLPS:
                 alpha=0.8,
                 shading="nearest",
             )
-        

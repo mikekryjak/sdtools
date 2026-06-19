@@ -10,8 +10,8 @@ from datetime import datetime
 import pandas as pd
 import fnmatch
 
+
 def is_finished(key):
-        
     """
     -> is_finished(path, key, quiet = False)
     Will print status of all cases with names matching key in path
@@ -24,7 +24,7 @@ def is_finished(key):
     """
     if key == None:
         key = "*"
-    #key = "*"+str(key)+"*"
+    # key = "*"+str(key)+"*"
     key = str(key)
     folders = os.listdir(os.getcwd())
     path = os.getcwd()
@@ -34,9 +34,8 @@ def is_finished(key):
     found = False
 
     for folder in folders:
-
         # Check it's not a file
-        if fnmatch.fnmatch(folder, key):# and "BOUT.inp" in os.path.join(path,folder):
+        if fnmatch.fnmatch(folder, key):  # and "BOUT.inp" in os.path.join(path,folder):
             found = True
             path_folder = path + os.path.sep + folder
 
@@ -45,7 +44,7 @@ def is_finished(key):
             found_dmp = False
             found_inp = False
             boutdata_ok = False
-            
+
             # Make sure we have results and input files
             for file in files:
                 if "dmp" in file:
@@ -61,60 +60,67 @@ def is_finished(key):
                     print("Tried to read a file that's not a case: {}".format(folder))
 
             if boutdata_ok == True:
-                if data["options"]["timestep"] * data["options"]["nout"] == data["outputs"]["tt"]:
+                if (
+                    data["options"]["timestep"] * data["options"]["nout"]
+                    == data["outputs"]["tt"]
+                ):
                     status = "Finished"
                 else:
-                    
-                    status = "Not finished: {:.0%} complete".format(data["outputs"]["tt"]/(data["options"]["nout"]*data["options"]["timestep"]))
-                    
-                    
+                    status = "Not finished: {:.0%} complete".format(
+                        data["outputs"]["tt"]
+                        / (data["options"]["nout"] * data["options"]["timestep"])
+                    )
+
             if boutdata_ok == False:
                 status = "Error"
             if found_dmp == False:
                 status = "Not started"
             if found_inp == False:
                 status = "Missing input file"
-                
+
             # Find date modified
             mtime = os.path.getmtime(folder)
             mtime = datetime.fromtimestamp(mtime)
-           
+
             mtimes.append(mtime)
             cases.append(folder)
             statuses.append(status)
-            
+
     if found == False:
         print("Could not find any cases matching {}".format(key))
-        
+
     if __name__ == "__main__":
-        # Create df to sort by time modified      
+        # Create df to sort by time modified
         out = pd.DataFrame()
         out["mtime"] = mtimes
         out["case"] = cases
         out["status"] = statuses
-        out = out.sort_values(by="mtime", ascending = False)
+        out = out.sort_values(by="mtime", ascending=False)
 
         for i in range(len(out)):
             row = out.iloc[i]
 
-            print(f'{row["mtime"].strftime("%d/%m/%Y %H:%M")} || {row["case"]} || {row["status"]}')
-    
-    # If called as a function, return just the status.        
+            print(
+                f"{row['mtime'].strftime('%d/%m/%Y %H:%M')} || {row['case']} || {row['status']}"
+            )
+
+    # If called as a function, return just the status.
     else:
         if len(statuses) > 1:
             print("Found multiple files, please provide unique key")
         else:
-            return(status)
-        
-        
-#------------------------------------------------------------
+            return status
+
+
+# ------------------------------------------------------------
 # PARSER
-#------------------------------------------------------------
+# ------------------------------------------------------------
 if __name__ == "__main__":
-    
     # Define arguments
-    parser = argparse.ArgumentParser(description = "Prints case status")
-    parser.add_argument("key", type=str, nargs = "?", help = "Only return cases with this in name")
+    parser = argparse.ArgumentParser(description="Prints case status")
+    parser.add_argument(
+        "key", type=str, nargs="?", help="Only return cases with this in name"
+    )
 
     # Extract arguments
     args = parser.parse_args()

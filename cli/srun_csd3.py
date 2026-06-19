@@ -11,14 +11,14 @@ import time
 
 # https://realpython.com/python-subprocess/
 
-parser = argparse.ArgumentParser(description = "Run case")
-parser.add_argument("casepath", type=str, help = "Case to run")
-parser.add_argument("-b", type=str, help = "Branch (build folder name)")
-parser.add_argument("-c", type=str, help = "Number of cores")
-parser.add_argument("-N", type=str, help = "Number of nodes")
-parser.add_argument("-t", type=str, help = "Time in hh:mm:ss")
-parser.add_argument("-restart", action="store_true", help = "Restart?")
-parser.add_argument("-append", action="store_true", help = "Append?")
+parser = argparse.ArgumentParser(description="Run case")
+parser.add_argument("casepath", type=str, help="Case to run")
+parser.add_argument("-b", type=str, help="Branch (build folder name)")
+parser.add_argument("-c", type=str, help="Number of cores")
+parser.add_argument("-N", type=str, help="Number of nodes")
+parser.add_argument("-t", type=str, help="Time in hh:mm:ss")
+parser.add_argument("-restart", action="store_true", help="Restart?")
+parser.add_argument("-append", action="store_true", help="Append?")
 
 
 args = parser.parse_args()
@@ -27,11 +27,11 @@ args = parser.parse_args()
 # if args.b == None:
 #     print("Please specify branch with --b <branch_name>")
 #     quit()
-    
+
 if args.c == None:
     print("Please specify number of cores with --c <core_count>")
     quit()
-    
+
 if args.N == None:
     print("Please specify number of nodes with --n <core_count>")
     quit()
@@ -51,12 +51,11 @@ if args.restart == False and args.append == False:
 
 jobname = casename
 nodes = int(args.N)
-cores_per_node = int(int(args.c)/nodes)
+cores_per_node = int(int(args.c) / nodes)
 partition = "cclake"
 time = args.t
 
-slurmcommand = \
-f"""#!/bin/bash 
+slurmcommand = f"""#!/bin/bash 
 #SBATCH -A UKAEA-AP002-CPU
 #SBATCH -J {jobname}
 #SBATCH -N {nodes}
@@ -71,7 +70,7 @@ f"""#!/bin/bash
 #SBATCH --mail-user=mike.kryjak@york.ac.uk        # Where to send mail
 
 source /home/ir-kryj2/bout-build-scripts/bout.env
-mpirun -n {nodes*cores_per_node} /home/ir-kryj2/BOUT-7152948/BOUT-dev/build/examples/hasegawa-wakatani-3d/hw3d -d {abscasepath} {restartappend}
+mpirun -n {nodes * cores_per_node} /home/ir-kryj2/BOUT-7152948/BOUT-dev/build/examples/hasegawa-wakatani-3d/hw3d -d {abscasepath} {restartappend}
 
 """
 

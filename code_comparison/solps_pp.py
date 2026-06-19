@@ -49,25 +49,23 @@ import ipywidgets as widgets
 # from solps_python_scripts.read_b2fgmtry import read_b2fgmtry
 
 
-
-class SOLPScase():
-    def __init__(self, path, path_b2fgmtry = None):
-        
+class SOLPScase:
+    def __init__(self, path, path_b2fgmtry=None):
         """
         Note that everything in the balance file is in the Y, X convention unlike the
         X, Y convention in the results. This is not intended and it reads as X, Y in MATLAB.
         You MUST transpose everything so that it's Y,X (large then small number) so it's consistent with geometry
         which is the opposite. This should already be done in this script.
-        
+
         NOTES ON GUARD CELLS IN SOLPS
-        - Total cell count is nx+2, ny+2. Guard cells are there for upper targets but somehow don't get counted (?!). 
+        - Total cell count is nx+2, ny+2. Guard cells are there for upper targets but somehow don't get counted (?!).
           All of the balance file results are with guard cells and this function plots them by default.
-          Their position/mask can be found in resignore available in b2fgmtry. 
+          Their position/mask can be found in resignore available in b2fgmtry.
         - Guard cells are always really tiny!!!
-        
+
         Guide on radiation from DM
-        b2stel_she_bal in balance.nc gives you the radiation from each ionisation state. 
-        You can get the species indeces from the string matrix "species" 
+        b2stel_she_bal in balance.nc gives you the radiation from each ionisation state.
+        You can get the species indeces from the string matrix "species"
         (for Ryoko's case I think it's 4:21 for the neon ions but do check)
         numbers are in W, so divide by "vol" to get W/m3
 
@@ -80,62 +78,62 @@ class SOLPScase():
         - The above shouldn't matter, so below we align the two
 
         There is a routine for this in sdtools.code_comparison.grid_interp.TransplantFromSOLPS.align_psi
-        
+
         Balance file variables
         ------------
-        
+
         FLUXES
         ------------
         ALL ARE IN W OR S^-1 and defined at LHS cell edge
         Many variable names are constructed from locations/concepts defined in the manual (e.g. emel)
         ALL fluxes have dimensions: y (poloidal), x (radial), direction (0=pol,1=rad), species
-        
+
         Particle fluxes:
-        fna is particle flux. fna_pll is the parallel advection. 
-        
+        fna is particle flux. fna_pll is the parallel advection.
+
         Heat fluxes:
         The third dimension is the direction, 0 = poloidal, 1 = radial
         fhi_32 is the convective ion heat flux (52 is only if you use total energy)
         fhi_cond is conductive
         fhe_thermj is the parallel current electron heat flux
         Rest are to do with drifts or currents
-        
+
         fht = total heat flux = fhe_cond + 5/3*fhe_32 + fhi_cond + 5/3*fhi_32 + fhe_thermj
-        
+
         BALANCES
         ----------
         b2stel_she_bal: radiation losses due to atomic processes in W/m3. Third dimension is species index.
         eirene_mc_emel_she_bal: Electron energy loss/gain due to interaction with molecules. 3rd dim is strata
         eirene_mc_empl_shi_bal: Ion energy loss/gain due to interaction with molecules. 3rd dim is strata
-        
+
         eirene_mc_papl_sna_bal: particle source due to ionisation in s^-1. 3rd dim species (second is EIRENE neutral), 4d dim strata
-        
+
         """
         self.path = path
         raw_balance = nc.Dataset(os.path.join(path, "balance.nc"))
-        
+
         ## Need to transpose to get over the backwards convention compared to MATLAB
         bal = {}
         for key in raw_balance.variables:
             bal[key] = raw_balance[key][:].transpose()
-            
+
         self.bal = bal
-        
+
         raw_balance.close()
 
         self.params = list(bal.keys())
         self.params.sort()
         self.params_original = self.params.copy()
-        
+
         # Set up geometry
-        
+
         g = self.g = {}
-        
+
         # Get cell centre coordinates
         R = self.bal["R"] = self.g["R"] = np.mean(bal["crx"], axis=2)
         Z = self.bal["Z"] = self.g["Z"] = np.mean(bal["cry"], axis=2)
         self.g["hx"] = bal["hx"]
-        
+
         if "hy" in bal:
             self.g["hy"] = bal["hy"]
         else:
@@ -145,47 +143,59 @@ class SOLPScase():
         self.g["nx"] = self.g["crx"].shape[0]
         self.g["ny"] = self.g["crx"].shape[1]
         self.g["vol"] = self.bal["vol"]
-        
-        self.bal["Btot"] = self.g["Btot"] = bal["bb"][:,:,3]
-        self.bal["Bpol"] = self.g["Bpol"] = bal["bb"][:,:,0]
-        self.bal["Btor"] = self.g["Btor"] = np.sqrt(self.g["Btot"]**2 - self.g["Bpol"]**2) 
-        
-        
+
+        self.bal["Btot"] = self.g["Btot"] = bal["bb"][:, :, 3]
+        self.bal["Bpol"] = self.g["Bpol"] = bal["bb"][:, :, 0]
+        self.bal["Btor"] = self.g["Btor"] = np.sqrt(
+            self.g["Btot"] ** 2 - self.g["Bpol"] ** 2
+        )
+
         ## Get branch cuts
-        leftix = bal["leftix"]+1
-        leftix_diff = np.diff(leftix[:,1])
-        g["xcut"] = xcut = np.argwhere(leftix_diff<0).squeeze()
-        g["leftcut"] = [xcut[0]-2, xcut[1]+2]
-        g["rightcut"] = [xcut[4]-1, xcut[3]-1]
-        
-        omp = self.g["omp"] = int((g["rightcut"][0] + g["rightcut"][1])/2) + 1
-        imp = self.g["imp"] = int((g["leftcut"][0] + g["leftcut"][1])/2)
+        leftix = bal["leftix"] + 1
+        leftix_diff = np.diff(leftix[:, 1])
+        g["xcut"] = xcut = np.argwhere(leftix_diff < 0).squeeze()
+        g["leftcut"] = [xcut[0] - 2, xcut[1] + 2]
+        g["rightcut"] = [xcut[4] - 1, xcut[3] - 1]
+
+        omp = self.g["omp"] = int((g["rightcut"][0] + g["rightcut"][1]) / 2) + 1
+        imp = self.g["imp"] = int((g["leftcut"][0] + g["leftcut"][1]) / 2)
         upper_break = self.g["upper_break"] = g["xcut"][2] + 1
-        sep = self.g["sep"] = bal["jsep"][0] + 2  # Add 1 for guard cell and another to get first ring AFTER separatrix
+        sep = self.g["sep"] = (
+            bal["jsep"][0] + 2
+        )  # Add 1 for guard cell and another to get first ring AFTER separatrix
         # self.g["xpoints"] = self.find_xpoints()   # NOTE: Not robust
-        
-        
+
         ## Prepare selectors
-        ## ALL SELECTORS HAVE GUARD CELLS   
+        ## ALL SELECTORS HAVE GUARD CELLS
         psel = {}
         psel["inner_lower_target"] = 1
-        psel["inner_upper_target"] = upper_break -2
-        psel["outer_upper_target"] = upper_break+1
-        psel["outer_lower_target"] = self.g["nx"] - 2  # last DOMAIN cell (nx-1 is the guard)
+        psel["inner_upper_target"] = upper_break - 2
+        psel["outer_upper_target"] = upper_break + 1
+        psel["outer_lower_target"] = (
+            self.g["nx"] - 2
+        )  # last DOMAIN cell (nx-1 is the guard)
 
         psel["inner_lower_target_guard"] = 1
-        psel["inner_upper_target_guard"] = upper_break -1
+        psel["inner_upper_target_guard"] = upper_break - 1
         psel["outer_upper_target_guard"] = upper_break
-        psel["outer_lower_target_guard"] = self.g["nx"]-1
+        psel["outer_lower_target_guard"] = self.g["nx"] - 1
 
-        psel["outer_upper_divertor"] = slice(self.g["upper_break"], self.g["rightcut"][1]+2)
-        psel["inner_upper_divertor"] = slice(self.g["leftcut"][1]-2, self.g["upper_break"])
-        psel["outer_lower_divertor"] = slice(self.g["rightcut"][0]+2, self.g["nx"])
-        psel["inner_lower_divertor"] = slice(0, self.g["leftcut"][0]+2)
+        psel["outer_upper_divertor"] = slice(
+            self.g["upper_break"], self.g["rightcut"][1] + 2
+        )
+        psel["inner_upper_divertor"] = slice(
+            self.g["leftcut"][1] - 2, self.g["upper_break"]
+        )
+        psel["outer_lower_divertor"] = slice(self.g["rightcut"][0] + 2, self.g["nx"])
+        psel["inner_lower_divertor"] = slice(0, self.g["leftcut"][0] + 2)
 
         # psel["upper_pfr"] = np.r_[psel["inner_upper_divertor"], psel["outer_upper_divertor"]]
-        psel["upper_pfr"] = np.r_[psel["outer_upper_divertor"], psel["inner_upper_divertor"]]
-        psel["lower_pfr"] = np.r_[psel["inner_lower_divertor"], psel["outer_lower_divertor"]]
+        psel["upper_pfr"] = np.r_[
+            psel["outer_upper_divertor"], psel["inner_upper_divertor"]
+        ]
+        psel["lower_pfr"] = np.r_[
+            psel["inner_lower_divertor"], psel["outer_lower_divertor"]
+        ]
 
         psel["outer_upper_pfr"] = psel["outer_upper_divertor"]
         psel["inner_upper_pfr"] = psel["inner_upper_divertor"]
@@ -196,7 +206,7 @@ class SOLPScase():
         psel["outer_sol"] = slice(self.g["upper_break"], None)
         psel["inner_sol"] = slice(0, self.g["upper_break"])
 
-        psel["outer_lower_sol"] = slice(self.g["omp"]+1, None)
+        psel["outer_lower_sol"] = slice(self.g["omp"] + 1, None)
         psel["outer_upper_sol"] = slice(self.g["upper_break"], self.g["omp"] + 1)
 
         psel["outer_lower_sol_extra"] = slice(self.g["omp"], None)
@@ -207,56 +217,84 @@ class SOLPScase():
 
         psel["inner_lower_sol_extra"] = slice(0, self.g["imp"] + 1)
         psel["inner_upper_sol_extra"] = slice(self.g["imp"] - 1, self.g["upper_break"])
-        
+
         psel["inner_core"] = slice(self.g["leftcut"][0] + 2, self.g["leftcut"][1] - 2)
         psel["outer_core"] = slice(self.g["rightcut"][1] + 2, self.g["rightcut"][0] + 2)
         psel["core"] = np.r_[psel["outer_core"], psel["inner_core"]]
 
         psel["omp"] = omp
         psel["imp"] = imp
-        
+
         ## X-point indices: first cell downstream of X-point
-        psel["inner_lower_xpoint"] = g["xcut"][0] -1
+        psel["inner_lower_xpoint"] = g["xcut"][0] - 1
         psel["inner_upper_xpoint"] = g["xcut"][1]
         psel["outer_upper_xpoint"] = g["xcut"][3]
-        psel["outer_lower_xpoint"] = g["xcut"][4]+1
+        psel["outer_lower_xpoint"] = g["xcut"][4] + 1
 
         # Upstream selections run from the midplane to the X-point and
         # overlap with the divertor selections at the X-point cell.
-        psel["inner_lower_upstream"] = slice(psel["inner_lower_xpoint"]+1, self.g["imp"])
+        psel["inner_lower_upstream"] = slice(
+            psel["inner_lower_xpoint"] + 1, self.g["imp"]
+        )
         psel["inner_upper_upstream"] = slice(self.g["imp"], psel["inner_upper_xpoint"])
-        psel["outer_upper_upstream"] = slice(psel["outer_upper_xpoint"]+1, self.g["omp"] + 1)
-        psel["outer_lower_upstream"] = slice(self.g["omp"]+1, psel["outer_lower_xpoint"])
+        psel["outer_upper_upstream"] = slice(
+            psel["outer_upper_xpoint"] + 1, self.g["omp"] + 1
+        )
+        psel["outer_lower_upstream"] = slice(
+            self.g["omp"] + 1, psel["outer_lower_xpoint"]
+        )
 
         # Includes one cell beyond the midplane
-        psel["inner_lower_upstream_extra"] = slice(psel["inner_lower_xpoint"]+1, self.g["imp"]+1)
-        psel["inner_upper_upstream_extra"] = slice(self.g["imp"]-1, psel["inner_upper_xpoint"]+1)
-        psel["outer_upper_upstream_extra"] = slice(psel["outer_upper_xpoint"]+1, self.g["omp"] + 2)
-        psel["outer_lower_upstream_extra"] = slice(self.g["omp"], psel["outer_lower_xpoint"])
-        
+        psel["inner_lower_upstream_extra"] = slice(
+            psel["inner_lower_xpoint"] + 1, self.g["imp"] + 1
+        )
+        psel["inner_upper_upstream_extra"] = slice(
+            self.g["imp"] - 1, psel["inner_upper_xpoint"] + 1
+        )
+        psel["outer_upper_upstream_extra"] = slice(
+            psel["outer_upper_xpoint"] + 1, self.g["omp"] + 2
+        )
+        psel["outer_lower_upstream_extra"] = slice(
+            self.g["omp"], psel["outer_lower_xpoint"]
+        )
+
         # These are for 1d poloidal data getter
-        psel["inner_lower_xpoint_fromtarget"] = psel["inner_lower_xpoint"] - psel["inner_lower_target_guard"] + 1
-        psel["inner_upper_xpoint_fromtarget"] = psel["inner_upper_target_guard"] - psel["inner_upper_xpoint"] + 2
-        psel["outer_upper_xpoint_fromtarget"] = psel["outer_upper_xpoint"] - psel["outer_upper_target_guard"] + 2
-        psel["outer_lower_xpoint_fromtarget"] = self.g["nx"] - psel["outer_lower_xpoint"] + 1
+        psel["inner_lower_xpoint_fromtarget"] = (
+            psel["inner_lower_xpoint"] - psel["inner_lower_target_guard"] + 1
+        )
+        psel["inner_upper_xpoint_fromtarget"] = (
+            psel["inner_upper_target_guard"] - psel["inner_upper_xpoint"] + 2
+        )
+        psel["outer_upper_xpoint_fromtarget"] = (
+            psel["outer_upper_xpoint"] - psel["outer_upper_target_guard"] + 2
+        )
+        psel["outer_lower_xpoint_fromtarget"] = (
+            self.g["nx"] - psel["outer_lower_xpoint"] + 1
+        )
         self.psel = psel
 
         ## 2D selectors
         s = self.s = {}
         for location in psel.keys():
             s[location] = (psel[location], slice(None, None))
-        
+
         # First SOL rings
-        for name in ["outer_sol", "outer_lower_sol", "outer_upper_sol", "inner_sol", "inner_lower_sol", "inner_upper_sol"]:
+        for name in [
+            "outer_sol",
+            "outer_lower_sol",
+            "outer_upper_sol",
+            "inner_sol",
+            "inner_lower_sol",
+            "inner_upper_sol",
+        ]:
             s[name] = (self.psel[name], self.g["sep"])
 
         self.read_b2fgmtry(path_b2fgmtry)
         # self.reverse_velocities()  # Positive velocity is towards outer target
         self.get_species()
         self.derive_data()
-        
 
-    def read_b2fgmtry(self, path = None, verbose = False, strict = True):
+    def read_b2fgmtry(self, path=None, verbose=False, strict=True):
         """
         Read b2fgmtry and merge supplemental geometry data into self.g.
 
@@ -290,7 +328,9 @@ class SOLPScase():
             candidates.append(os.path.join(self.path, "b2fgmtry"))
             candidates.append(os.path.join(self.path, "../baserun/b2fgmtry"))
 
-        gmtry_path = next((candidate for candidate in candidates if os.path.exists(candidate)), None)
+        gmtry_path = next(
+            (candidate for candidate in candidates if os.path.exists(candidate)), None
+        )
         if gmtry_path is None:
             if strict:
                 raise FileNotFoundError(f"b2fgmtry not found in {candidates}")
@@ -349,7 +389,9 @@ class SOLPScase():
             gmtry = {"nx": nx, "ny": ny}
             for fieldname, reader, dims in specs:
                 if dims is None:
-                    source = gmtry["nlreg"] if fieldname.startswith("nl") else gmtry["nncut"]
+                    source = (
+                        gmtry["nlreg"] if fieldname.startswith("nl") else gmtry["nncut"]
+                    )
                     dims = int(np.asarray(source).squeeze())
                 gmtry[fieldname] = reader(fid, fieldname, dims)
 
@@ -359,7 +401,6 @@ class SOLPScase():
                 self.g[key] = value
                 added_fields[key] = value
 
-
         # Get psi at cell centres instead of corners
         self.g["fpsi"] = self.g["fpsi"].mean(axis=2).squeeze()
 
@@ -367,12 +408,12 @@ class SOLPScase():
             print(f"Loaded b2fgmtry from {gmtry_path}")
 
         return added_fields
-        
+
     def get_species(self):
         """
         Extract species indices from the balance file species matrix
         """
-        
+
         bal = self.bal
         df_species = pd.DataFrame()
 
@@ -380,25 +421,23 @@ class SOLPScase():
         nspecies = bal["species"].shape[1]
 
         for ispecies in range(nspecies):
-            
             species = ""
             for ichar in range(nchars):
                 string = str(bal["species"][ichar, ispecies])
-                string = string.replace("b", "").replace("'","")
+                string = string.replace("b", "").replace("'", "")
                 species += string
-                
+
             df_species.loc[ispecies, "name"] = species.strip()
-            
+
         self.species = df_species
-        
-        
-    def get_impurity_stats(self, species_name, all_states = False):
+
+    def get_impurity_stats(self, species_name, all_states=False):
         """
         Get sum of radiation for all species containing the string "species_name"
         and put it in the balance file. Units are W/m3
-        
+
         all_states: save densities for neutral state and all charged states
-        
+
         """
         try:
             species = self.species
@@ -406,35 +445,36 @@ class SOLPScase():
             print("Species not found, generating")
             self.get_species()
         bal = self.bal
-        
-        dcz = species[species["name"].str.contains(fr"{species_name}\+")]
+
+        dcz = species[species["name"].str.contains(rf"{species_name}\+")]
         species_indices = list(dcz.index)
-        
+
         if len(species_indices) < 1:
             raise ValueError(f"No species found matching {species_name}")
 
         rad = []
         nimp = []
         for i in species_indices:
-            rad.append(bal["b2stel_she_bal"][:,:,i])
-            nimp.append(bal["na"][:,:,i])
+            rad.append(bal["b2stel_she_bal"][:, :, i])
+            nimp.append(bal["na"][:, :, i])
 
-        rad = np.sum(rad, axis = 0)
-        nimp = np.sum(nimp, axis = 0)
-        
-        self.bal[f"R{species_name}"] = abs(rad / bal["vol"] )
+        rad = np.sum(rad, axis=0)
+        nimp = np.sum(nimp, axis=0)
+
+        self.bal[f"R{species_name}"] = abs(rad / bal["vol"])
         self.bal[f"n{species_name}"] = nimp
         self.bal[f"f{species_name}"] = nimp / self.bal["ne"]
-        self.bal[f"f{species_name}tot"] = nimp / (self.bal["ne"] + self.bal["Na"] + (self.bal["Nm"]*2))
-        
+        self.bal[f"f{species_name}tot"] = nimp / (
+            self.bal["ne"] + self.bal["Na"] + (self.bal["Nm"] * 2)
+        )
+
         if all_states:
             print("Saving all states")
             dcz = species[species["name"].str.contains(f"{species_name}")]
             for i in dcz.index:
                 species = dcz.loc[i, "name"]
-                self.bal[f"n{species}"] = bal["na"][:,:,i]
-            
-        
+                self.bal[f"n{species}"] = bal["na"][:, :, i]
+
         print(f"Added total radiation, density and fraction for {species_name}")
 
     def derive_data(self):
@@ -442,10 +482,10 @@ class SOLPScase():
         Add new derived variables to the balance file
         This includes duplicates which are in Hermes-3 convention
         """
-        
+
         bal = self.bal
         g = self.g
-        
+
         ## EIRENE derived variables have extra values in the arrays
         ## Either 5 or 2 extra zeros at the end in poloidal depending on topology
         double_null = True
@@ -453,7 +493,7 @@ class SOLPScase():
             ignore_idx = 5
         else:
             ignore_idx = 2
-        
+
         qe = constants("q_e")
         Mi = constants("mass_p") * 2
 
@@ -467,54 +507,59 @@ class SOLPScase():
         bal["Na"] = bal["dab2"][:-ignore_idx, :, 0]
         bal["Nm"] = bal["dmb2"][:-ignore_idx, :, 0]
         bal["Nn"] = bal["Na"] + bal["Nm"] * 2
-        bal["Ta"] = (bal["tab2"][:-ignore_idx, :, 0] / qe)
+        bal["Ta"] = bal["tab2"][:-ignore_idx, :, 0] / qe
         bal["Td"] = bal["Ta"]
-        bal["Tm"] = (bal["tmb2"][:-ignore_idx, :, 0] / qe)
+        bal["Tm"] = bal["tmb2"][:-ignore_idx, :, 0] / qe
         bal["Pa"] = bal["Na"].squeeze() * bal["Ta"].squeeze() * qe
         bal["Pm"] = bal["Nm"].squeeze() * bal["Tm"].squeeze() * qe
 
         bal["Pn"] = bal["Pa"] + bal["Pm"]
         bal["Tn"] = bal["Pn"] / bal["Nn"] / qe
-        
+
         # Derive total fluxes (excl. drifts)
-        bal["fhe_total"] = bal["fhe_cond"] + 5/3*bal["fhe_32"] + bal["fhe_thermj"]
-        bal["fhi_total"] = bal["fhi_cond"] + 5/3*bal["fhi_32"]
-        
+        bal["fhe_total"] = bal["fhe_cond"] + 5 / 3 * bal["fhe_32"] + bal["fhe_thermj"]
+        bal["fhi_total"] = bal["fhi_cond"] + 5 / 3 * bal["fhi_32"]
+
         # Split fluxes into X and Y components
         existing_params = list(bal.keys())
         list_species = self.species["name"].values
-        
+
         # NOTE: check that this works if you have multiple ions.
         # It's possible that all the arrays have 4 dimensions then
         for param in existing_params:
             for prefix in ["fhe", "fhi", "fmo", "fna"]:
                 if prefix in param and not any([name in param for name in ["x", "y"]]):
-                    
                     # Direction split only
                     if len(bal[param].shape) == 3:
-                        bal[param.replace(prefix, f"{prefix}x")] = bal[param][:,:,0]
-                        bal[param.replace(prefix, f"{prefix}y")] = bal[param][:,:,1]
-                    
+                        bal[param.replace(prefix, f"{prefix}x")] = bal[param][:, :, 0]
+                        bal[param.replace(prefix, f"{prefix}y")] = bal[param][:, :, 1]
+
                     # Species split
                     elif len(bal[param].shape) == 4:
                         for i, species in enumerate(list_species):
-                            bal[param.replace(prefix, f"{prefix}x_{species}")] = bal[param][:,:,0,i]
-                            bal[param.replace(prefix, f"{prefix}y_{species}")] = bal[param][:,:,1,i]
-                        
-                    
-        
-        bal["hpar"] = g["hx"] * abs(g["Btot"] / abs(g["Bpol"]))   # Parallel cell width [m]
-        bal["apar"] = bal["vol"] / bal["hpar"]            # Parallel cross-sectional area [m2]
-                    
+                            bal[param.replace(prefix, f"{prefix}x_{species}")] = bal[
+                                param
+                            ][:, :, 0, i]
+                            bal[param.replace(prefix, f"{prefix}y_{species}")] = bal[
+                                param
+                            ][:, :, 1, i]
+
+        bal["hpar"] = g["hx"] * abs(
+            g["Btot"] / abs(g["Bpol"])
+        )  # Parallel cell width [m]
+        bal["apar"] = bal["vol"] / bal["hpar"]  # Parallel cross-sectional area [m2]
+
         bal["fhx_total"] = bal["fhex_total"] + bal["fhix_total"]
         bal["fhy_total"] = bal["fhey_total"] + bal["fhiy_total"]
-        
+
         # flux = bal["fnax_D+1_tot"] / (bal["vol"] / bal["
-        
-        bal["Vd+"] = bal["ua"][:,:,1] * -1  # Note first species is fluid neutral
+
+        bal["Vd+"] = bal["ua"][:, :, 1] * -1  # Note first species is fluid neutral
         bal["NVd+"] = bal["Vd+"] * bal["Ne"] * Mi  # Parallel momentum flux kg/m2/s
-        bal["M"] = np.abs(bal["Vd+"] / np.sqrt((bal["Te"]*qe + bal["Td+"]*qe)/Mi))  # Mach number
-        
+        bal["M"] = np.abs(
+            bal["Vd+"] / np.sqrt((bal["Te"] * qe + bal["Td+"] * qe) / Mi)
+        )  # Mach number
+
         ## NOW FOUND ua, DONT NEED THIS. besides fluxes are at cell edges
         # if "fnax_D+1_tot" in bal:
         #     bal["NVd+"] = bal["fnax_D+1_tot"] * Mi  / bal["apar"]  # Parallel momentum flux kg/m2/s
@@ -522,25 +567,30 @@ class SOLPScase():
         #     bal["M"] = bal["Vd+"] / np.sqrt((bal["Te"]*qe + bal["Td+"]*qe)/Mi)  # Mach number
         # else:
         #     print("fnax_tot not found, skipping momentum calculation")
-            
+
         # Reaction channels
         # bal["Rd+_atm"] = bal["b2stel_she_bal"][:,:,1] / bal["vol"]  # Total atom radiation [W/m3]
-        
+
         # We follow Hermes-3 convention: all channels as sources (per volume basis)
         # S is particle source, E energy transfer, R radiation (or system loss), F momentum transfer
-        bal["Rd+_exiz"] = bal["eirene_mc_eael_she_bal"].sum(axis = 2) / bal["vol"]  # Loss of energy due to excitation and 13.6 iz potential [W/m3]
-        bal["Rd+_mol"] = bal["eirene_mc_emel_she_bal"].sum(axis = 2) / bal["vol"]  # Molecule radiation summed over all strata [W/m3]
-            
-        bal["Sd+_iz"] = bal["eirene_mc_papl_sna_bal"][:,:,1,:].sum(axis = 2) / bal["vol"]  # Choose ion species and sum over strata
-        bal["Sd+_rec"] = bal["eirene_mc_pppl_sna_bal"][:,:,1,:].sum(axis = 2) / bal["vol"]   # Choose ion species and sum over strata
-        
-                
+        bal["Rd+_exiz"] = (
+            bal["eirene_mc_eael_she_bal"].sum(axis=2) / bal["vol"]
+        )  # Loss of energy due to excitation and 13.6 iz potential [W/m3]
+        bal["Rd+_mol"] = (
+            bal["eirene_mc_emel_she_bal"].sum(axis=2) / bal["vol"]
+        )  # Molecule radiation summed over all strata [W/m3]
+
+        bal["Sd+_iz"] = (
+            bal["eirene_mc_papl_sna_bal"][:, :, 1, :].sum(axis=2) / bal["vol"]
+        )  # Choose ion species and sum over strata
+        bal["Sd+_rec"] = (
+            bal["eirene_mc_pppl_sna_bal"][:, :, 1, :].sum(axis=2) / bal["vol"]
+        )  # Choose ion species and sum over strata
+
         self.bal = bal
         self.params = list(self.bal.keys())
 
-
-        
-    def make_custom_sol_ring(self, name, i = None, sep_dist = None):
+    def make_custom_sol_ring(self, name, i=None, sep_dist=None):
         """
         Inputs
         ------
@@ -548,19 +598,19 @@ class SOLPScase():
                 "outer_sol", "outer_lower_sol", "outer_upper_sol", "inner_sol", "inner_lower_sol", "inner_upper_sol"
                 "outer_lower_upstream", "outer_upper_upstream", "inner_lower_upstream", "inner_upper_upstream"
                 "inner_upper_divertor", "outer_upper_divertor", "inner_lower_divertor", "outer_lower_divertor"
-            i, int: 
-                SOL ring index (0 = first inside SOL) 
+            i, int:
+                SOL ring index (0 = first inside SOL)
             sep_dist, int
                 Separatrix distance in [m]
-                
+
         Returns:
         ------
             selector tuple as (X,Y)
-            
+
         NOTE: INCLUDES GUARD CELLS apart from legs....
         NOTE: DOES NOT SUPPORT DISCONNECTED DOUBLE NULL
         """
-        
+
         if i != None and sep_dist == None:
             yid = self.g["sep"] + i
         if sep_dist != None and i == None:
@@ -575,46 +625,44 @@ class SOLPScase():
 
         selector = self.psel.get(name)
         if selector is None or np.isscalar(selector):
-            raise Exception(
-                f"Region {name} not supported for custom ring selection"
-            )
+            raise Exception(f"Region {name} not supported for custom ring selection")
 
         return (selector, yid)
-    
 
-        
     def close(self):
         self.bal.close()
-        
-    def plot_2d(self, param,
-             ax = None,
-             norm = None,
-             data = np.array([]),
-             cmap = "Spectral_r",
-             custom_cmap = None,
-             antialias = True,
-             linecolor = "k",
-             linewidth = 0,
-             vmin = None,
-             vmax = None,
-             logscale = False,
-             linthresh = None,
-             absolute = False,
-             alpha = 1,
-             separatrix = True,
-             separatrix_kwargs = {},
-             grid_only = False,
-             cbar = True,
-             axis_labels = True,
-             dpi = 150,
-             xlim = (None, None),
-             ylim = (None, None)
-    ):  
+
+    def plot_2d(
+        self,
+        param,
+        ax=None,
+        norm=None,
+        data=np.array([]),
+        cmap="Spectral_r",
+        custom_cmap=None,
+        antialias=True,
+        linecolor="k",
+        linewidth=0,
+        vmin=None,
+        vmax=None,
+        logscale=False,
+        linthresh=None,
+        absolute=False,
+        alpha=1,
+        separatrix=True,
+        separatrix_kwargs={},
+        grid_only=False,
+        cbar=True,
+        axis_labels=True,
+        dpi=150,
+        xlim=(None, None),
+        ylim=(None, None),
+    ):
         # print(data)
         # print(len(data))
         # print(data.size)
         # print(type(data))
-        
+
         if custom_cmap != None:
             cmap = custom_cmap
 
@@ -623,39 +671,35 @@ class SOLPScase():
             if not data.size > 0:
                 data = self.bal[param]
         # else:
-            # print(f"Data is not numpy array, it's {type(data)}")
+        # print(f"Data is not numpy array, it's {type(data)}")
         # elif data == None:
         #     data = self.bal[param]
-        
+
         if grid_only is True:
             data = np.zeros_like(self.bal["te"])
 
         if grid_only is True and linewidth == 0:
             linewidth = 0.1
-        
+
         if absolute:
             data = np.abs(data)
-        
+
         if vmin == None:
             vmin = data.min()
         if vmax == None:
             vmax = data.max()
         if norm == None:
-            norm = create_norm(logscale, norm, vmin, vmax, linthresh = linthresh)
+            norm = create_norm(logscale, norm, vmin, vmax, linthresh=linthresh)
         if ax == None:
-            fig, ax = plt.subplots(dpi = dpi)
+            fig, ax = plt.subplots(dpi=dpi)
         else:
             fig = ax.get_figure()
-        
 
         # Following SOLPS convention: X poloidal, Y radial
         crx = self.bal["crx"]
         cry = self.bal["cry"]
         nx, ny = self.g["nx"], self.g["ny"]
-        
-        
-        
-        
+
         # In hermes-3 and needed for plot: lower left, lower right, upper right, upper left, lower left
         # SOLPS crx structure: lower left, lower right, upper left, upper right
         # So translating crx is gonna be 0, 1, 3, 2, 0
@@ -667,106 +711,114 @@ class SOLPScase():
         for i in range(nx):
             for j in range(ny):
                 p = mpl.patches.Polygon(
-                    np.concatenate([crx[i,j,:][tuple(idx)], cry[i,j,:][tuple(idx)]]).reshape(2,5).T,
-                    
+                    np.concatenate([crx[i, j, :][tuple(idx)], cry[i, j, :][tuple(idx)]])
+                    .reshape(2, 5)
+                    .T,
                     fill=False,
                     closed=True,
                 )
                 patches.append(p)
-                
+
         # Polygon colors
         colors = data.flatten()
-        
+
         if grid_only is True:
             polys = mpl.collections.PatchCollection(
-                patches, alpha = alpha,
-                antialiaseds = antialias,
-                edgecolors = linecolor,
-                facecolors = "none",
-                linewidths = linewidth,
-                joinstyle = "bevel",
-                match_original = False)
-        
+                patches,
+                alpha=alpha,
+                antialiaseds=antialias,
+                edgecolors=linecolor,
+                facecolors="none",
+                linewidths=linewidth,
+                joinstyle="bevel",
+                match_original=False,
+            )
+
         else:
             polys = mpl.collections.PatchCollection(
-                patches, alpha = alpha, norm = norm, cmap = cmap, 
-                antialiaseds = antialias,
-                edgecolors = linecolor,
-                linewidths = linewidth,
-                joinstyle = "bevel")
+                patches,
+                alpha=alpha,
+                norm=norm,
+                cmap=cmap,
+                antialiaseds=antialias,
+                edgecolors=linecolor,
+                linewidths=linewidth,
+                joinstyle="bevel",
+            )
             polys.set_array(colors)
-        
+
         ## Cbar
         if fig != None and grid_only == False and cbar == True:
             # From https://joseph-long.com/writing/colorbars/
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="5%", pad=0.05)
-            fig.colorbar(polys, cax = cax)
-            cax.grid(visible = False)
+            fig.colorbar(polys, cax=cax)
+            cax.grid(visible=False)
         ax.add_collection(polys)
         ax.set_aspect("equal")
-        
+
         ## Somehow autoscale breaks sometimes
         xmin, xmax = crx.min(), crx.max()
         ymin, ymax = cry.min(), cry.max()
         xspan = xmax - xmin
         yspan = ymax - ymin
 
-        ax.set_xlim(xmin - xspan*0.05, xmax + xspan*0.05)
-        ax.set_ylim(ymin - yspan*0.05, ymax + yspan*0.05)
-        
+        ax.set_xlim(xmin - xspan * 0.05, xmax + xspan * 0.05)
+        ax.set_ylim(ymin - yspan * 0.05, ymax + yspan * 0.05)
+
         if axis_labels is True:
             ax.set_xlabel("R [m]")
             ax.set_ylabel("Z [m]")
         if grid_only is False:
             ax.set_title(param)
-        
+
         if separatrix is True:
-            self.plot_separatrix(ax = ax, **separatrix_kwargs)
-            
+            self.plot_separatrix(ax=ax, **separatrix_kwargs)
+
         if xlim != (None, None):
             ax.set_xlim(xlim)
         if ylim != (None, None):
             ax.set_ylim(ylim)
-            
-    def plot_neutral_vectors(self,
-                             ax, 
-                             normalise_arrows = True,
-                             flux = False,  # Plot neutral flux instead of speed?
-                             vmin = None,
-                             vmax = None,
-                             cmap = "jet",
-                             logscale = False,
-                             width = 0.0025,
-                             scale_mult = 1,
-                             gridcolor = "lightgrey",
-                             gridwidth = 0.5):
-        
+
+    def plot_neutral_vectors(
+        self,
+        ax,
+        normalise_arrows=True,
+        flux=False,  # Plot neutral flux instead of speed?
+        vmin=None,
+        vmax=None,
+        cmap="jet",
+        logscale=False,
+        width=0.0025,
+        scale_mult=1,
+        gridcolor="lightgrey",
+        gridwidth=0.5,
+    ):
+
         fort46_path = os.path.join(self.path, "fort.46.pkl")
         with open(fort46_path, "rb") as f:
             f46 = pickle.load(f)
-            
+
         triangles_path = os.path.join(self.path, "triangle_mesh.pkl")
         with open(triangles_path, "rb") as f:
             triangles = pickle.load(f)
-            
-            
+
         if ax == None:
             fig, ax = plt.subplots()
 
         nodes = triangles["nodes"]
         cells = triangles["cells"]
-        triang = mpl.tri.Triangulation(nodes[:,0], nodes[:,1], cells)
+        triang = mpl.tri.Triangulation(nodes[:, 0], nodes[:, 1], cells)
 
         if flux:
-            U = f46["vxdena"] / (2*constants("mass_p"))
-            V = f46["vydena"] / (2*constants("mass_p"))
+            U = f46["vxdena"] / (2 * constants("mass_p"))
+            V = f46["vydena"] / (2 * constants("mass_p"))
             clabel = "Flux [$m^2/s$]"
         else:
-            U = f46["vxdena"] / f46["pdena"] / (2*constants("mass_p"))
-            V = f46["vydena"] / f46["pdena"] / (2*constants("mass_p"))
+            U = f46["vxdena"] / f46["pdena"] / (2 * constants("mass_p"))
+            V = f46["vydena"] / f46["pdena"] / (2 * constants("mass_p"))
             clabel = "Flux [$m/s$]"
-            
+
         speed = np.hypot(U, V)
 
         tri_coords = nodes[cells]
@@ -781,13 +833,13 @@ class SOLPScase():
             eps = 1e-16
             U = U / (speed + eps) * scale
             V = V / (speed + eps) * scale
-            
+
         # set up log normalization (avoid zeros by clipping)
         if vmin is None:
             vmin = max(speed.min(), 1e-3)  # lower bound >0
         if vmax is None:
             vmax = speed.max()
-            
+
         if logscale:
             norm = mpl.colors.LogNorm(vmin=vmin, vmax=vmax)
             cbar_formatter = mpl.ticker.LogFormatterSciNotation(base=10)
@@ -796,49 +848,51 @@ class SOLPScase():
             cbar_formatter = None
 
         if ax is None:
-            fig, ax = plt.subplots(figsize = (5,15))
+            fig, ax = plt.subplots(figsize=(5, 15))
 
-        ax.triplot(triang, color = gridcolor, lw = gridwidth)
+        ax.triplot(triang, color=gridcolor, lw=gridwidth)
 
-
-        Q = ax.quiver(px, py, U, V, speed,
-                        angles='xy',        # no automatic rotation
-                        scale_units='xy',   # scale in data units
-                        cmap = cmap,
-                        norm = norm,
-                        scale=3e6,            # if vectors are already in desired length
-                        width=width        # adjust arrow thickness
-                        )
+        Q = ax.quiver(
+            px,
+            py,
+            U,
+            V,
+            speed,
+            angles="xy",  # no automatic rotation
+            scale_units="xy",  # scale in data units
+            cmap=cmap,
+            norm=norm,
+            scale=3e6,  # if vectors are already in desired length
+            width=width,  # adjust arrow thickness
+        )
 
         # create a colorbar whose height matches ax
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="3%", pad=0.05)
         cbar = plt.colorbar(Q, cax=cax, format=cbar_formatter)
         cbar.set_label(clabel)
-        cbar.ax.yaxis.set_tick_params(which='both', length=4)
+        cbar.ax.yaxis.set_tick_params(which="both", length=4)
 
         ax.set_aspect("equal")
-        
-            
-            
-    def plot_separatrix(self, ax, **separatrix_kwargs):
-        
-        kwargs = {**{"c" : "white", "ls" : "-"}, **separatrix_kwargs}
 
-        R = self.g["crx"][:,:,0]
-        Z = self.g["cry"][:,:,0]
+    def plot_separatrix(self, ax, **separatrix_kwargs):
+
+        kwargs = {**{"c": "white", "ls": "-"}, **separatrix_kwargs}
+
+        R = self.g["crx"][:, :, 0]
+        Z = self.g["cry"][:, :, 0]
         ax.plot(R[self.s["inner_sol"]], Z[self.s["inner_sol"]], **kwargs)
         ax.plot(R[self.s["outer_sol"]], Z[self.s["outer_sol"]], **kwargs)
-        
+
     def get_1d_radial_data(
         self,
         params,
-        region = None,
-        poloidal_index = None,
-        verbose = False,
-        guards = False,
-        keep_geometry = True,
-        interpolate_midplane = True
+        region=None,
+        poloidal_index=None,
+        verbose=False,
+        guards=False,
+        keep_geometry=True,
+        interpolate_midplane=True,
     ):
         """
         Return a 1D radial profile at the inner/outer midplane or at a target.
@@ -883,7 +937,7 @@ class SOLPScase():
             ``dist`` coordinate is shifted so that zero corresponds to the
             separatrix.
         """
-        
+
         bal = self.bal
 
         if poloidal_index is None and region is None:
@@ -893,24 +947,29 @@ class SOLPScase():
 
         if type(params) == str:
             params = [params]
-        
+
         # Poloidal selector
         if region is not None:
-            if any([region in name for name in [
-                "omp", "imp"]]):
+            if any([region in name for name in ["omp", "imp"]]):
+                p = self.s[region]
+                selector = self.s[region]
 
-                p = self.s[region] 
+            elif any(
+                [
+                    region in name
+                    for name in [
+                        "outer_lower_target",
+                        "inner_lower_target",
+                        "outer_upper_target",
+                        "inner_upper_target",
+                    ]
+                ]
+            ):
                 selector = self.s[region]
-                
-            elif any([region in name for name in [
-                "outer_lower_target", "inner_lower_target",
-                "outer_upper_target", "inner_upper_target"]]):
-                
-                selector = self.s[region]
-                
+
             else:
                 raise Exception(f"Unrecognised region: {region}")
-            
+
         elif poloidal_index is not None:
             selector = (poloidal_index, slice(None))
 
@@ -918,22 +977,22 @@ class SOLPScase():
         if (region == "omp" or region == "imp") and interpolate_midplane:
             ## Select a couple of cells on each side of the midplane
             if region == "omp":
-                pol_selector = slice(self.psel["omp"]-3, self.psel["omp"]+5)
+                pol_selector = slice(self.psel["omp"] - 3, self.psel["omp"] + 5)
             elif region == "imp":
-                pol_selector = slice(self.psel["imp"]-4, self.psel["imp"]+4)
-                
+                pol_selector = slice(self.psel["imp"] - 4, self.psel["imp"] + 4)
 
-            no_rings = self.g["ny"]   # Number of radial cells
-                
-            # For every parameter, collect the value interpolated at Z = 0 
+            no_rings = self.g["ny"]  # Number of radial cells
 
-            df_pol_slice = pd.DataFrame()  # Dataframe containing 2D data around the midplane for 
-            df_rad_slice = pd.DataFrame()   # Radial profile dataframe to construct
+            # For every parameter, collect the value interpolated at Z = 0
+
+            df_pol_slice = (
+                pd.DataFrame()
+            )  # Dataframe containing 2D data around the midplane for
+            df_rad_slice = pd.DataFrame()  # Radial profile dataframe to construct
 
             for ring_id in range(no_rings):
-
                 Z = self.g["Z"][pol_selector, ring_id]
-                
+
                 # Get parameters
                 for param in ["Z", "R", "hx", "hy", "vol", "Btot", "Bpol"] + params:
                     if param in bal:
@@ -942,14 +1001,16 @@ class SOLPScase():
                         df_pol_slice[param] = self.g[param][pol_selector, ring_id]
                     else:
                         print(f"Parameter {param} not found")
-                    
+
                 # Interpolate to Z=0
-                
-                for param in df_pol_slice.drop(["Z"], axis = 1).columns:
-                    df_rad_slice.loc[ring_id, param] = scipy.interpolate.interp1d(df_pol_slice["Z"], df_pol_slice[param], kind = "cubic")(0)
-                    
+
+                for param in df_pol_slice.drop(["Z"], axis=1).columns:
+                    df_rad_slice.loc[ring_id, param] = scipy.interpolate.interp1d(
+                        df_pol_slice["Z"], df_pol_slice[param], kind="cubic"
+                    )(0)
+
             df = df_rad_slice.copy()
-            
+
         else:
             df = pd.DataFrame()
             for param in ["hx", "hy", "R", "Z", "hx", "Btot", "Bpol", "vol"] + params:
@@ -959,49 +1020,50 @@ class SOLPScase():
                     df[param] = self.g[param][selector]
                 else:
                     print(f"Parameter {param} not found")
-                
-        
+
         # Interpolate between cells to get separatrix distance
         hy = df["hy"].values
         vol = df["vol"].values
-        
+
         for i, _ in enumerate(df["hy"]):
             if i == 0:
                 df.loc[i, "dist"] = hy[i] / 2
             else:
-                df.loc[i, "dist"] = df.loc[i-1, "dist"] + hy[i-1]/2 + hy[i]/2
-        
+                df.loc[i, "dist"] = df.loc[i - 1, "dist"] + hy[i - 1] / 2 + hy[i] / 2
+
         sepind = self.g["sep"]
-        dist_sep = df["dist"][sepind] - (df["dist"][sepind] - df["dist"][sepind-1]) / 2
-        df["dist"] -= dist_sep 
+        dist_sep = (
+            df["dist"][sepind] - (df["dist"][sepind] - df["dist"][sepind - 1]) / 2
+        )
+        df["dist"] -= dist_sep
         df["sep"] = 0
         df.loc[sepind, "sep"] = 1
 
-        
         dSpar = df["hx"] * abs(df["Btot"] / df["Bpol"])
         df["apar"] = df["vol"] / dSpar
-        
+
         df.insert(0, "dist", df.pop("dist"))
         df.insert(1, "sep", df.pop("sep"))
         df.insert(2, "apar", df.pop("apar"))
         df.insert(3, "vol", df.pop("vol"))
-        
+
         if keep_geometry is False:
-            df = df.drop(["R", "hx", "hy", "Btot", "Bpol"], axis = 1)
-        
+            df = df.drop(["R", "hx", "hy", "Btot", "Bpol"], axis=1)
+
         if guards is False:
-            df = df.iloc[1:-1]  # Trim guards but keep indices          
-        
+            df = df.iloc[1:-1]  # Trim guards but keep indices
+
         return df
 
     def _interpolate_exact_sol_ring(
-            self, 
-            params, 
-            region,
-            sepdist,
-            radial_start_region=None, 
-            extrapolate_radial = False,
-            debug = False):
+        self,
+        params,
+        region,
+        sepdist,
+        radial_start_region=None,
+        extrapolate_radial=False,
+        debug=False,
+    ):
         """
         Returns poloidal data radially interpolated to an exact separatrix distance.
         Uses the midplane radial profile to determine the target flux surface,
@@ -1026,7 +1088,7 @@ class SOLPScase():
         else:
             if sepdist > 0:
                 raise ValueError("sepdist must be negative for core or PFR regions")
-        
+
         ## Get radial slice to figure out field line starting point based on sepdist
         if radial_start_region is None:
             if region == "outer_lower_pfr":
@@ -1042,13 +1104,14 @@ class SOLPScase():
             elif "inner" in region:
                 radial_start_region = "imp"
             else:
-                raise Exception(f"Radial start region must be provided for region {region}")
+                raise Exception(
+                    f"Radial start region must be provided for region {region}"
+                )
 
         # Get midplane radial profile to find fractional ring index for desired sepdist
         radial_slice = self.get_1d_radial_data(
             ["fpsi"], region=radial_start_region, keep_geometry=True, guards=False
         )
-
 
         radial_dist_min = radial_slice["dist"].min()
         radial_dist_max = radial_slice["dist"].max()
@@ -1079,7 +1142,7 @@ class SOLPScase():
                 )(sepdist)
             )
 
-        # Get poloidal indices for the region 
+        # Get poloidal indices for the region
         pol_indices = np.arange(self.g["nx"])[self.psel[region]]
 
         geom_params = ["R", "Z", "hx", "Btot", "Bpol", "vol", "fpsi"]
@@ -1110,47 +1173,53 @@ class SOLPScase():
             lookup[param_name] = arr
 
         # Interpolate across rings at each poloidal position
-        
+
         df = pd.DataFrame()
 
         # Make figure, plot grid
         if debug:
-            fig, ax = plt.subplots(dpi = 150)
-            self.plot_2d("Te", ax = ax, grid_only = True)
+            fig, ax = plt.subplots(dpi=150)
+            self.plot_2d("Te", ax=ax, grid_only=True)
         for _, pol_i in enumerate(pol_indices):
+            radial = self.get_1d_radial_data(
+                params=all_param_names, poloidal_index=pol_i
+            )
 
-            radial = self.get_1d_radial_data(params = all_param_names, poloidal_index = pol_i)
-            
             # Plot radial slices
             if debug:
-                ax.plot(radial["R"], radial["Z"], "o", markersize = 1, alpha = 0.5)
+                ax.plot(radial["R"], radial["Z"], "o", markersize=1, alpha=0.5)
 
             if psi < radial["fpsi"].min() or psi > radial["fpsi"].max():
-                print(f"Warning: desired psi {psi} is outside the range of available psi values ({radial['fpsi'].min()} to {radial['fpsi'].max()}) at poloidal index {pol_i}.")
-            
+                print(
+                    f"Warning: desired psi {psi} is outside the range of available psi values ({radial['fpsi'].min()} to {radial['fpsi'].max()}) at poloidal index {pol_i}."
+                )
+
                 if extrapolate_radial:
                     print("Extrapolating...")
 
             for param_name in all_param_names:
-
                 if extrapolate_radial:
-                    
                     df.loc[pol_i, param_name] = float(
-                        scipy.interpolate.interp1d(radial["fpsi"], radial[param_name],
-                                                bounds_error = False,
-                                                fill_value = "extrapolate")(psi)
+                        scipy.interpolate.interp1d(
+                            radial["fpsi"],
+                            radial[param_name],
+                            bounds_error=False,
+                            fill_value="extrapolate",
+                        )(psi)
                     )
-                
+
                 else:
                     df.loc[pol_i, param_name] = float(
-                        scipy.interpolate.interp1d(radial["fpsi"], radial[param_name])(psi)
+                        scipy.interpolate.interp1d(radial["fpsi"], radial[param_name])(
+                            psi
+                        )
                     )
-            
+
         # Plot field line
         if debug:
-            ax.plot(df["R"], df["Z"], c = "deeppink")
-            ax.plot(df.iloc[0]["R"], df.iloc[0]["Z"], "o", markersize = 5, c = "green")
-            ax.plot(df.iloc[-1]["R"], df.iloc[-1]["Z"], "o", markersize = 5, c = "red")
+            ax.plot(df["R"], df["Z"], c="deeppink")
+            ax.plot(df.iloc[0]["R"], df.iloc[0]["Z"], "o", markersize=5, c="green")
+            ax.plot(df.iloc[-1]["R"], df.iloc[-1]["Z"], "o", markersize=5, c="red")
 
         return df
 
@@ -1159,23 +1228,28 @@ class SOLPScase():
         params,
         region="outer",
         **kwargs,
-        ):
-
+    ):
         """
         Prepare a full two-divertor field line dataset by using get_1d_poloidal_data
-        for both upper and lower and concatenating them. 
+        for both upper and lower and concatenating them.
 
-        Each dataset starts at the midplane with an interpolated value exactly at Z=0, 
+        Each dataset starts at the midplane with an interpolated value exactly at Z=0,
         so here we flip the upper leg and join it to the lower leg while removing one
         of the duplicate midplane points.
         """
 
         if "lower" in region or "upper" in region:
-            raise ValueError("Region should be 'inner_sol' or 'outer_sol' for double leg data, not 'inner_lower_sol' etc.")
+            raise ValueError(
+                "Region should be 'inner_sol' or 'outer_sol' for double leg data, not 'inner_lower_sol' etc."
+            )
 
-        df_lower = self.get_1d_poloidal_data(params, region=f"{region}_lower_sol", **kwargs)
-        df_upper = self.get_1d_poloidal_data(params, region=f"{region}_upper_sol", **kwargs)
-        fl = pd.concat([df_upper.iloc[::-1], df_lower.iloc[1:]], ignore_index = True)
+        df_lower = self.get_1d_poloidal_data(
+            params, region=f"{region}_lower_sol", **kwargs
+        )
+        df_upper = self.get_1d_poloidal_data(
+            params, region=f"{region}_upper_sol", **kwargs
+        )
+        fl = pd.concat([df_upper.iloc[::-1], df_lower.iloc[1:]], ignore_index=True)
 
         return fl
 
@@ -1208,26 +1282,36 @@ class SOLPScase():
         """
 
         if region == "outer" or region == "inner":
-            raise ValueError("Only one divertor leg at a time is supported for now, specify upper or lower")
-        
+            raise ValueError(
+                "Only one divertor leg at a time is supported for now, specify upper or lower"
+            )
+
         if isinstance(params, str):
             params = [params]
-            
+
         if sepadd is None and sepdist is None:
             raise ValueError("Must use either index i or separatrix distance sepdist")
-        
+
         elif sepadd is not None and sepdist is not None:
-            raise ValueError("Must use either index i or separatrix distance sepdist, not both")
-        
+            raise ValueError(
+                "Must use either index i or separatrix distance sepdist, not both"
+            )
+
         if "divertor" in region and interpolate_midplane:
-            raise ValueError("Interpolate midplane = true should not be used for divertor regions!")
-        
+            raise ValueError(
+                "Interpolate midplane = true should not be used for divertor regions!"
+            )
+
         if "extra" not in region and interpolate_midplane:
-            raise ValueError("Region doesn't go beyond the midplane, can't interpolate to midplane! Try regions with suffix _extra")
+            raise ValueError(
+                "Region doesn't go beyond the midplane, can't interpolate to midplane! Try regions with suffix _extra"
+            )
 
         if any([x in region for x in ["pfr", "core"]]) and interpolate_midplane:
-            raise ValueError("Interpolate midplane = true should not be used for PFR or core regions!")
-        
+            raise ValueError(
+                "Interpolate midplane = true should not be used for PFR or core regions!"
+            )
+
         if radial_start_region == "auto":
             if region == "outer_lower_pfr":
                 radial_start_region = "outer_lower_target"
@@ -1264,7 +1348,7 @@ class SOLPScase():
                 sepdist,
                 radial_start_region=radial_start_region,
                 debug=False,
-                extrapolate_radial = extrapolate_radial
+                extrapolate_radial=extrapolate_radial,
             )
 
             hx = df["hx"].values
@@ -1288,7 +1372,6 @@ class SOLPScase():
                     radial_df.loc[(radial_df["dist"] - sepdist).abs().idxmin()].name
                     - sepind
                 )
-
 
             selector = self.make_custom_sol_ring(region, i=sepadd)
 
@@ -1335,35 +1418,44 @@ class SOLPScase():
             df["apar"] = vol / dSpar
 
         # Flip certain regions to make sure we always end at a guard cell
-        if any([name in region for name in [
-            "outer_upper_sol", "inner_lower_sol",
-            "outer_upper_upstream", "inner_lower_upstream",
-            "outer_upper_divertor", "inner_lower_divertor",
-            "outer_upper_pfr", "inner_lower_pfr"
-            ]]):
+        if any(
+            [
+                name in region
+                for name in [
+                    "outer_upper_sol",
+                    "inner_lower_sol",
+                    "outer_upper_upstream",
+                    "inner_lower_upstream",
+                    "outer_upper_divertor",
+                    "inner_lower_divertor",
+                    "outer_upper_pfr",
+                    "inner_lower_pfr",
+                ]
+            ]
+        ):
             df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
             df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
-            df = df.iloc[::-1].reset_index(drop = True)
+            df = df.iloc[::-1].reset_index(drop=True)
 
         # Interpolate onto Z = 0
         if interpolate_midplane:
             for param in df.columns.drop("Z"):
-                interp = scipy.interpolate.interp1d(df["Z"], df[param], kind = "linear")
+                interp = scipy.interpolate.interp1d(df["Z"], df[param], kind="linear")
                 df.loc[df.index[0], param] = interp(0)
-            df.loc[df.index[0],"Z"] = 0  
+            df.loc[df.index[0], "Z"] = 0
 
-            df["Spol"] -= df["Spol"].iloc[0]   # Now 0 is at Z = 0
-            df["Spar"] -= df["Spar"].iloc[0]   # Now 0 is at Z = 0
+            df["Spol"] -= df["Spol"].iloc[0]  # Now 0 is at Z = 0
+            df["Spar"] -= df["Spar"].iloc[0]  # Now 0 is at Z = 0
 
-        
-        
         if "sol" in region:
             ## Value of X-point column will be 1 in the cell just downstream of X-point
-            Xpoint_index = df.index[-self.psel[region.split("_sol")[0]+"_xpoint_fromtarget"]+1]
-            
+            Xpoint_index = df.index[
+                -self.psel[region.split("_sol")[0] + "_xpoint_fromtarget"] + 1
+            ]
+
             df.loc[:Xpoint_index, "region"] = "upstream"
             df.loc[Xpoint_index:, "region"] = "divertor"
-            
+
             df["Xpoint"] = 0
             df.loc[Xpoint_index, "Xpoint"] = 1
 
@@ -1377,7 +1469,6 @@ class SOLPScase():
             df["region"] = "pfr"
         else:
             df["region"] = "core"
-        
 
         if not guards and any([x in region for x in ["sol", "divertor", "pfr"]]):
             df = df.iloc[:-1]
@@ -1386,138 +1477,148 @@ class SOLPScase():
             df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
             df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
             df = df.iloc[::-1]
-        
-        df = df.reset_index(drop = True)
+
+        df = df.reset_index(drop=True)
 
         if debug:
-            fig, ax = plt.subplots(dpi = 150)
-            self.plot_2d("Te", ax = ax, grid_only = True)
-            ax.plot(df["R"], df["Z"], "-", c = "deeppink", markersize = 3)
-            ax.plot(df.iloc[0]["R"], df.iloc[0]["Z"], "o", markersize = 5, c = "green")
-            ax.plot(df.iloc[-1]["R"], df.iloc[-1]["Z"], "o", markersize = 5, c = "red")
-        
+            fig, ax = plt.subplots(dpi=150)
+            self.plot_2d("Te", ax=ax, grid_only=True)
+            ax.plot(df["R"], df["Z"], "-", c="deeppink", markersize=3)
+            ax.plot(df.iloc[0]["R"], df.iloc[0]["Z"], "o", markersize=5, c="green")
+            ax.plot(df.iloc[-1]["R"], df.iloc[-1]["Z"], "o", markersize=5, c="red")
+
         return df
-    
+
     def find_param(self, name):
         """
         Returns variables that match string
         """
         for param in self.params:
-            if name in param: print(param)
-            
+            if name in param:
+                print(param)
+
     # def find_xpoints(self, plot = False):
     #     """
     #     Returns poloidal IDs of xpoints, works for double null only
     #     the IDs are for the cell immediately after the X-point
     #     in the direction of ascending X (poloidal) coordinate.
     #     They are arranged clockwise starting at inner lower
-        
+
     #     NOT VERY ROBUST
-        
+
     #     DEPRECATED - USING DAVID MOULTON'S XCUT METHOD INSTEAD
     #     """
 
-        # x = range(self.g["nx"])
-        # R = self.g["R"][:,self.g["sep"]]
+    # x = range(self.g["nx"])
+    # R = self.g["R"][:,self.g["sep"]]
 
-        # inner_R = self.g["R"][slice(None, self.g["upper_break"]),self.g["sep"]]
-        # inner_x = np.array(range(self.g["upper_break"]))
+    # inner_R = self.g["R"][slice(None, self.g["upper_break"]),self.g["sep"]]
+    # inner_x = np.array(range(self.g["upper_break"]))
 
+    # outer_R = self.g["R"][slice(self.g["upper_break"], None),self.g["sep"]]
+    # outer_x = np.array(range(self.g["upper_break"], self.g["nx"]))
 
-        # outer_R = self.g["R"][slice(self.g["upper_break"], None),self.g["sep"]]
-        # outer_x = np.array(range(self.g["upper_break"], self.g["nx"]))
+    # import scipy
 
-        # import scipy
+    # inner_ids = scipy.signal.find_peaks(inner_R, threshold = 0.0007)
+    # outer_ids = scipy.signal.find_peaks(outer_R*-1, threshold = 0.001)
 
-        # inner_ids = scipy.signal.find_peaks(inner_R, threshold = 0.0007)
-        # outer_ids = scipy.signal.find_peaks(outer_R*-1, threshold = 0.001)
+    # issue = False
 
-            
-                
-        # issue = False
-        
-        # if (len(inner_ids[0]) > 2):
-        #     print("Too many X-points found in inner SOL")
-        #     issue = True
-        # elif (len(inner_ids[0]) < 2):
-        #     print("Too few X-points found in inner SOL")
-        #     issue = True
-            
-        # if (len(outer_ids[0]) > 2):
-        #     print("Too many X-points found in outer SOL")
-        #     issue = True
-            
-        # elif (len(outer_ids[0]) < 2):
-        #     print("Too few X-points found in outer SOL")
-        #     issue = True
-            
-        # if issue or plot:
-        #     fig, axes = plt.subplots(1,2, figsize = (8,4))
-        #     ax = axes[0]
-        #     ax.set_title("Inner SOL")
-        #     ax.plot(inner_x, inner_R)
-        #     for i in inner_ids[0]:
-        #         ax.scatter(inner_x[i], inner_R[i])
-        #     ax = axes[1]
-        #     ax.set_title("Outer SOL")
-        #     ax.plot(outer_x, outer_R)
-        #     for i in outer_ids[0]:
-        #         ax.scatter(outer_x[i], outer_R[i])
-                
-        # if issue:
-        #     raise Exception("Issue in peak finder, try reducing threshold")
+    # if (len(inner_ids[0]) > 2):
+    #     print("Too many X-points found in inner SOL")
+    #     issue = True
+    # elif (len(inner_ids[0]) < 2):
+    #     print("Too few X-points found in inner SOL")
+    #     issue = True
 
-        # xpoints = [
-        #     inner_ids[0][0], 
-        #     inner_ids[0][1]+1, 
-        #     outer_ids[0][0]+ self.g["upper_break"] + 1, 
-        #     outer_ids[0][1]+ self.g["upper_break"]
-        #     ]
+    # if (len(outer_ids[0]) > 2):
+    #     print("Too many X-points found in outer SOL")
+    #     issue = True
 
-        # return xpoints
-    
-    def plot_selection(self, sel, ax = None, title = None, **kwargs):
+    # elif (len(outer_ids[0]) < 2):
+    #     print("Too few X-points found in outer SOL")
+    #     issue = True
+
+    # if issue or plot:
+    #     fig, axes = plt.subplots(1,2, figsize = (8,4))
+    #     ax = axes[0]
+    #     ax.set_title("Inner SOL")
+    #     ax.plot(inner_x, inner_R)
+    #     for i in inner_ids[0]:
+    #         ax.scatter(inner_x[i], inner_R[i])
+    #     ax = axes[1]
+    #     ax.set_title("Outer SOL")
+    #     ax.plot(outer_x, outer_R)
+    #     for i in outer_ids[0]:
+    #         ax.scatter(outer_x[i], outer_R[i])
+
+    # if issue:
+    #     raise Exception("Issue in peak finder, try reducing threshold")
+
+    # xpoints = [
+    #     inner_ids[0][0],
+    #     inner_ids[0][1]+1,
+    #     outer_ids[0][0]+ self.g["upper_break"] + 1,
+    #     outer_ids[0][1]+ self.g["upper_break"]
+    #     ]
+
+    # return xpoints
+
+    def plot_selection(self, sel, ax=None, title=None, **kwargs):
         """
         Plots scatter of selected points according to the tuple sel
         which contains slices in (X, Y)
         Examples provided in self.s
         """
-        
+
         data = self.bal["ne"][:]
         data = np.zeros_like(data)
 
         data[sel] = 1
-        
+
         def_kwargs = dict(
-            separatrix_kwargs = dict(lw = 0.5, ls = "--", c = "white"),
-            linewidth = 0.1)
-        
+            separatrix_kwargs=dict(lw=0.5, ls="--", c="white"), linewidth=0.1
+        )
+
         plot_kwargs = {**def_kwargs, **kwargs}
-        
+
         if "dpi" in kwargs:
             dpi = kwargs["dpi"]
         else:
             dpi = 150
-            
+
         if ax == None:
-            fig, ax = plt.subplots(dpi = dpi)
+            fig, ax = plt.subplots(dpi=dpi)
 
-        
+        self.plot_2d(
+            "",
+            ax=ax,
+            data=data,
+            cmap=mpl.colors.ListedColormap(["lightgrey", "limegreen"]),
+            antialias=True,
+            cbar=False,
+            **plot_kwargs,
+        )
 
-        self.plot_2d("", ax = ax, data = data, cmap = mpl.colors.ListedColormap(["lightgrey", "limegreen"]),
-             antialias = True, 
-             cbar = False,
-             **plot_kwargs)
-        
-        ax.scatter(self.g["R"][sel], self.g["Z"][sel], c = "deeppink", s = 3)
+        ax.scatter(self.g["R"][sel], self.g["Z"][sel], c="deeppink", s=3)
 
         if title:
             ax.set_title(title)
-        
-    def extract_cooling_curve(self, species, region, sepadd, order = 10, 
-                              plot = False, cz_effect = False,
-                              ne_effect = False, other_losses = False, constant_cz = 0.05,
-                              polyval = True):
+
+    def extract_cooling_curve(
+        self,
+        species,
+        region,
+        sepadd,
+        order=10,
+        plot=False,
+        cz_effect=False,
+        ne_effect=False,
+        other_losses=False,
+        constant_cz=0.05,
+        polyval=True,
+    ):
         """
         Extract cooling curve from a single SOL ring
         Inputs: species (e.g. Ar). Must calculate RAr and fAr first (get radiation stats)
@@ -1525,92 +1626,100 @@ class SOLPScase():
         sepadd: no. sol rings beyond separatrix
         order: order of polynomial fit
         plot: debug plot
-        
+
         Returns a function for the cooling curve which takes a float
         and returns the curve in Wm3
         """
-        
+
         if other_losses:
-            param_list = ["Te", f"R{species}", "RC", "Rd+_exiz", "Rd+_mol", f"f{species}", "ne"]
+            param_list = [
+                "Te",
+                f"R{species}",
+                "RC",
+                "Rd+_exiz",
+                "Rd+_mol",
+                f"f{species}",
+                "ne",
+            ]
         else:
             param_list = ["Te", f"R{species}", f"f{species}", "ne"]
 
-        solps = self.get_1d_poloidal_data(param_list, sepadd = sepadd, region = region)
+        solps = self.get_1d_poloidal_data(param_list, sepadd=sepadd, region=region)
         solps = solps.iloc[:-1]  # Ignore guard cell
         solps[f"R{species}"] = abs(solps[f"R{species}"])
 
         x = solps["Te"]
         upper_limit = solps["Te"].max()  # Upper validity limit
-        
-            
+
         if other_losses:
             solps["RC"] = np.abs(solps["RC"])
             solps["Rd+_exiz"] = np.abs(solps["Rd+_exiz"])
             solps["Rd+_mol"] = np.abs(solps["Rd+_mol"])
-            Qrad = solps[f"R{species}"] + solps["RC"] + solps["Rd+_exiz"] + solps["Rd+_mol"]
+            Qrad = (
+                solps[f"R{species}"]
+                + solps["RC"]
+                + solps["Rd+_exiz"]
+                + solps["Rd+_mol"]
+            )
         else:
             Qrad = solps[f"R{species}"]
-            
+
         if cz_effect:
             cz = constant_cz
         else:
             cz = solps[f"f{species}"]
-            
+
         if ne_effect:
             upstream = solps.iloc[0]
             ne = upstream["ne"] * upstream["Te"] / solps["Te"]
         else:
             ne = solps["ne"]
-            
-        y = Qrad/(ne**2 * cz)
-        
-        
+
+        y = Qrad / (ne**2 * cz)
+
         if polyval:
             logx = np.log10(x)
             logy = np.log10(y)
 
             coeffs = np.polyfit(logx, logy, order)
             fit_logy = np.polyval(coeffs, logx)
-            
-            
+
             if plot:
                 ms = 2
-                fig, axes = plt.subplots(1,2, figsize = (10,4))
-                axes[0].plot(logx, logy, c = "k", marker = "o", lw = 0, ms = ms, label = "SOLPS")
-                
+                fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+                axes[0].plot(logx, logy, c="k", marker="o", lw=0, ms=ms, label="SOLPS")
+
                 axes[0].set_title("Log space")
                 axes[0].set_xlabel("logTe")
                 axes[0].set_ylabel("logLz")
-                
-                axes[1].plot(x, 10**(fit_logy), c = "darkorange")
-                axes[1].plot(x, y, c = "k", marker = "o", lw = 0, ms = ms, label = "SOLPS")
+
+                axes[1].plot(x, 10 ** (fit_logy), c="darkorange")
+                axes[1].plot(x, y, c="k", marker="o", lw=0, ms=ms, label="SOLPS")
                 axes[1].set_title("Linear space")
                 axes[1].set_xlabel("Te")
                 axes[1].set_ylabel("Lz")
-                
+
                 for ax in axes:
                     ax.legend()
-                
-                
-            
+
             def fit(T):
-            
+
                 if not any([type(T) != format for format in [np.float64, float]]):
                     raise ValueError("T must be a float")
 
                 logT = np.log10(T)
                 fit = lambda x: 10 ** np.polyval(coeffs, logT)
-                
+
                 if T > upper_limit:
                     return 0
                 elif T < 2:
                     return 0
                 else:
                     return fit(logT)
-                
+
         else:
-            interp = scipy.interpolate.interp1d(np.log10(x), y, kind = "quadratic")
-            
+            interp = scipy.interpolate.interp1d(np.log10(x), y, kind="quadratic")
+
             def fit(T):
                 if not any([type(T) != format for format in [np.float64, float]]):
                     raise ValueError("T must be a float")
@@ -1621,79 +1730,93 @@ class SOLPScase():
                     return 0
                 else:
                     return interp(np.log10(T))
-            
+
         return fit
 
-    def extract_kappa0(self, sepadd, region, target_first = True, plot =False, 
-                       qpar_weighted = True, total_hflux = True, skip_xpoint = False, print_kappa=False):
-        
-        df = self.get_1d_poloidal_data(["Te", "fhex_cond", "fhx_total"], 
-                                  sepadd = sepadd, region = region, target_first = target_first)
-                                  
+    def extract_kappa0(
+        self,
+        sepadd,
+        region,
+        target_first=True,
+        plot=False,
+        qpar_weighted=True,
+        total_hflux=True,
+        skip_xpoint=False,
+        print_kappa=False,
+    ):
+
+        df = self.get_1d_poloidal_data(
+            ["Te", "fhex_cond", "fhx_total"],
+            sepadd=sepadd,
+            region=region,
+            target_first=target_first,
+        )
 
         if "outer_upper_sol" in region or "inner_lower_sol" in region:
             mult = -1
         else:
             mult = 1
-            
+
         if total_hflux:
             df["qpar"] = df["fhx_total"] / df["apar"] * mult
         else:
             df["qpar"] = df["fhex_cond"] / df["apar"] * mult
 
         ### TRIM FIELD LINE
-        df = df.iloc[1:-1] # Remove guard cells
+        df = df.iloc[1:-1]  # Remove guard cells
         # df = df[df["Te"]>10] # Discard below front (temp)
-        qpar_front_idx = df[df["qpar"] > df["qpar"].max() * 0.15].index[0]  # Discard below front (qpar)
+        qpar_front_idx = df[df["qpar"] > df["qpar"].max() * 0.15].index[
+            0
+        ]  # Discard below front (qpar)
         df = df.iloc[qpar_front_idx:]
         df = df.iloc[:-2]
 
         # Skip points around X-point due to temperature gradient anomaly
         if skip_xpoint:
             xpoint_index = df[df["Xpoint"] == 1].index[0]
-            skip_indices = [xpoint_index-1, xpoint_index, xpoint_index+1]
+            skip_indices = [xpoint_index - 1, xpoint_index, xpoint_index + 1]
             df = df[~df.index.isin(skip_indices)]
 
         ### Kappa calc
         df["gradT"] = np.gradient(df["Te"], df["Spar"])
-        df = df[df["gradT"]>0]  # Discard negative T gradient
+        df = df[df["gradT"] > 0]  # Discard negative T gradient
 
-        df["kappa0"] = df["qpar"] / (df["Te"]**(5/2) * df["gradT"]) 
+        df["kappa0"] = df["qpar"] / (df["Te"] ** (5 / 2) * df["gradT"])
         df["kappa0_times_qpar"] = df["kappa0"] * df["qpar"]
 
-            
         if plot:
-            
-            dfx = df[df["Xpoint"]==1]
+            dfx = df[df["Xpoint"] == 1]
             fig, ax = plt.subplots()
-            ax.plot(df["Spar"], df["kappa0"], marker = "o", label = "kappa0", ms = 3, lw = 1)
-            ax.plot(dfx["Spar"], dfx["kappa0"], lw = 0, marker = "x", ms = 3)
+            ax.plot(df["Spar"], df["kappa0"], marker="o", label="kappa0", ms=3, lw=1)
+            ax.plot(dfx["Spar"], dfx["kappa0"], lw=0, marker="x", ms=3)
             ax2 = ax.twinx()
-            ax2.plot(df["Spar"], df["Te"], c = "r", marker = "o", label = "Te", ms = 3, lw = 1)
-            
+            ax2.plot(df["Spar"], df["Te"], c="r", marker="o", label="Te", ms=3, lw=1)
+
             ax.set_ylabel("kappa0")
             ax2.set_ylabel("Te [eV]")
             ax3 = ax.twinx()
-            ax3.plot(df["Spar"], df["qpar"], c = "darkorange", marker = "*", label = "qpar")
-            
+            ax3.plot(df["Spar"], df["qpar"], c="darkorange", marker="*", label="qpar")
+
             for x in [ax, ax2, ax3]:
-                x.grid(which = "both", visible = False)
-            fig.legend(loc = "upper right", bbox_to_anchor = (0.9, 0.9))
-            
+                x.grid(which="both", visible=False)
+            fig.legend(loc="upper right", bbox_to_anchor=(0.9, 0.9))
+
         if qpar_weighted:
             out = (df["kappa0_times_qpar"] / df["qpar"].sum()).sum()
         else:
             out = df["kappa0"].mean()
-            
+
         if print_kappa:
             print(f"Kappa0: {out:.0f}")
-            
+
         return out
-    
-    def extract_front_pos(self, sepadd, region, impurity = "N", method = "qpar_tot", threshold = 0.05):
+
+    def extract_front_pos(
+        self, sepadd, region, impurity="N", method="qpar_tot", threshold=0.05
+    ):
         """
-        Extract front position. 
-        
+        Extract front position.
+
         Inputs
         ------
         sepadd: no. of SOL rings beyond separatrix
@@ -1703,16 +1826,19 @@ class SOLPScase():
         threshold: fraction of max value to define front
         """
 
-        df = self.get_1d_poloidal_data(["Te", "fhex_cond", "fhx_total", f"R{impurity}", "Btot"], 
-                                  sepadd = sepadd, region = region, target_first = True)
-        
+        df = self.get_1d_poloidal_data(
+            ["Te", "fhex_cond", "fhx_total", f"R{impurity}", "Btot"],
+            sepadd=sepadd,
+            region=region,
+            target_first=True,
+        )
 
         df["qpar_cond"] = df["fhex_cond"] / df["apar"]
         df["qpar_tot"] = df["fhx_total"] / df["apar"]
         df["qpar_total"] = df["qpar_tot"]
 
         param = method
-        
+
         if "qpar" in param:
             df[param] = df[param].abs()
             max = df[param].max()
@@ -1720,135 +1846,162 @@ class SOLPScase():
             df_low = df.loc[:max_idx]
             df_low_rev = df_low.iloc[::-1].reset_index(drop=True)
 
-            df_after_front = df_low_rev[df_low_rev[param] <= max*threshold].reset_index(drop = True)
+            df_after_front = df_low_rev[
+                df_low_rev[param] <= max * threshold
+            ].reset_index(drop=True)
             if len(df_after_front) == 0:
                 front_spar = 0
             else:
                 front_spar = df_after_front.iloc[0]["Spar"]
-            
+
         else:
-            cumR = scipy.integrate.cumulative_trapezoid(y = df[f"R{impurity}"] / df["Btot"], x = df["Spar"], initial = 0)
-            df["cumR"] = cumR/cumR[-1]
-            df_after_front = df[df[param] <= threshold].reset_index(drop = True)
+            cumR = scipy.integrate.cumulative_trapezoid(
+                y=df[f"R{impurity}"] / df["Btot"], x=df["Spar"], initial=0
+            )
+            df["cumR"] = cumR / cumR[-1]
+            df_after_front = df[df[param] <= threshold].reset_index(drop=True)
             front_spar = df_after_front.iloc[-1]["Spar"]
-        
-        
+
         return front_spar
-    
-    
-    def get_leg_energy_balance(self, sepadd, region, impurities = ["N", "C"], plot = False):
-        
+
+    def get_leg_energy_balance(self, sepadd, region, impurities=["N", "C"], plot=False):
+
         impurity_variables = [f"R{impurity}" for impurity in impurities]
-        
-        fluxlist = ["fhex_total", "fhey_total", "fhix_total", "fhiy_total", "fhey_32", "fhey_cond", "fhiy_32", "fhiy_cond", "fhx_total"]
-        fline = self.get_1d_poloidal_data(impurity_variables + fluxlist + ["vol","Rd+_exiz", "Rd+_mol"], sepadd = sepadd, region = region, target_first = True)
-        fline_right = self.get_1d_poloidal_data(fluxlist, sepadd = sepadd+1, region = region, target_first = True)
-        
+
+        fluxlist = [
+            "fhex_total",
+            "fhey_total",
+            "fhix_total",
+            "fhiy_total",
+            "fhey_32",
+            "fhey_cond",
+            "fhiy_32",
+            "fhiy_cond",
+            "fhx_total",
+        ]
+        fline = self.get_1d_poloidal_data(
+            impurity_variables + fluxlist + ["vol", "Rd+_exiz", "Rd+_mol"],
+            sepadd=sepadd,
+            region=region,
+            target_first=True,
+        )
+        fline_right = self.get_1d_poloidal_data(
+            fluxlist, sepadd=sepadd + 1, region=region, target_first=True
+        )
+
         for param in fluxlist:
             if "inner_lower_sol" in region or "outer_upper_sol" in region:
                 fline[param] *= -1
                 fline_right[param] *= -1
-                
+
         if fline["fhx_total"].max() < 0:
             raise Exception("Total heat flux negative: fix sign")
-        
+
         fline_x = fline.query("Xpoint == 1").squeeze()  # First cell after X-point
         fline_right_x = fline_right.query("Xpoint == 1").squeeze()
-        fline_div = fline.query("region == 'divertor'")   # Cells below X-point
-        fline_right_div = fline_right.query("region == 'divertor'") 
+        fline_div = fline.query("region == 'divertor'")  # Cells below X-point
+        fline_right_div = fline_right.query("region == 'divertor'")
         out = {}
         for impurity in impurities:
             out[f"P_{impurity}"] = (fline[f"R{impurity}"] * fline["vol"]).sum()
-            
-        
-            
-        
-        out["P_H"] = ((fline["Rd+_exiz"].abs() + fline["Rd+_mol"].abs()) * fline["vol"]).sum()
+
+        out["P_H"] = (
+            (fline["Rd+_exiz"].abs() + fline["Rd+_mol"].abs()) * fline["vol"]
+        ).sum()
         out["P_div"] = fline_x["fhex_total"] + fline_x["fhix_total"]
-        
+
         out["qpar_mapped_to_target"] = out["P_div"] / fline.iloc[0]["apar"]
-        
+
         # Radial divergences: positive = flow radially outwards
         # Top = towards SOL, bottom = towards core (logical grid convention)
         # out["P_radial_e_bottom"] = fline_div["fhey_total"].sum()
-        # out["P_radial_e_top"] = fline_right_div["fhey_total"].sum() 
-        
-        # out["P_radial_i_bottom"] = fline_div["fhiy_total"].sum() 
-        # out["P_radial_i_top"] = fline_right_div["fhiy_total"].sum()  
-        
+        # out["P_radial_e_top"] = fline_right_div["fhey_total"].sum()
+
+        # out["P_radial_i_bottom"] = fline_div["fhiy_total"].sum()
+        # out["P_radial_i_top"] = fline_right_div["fhiy_total"].sum()
+
         # Need to know what "stays" in the tube, so take what entered and subtract what left
-        # out["P_radial_e"] = (out["P_radial_e_bottom"] - out["P_radial_e_top"]).sum() 
-        # out["P_radial_i"] = (out["P_radial_i_bottom"] - out["P_radial_i_top"]).sum() 
+        # out["P_radial_e"] = (out["P_radial_e_bottom"] - out["P_radial_e_top"]).sum()
+        # out["P_radial_i"] = (out["P_radial_i_bottom"] - out["P_radial_i_top"]).sum()
         # out["P_radial"] = out["P_radial_e"] + out["P_radial_i"]
-        
+
         P_radial_e_bottom = fline_div["fhey_total"]
-        P_radial_e_top = fline_right_div["fhey_total"] 
-        
-        P_radial_i_bottom = fline_div["fhiy_total"] 
-        P_radial_i_top = fline_right_div["fhiy_total"]  
-        
+        P_radial_e_top = fline_right_div["fhey_total"]
+
+        P_radial_i_bottom = fline_div["fhiy_total"]
+        P_radial_i_top = fline_right_div["fhiy_total"]
+
         P_radial_e = P_radial_e_bottom - P_radial_e_top
         P_radial_i = P_radial_i_bottom - P_radial_i_top
         P_radial = P_radial_e + P_radial_i
-        
-        out["P_radial_e"] = P_radial_e.sum() 
-        out["P_radial_i"] = P_radial_i.sum() 
+
+        out["P_radial_e"] = P_radial_e.sum()
+        out["P_radial_i"] = P_radial_i.sum()
         out["P_radial"] = P_radial.sum()
-        
+
         if plot:
             fig, ax = plt.subplots()
-            ax.plot(fline_div["Spar"], fline_div["fhx_total"], label = "total", c = "k")
-            ax.plot(fline_div["Spar"], (fline_div["Rd+_exiz"].abs() + fline_div["Rd+_mol"].abs()) * fline_div["vol"], label = "H")
-            ax.plot(fline_div["Spar"], fline_div["RAr"]*fline_div["vol"], label = "Ar")
-            ax.plot(fline_div["Spar"], P_radial, label = "radial")
-            ax.set_title(f"{region}, ring {sepadd+1}")
+            ax.plot(fline_div["Spar"], fline_div["fhx_total"], label="total", c="k")
+            ax.plot(
+                fline_div["Spar"],
+                (fline_div["Rd+_exiz"].abs() + fline_div["Rd+_mol"].abs())
+                * fline_div["vol"],
+                label="H",
+            )
+            ax.plot(fline_div["Spar"], fline_div["RAr"] * fline_div["vol"], label="Ar")
+            ax.plot(fline_div["Spar"], P_radial, label="radial")
+            ax.set_title(f"{region}, ring {sepadd + 1}")
             ax.legend()
             ax.set_ylabel(f"Integrated power source [W]")
             ax.set_xlabel("Spar")
 
-
         return out
-    
-    def get_leg_particle_balance(self, sepadd, region, Te_threshold = 0):
+
+    def get_leg_particle_balance(self, sepadd, region, Te_threshold=0):
         """
         Return integrals of particle sources along a single field line
         and comparison of them to the particle flux entering the divertor
         Ability to filter by temperature to exclude detachment region with Te_threshold
         """
-        
+
         variables = ["Te", "vol", "fnax_D+1_pll", "fnay_D+1_nanom", "Sd+_iz", "Sd+_rec"]
-        fline = self.get_1d_poloidal_data(variables, sepadd = sepadd, region = region, target_first = True)
-        fline_right = self.get_1d_poloidal_data(variables, sepadd = sepadd+1, region = region, target_first = True)
-        
+        fline = self.get_1d_poloidal_data(
+            variables, sepadd=sepadd, region=region, target_first=True
+        )
+        fline_right = self.get_1d_poloidal_data(
+            variables, sepadd=sepadd + 1, region=region, target_first=True
+        )
 
         fline_x = fline.query("Xpoint == 1").squeeze()  # First cell after X-point
         fline_right_x = fline_right.query("Xpoint == 1").squeeze()
-        fline_div = fline.query(f"region == 'divertor' & Te > {Te_threshold}")   # Cells below X-point
-        fline_right_div = fline_right.query(f"region == 'divertor' & Spar > {fline_div['Spar'].min()}")  # Same filter on RHS fline   
-        
+        fline_div = fline.query(
+            f"region == 'divertor' & Te > {Te_threshold}"
+        )  # Cells below X-point
+        fline_right_div = fline_right.query(
+            f"region == 'divertor' & Spar > {fline_div['Spar'].min()}"
+        )  # Same filter on RHS fline
+
         if any([x in region for x in ["inner_lower_sol"]]):
             mult = -1
         else:
             mult = 1
-            
+
         # plt.plot(fline_div["Spar"] , fline_div["Sd+_iz"] * fline_div["vol"])
-        
+
         out = {}
         out["S_div"] = fline_x["fnax_D+1_pll"] * mult
-        out["S_iz"] = (fline_div["Sd+_iz"]*fline_div["vol"]).sum()
-        
-        out["S_rec"] = (fline_div["Sd+_rec"]*fline_div["vol"]).sum()
-        
+        out["S_iz"] = (fline_div["Sd+_iz"] * fline_div["vol"]).sum()
+
+        out["S_rec"] = (fline_div["Sd+_rec"] * fline_div["vol"]).sum()
+
         out["S_radial_bottom"] = fline_div["fnay_D+1_nanom"].sum() * -1 * mult
         out["S_radial_top"] = fline_right_div["fnay_D+1_nanom"].sum() * -1 * mult
         out["S_radial"] = out["S_radial_bottom"] - out["S_radial_top"]
-        
+
         return out
 
-                 
 
-        
-def create_norm(logscale, norm, vmin, vmax, linthresh = None):
+def create_norm(logscale, norm, vmin, vmax, linthresh=None):
     if logscale:
         if norm is not None:
             raise ValueError(
@@ -1863,11 +2016,13 @@ def create_norm(logscale, norm, vmin, vmax, linthresh = None):
                 linear_scale = logscale
             else:
                 linear_scale = 1.0e-5
-            
+
             if linthresh is None:
                 linear_threshold = min(abs(vmin), abs(vmax)) * linear_scale
                 if linear_threshold == 0:
-                    linear_threshold = 1e-4 * vmax   # prevents crash on "Linthresh must be positive"
+                    linear_threshold = (
+                        1e-4 * vmax
+                    )  # prevents crash on "Linthresh must be positive"
             else:
                 linear_threshold = linthresh
             norm = mpl.colors.SymLogNorm(linear_threshold, vmin=vmin, vmax=vmax)
@@ -1876,42 +2031,47 @@ def create_norm(logscale, norm, vmin, vmax, linthresh = None):
 
     return norm
 
+
 def read_display_tallies(path):
-    """ 
+    """
     This reads a csv file coming from a copy paste of the output of the display_tallies SOLPS routine
     It parses the table into three dataframes corresponding to the volumetric tallies,
     and the tallies of fluxes between regions in the x and y directions
     Each variable comes in three flavours: suffixless = total, _n = neutrals, _i = ions
     """
-    
+
     # Read display tallies csv copied from console
-    df = pd.read_csv(path, skiprows=2, names = range(16), sep = r"\s+", index_col = 0)
+    df = pd.read_csv(path, skiprows=2, names=range(16), sep=r"\s+", index_col=0)
 
     # Make a col "param" with parameters - rest of columns are the 0-14 regions (double null only)
     df = df[df.index.notnull()].reset_index()
     df.columns = df.columns - 1
-    df = df.rename({-1 : "param"}, axis = 1)
-    
+    df = df.rename({-1: "param"}, axis=1)
+
     # Some lines have no parameter title and the delimiter parsing makes it start as a number
     # Shift those back to be in line with the others
-    df[df["param"].str.contains(r"E\+")] = df[df["param"].str.contains(r"E\+")].shift(axis=1)
+    df[df["param"].str.contains(r"E\+")] = df[df["param"].str.contains(r"E\+")].shift(
+        axis=1
+    )
 
     params = df["param"][df["param"].str.contains(r"D0|D\+|None") == False].values
 
     for i in df.index:
         # Empty rows due to the shifting above are now labelled correctly
         if df.loc[i, "param"] == None:
-            df.loc[i, "param"] = df.loc[i-1, "param"]
-            df.loc[i-1, "param"] = None
+            df.loc[i, "param"] = df.loc[i - 1, "param"]
+            df.loc[i - 1, "param"] = None
 
         # Label D0 as _n, D+1 as _i and D0 + D+1 as the original parameter
         if df.loc[i, "param"] == "D0":
-            name = df.loc[i-1, "param"]
-            df.loc[i, "param"] = name+"_n"
-            df.loc[i+1, "param"] = name+"_i"
-            df.loc[i-1] = df.loc[i] + df.loc[i+1]   # The name without suffix becomes sum of neutrals and ions
-            df.loc[i-1, "param"] = name
-            
+            name = df.loc[i - 1, "param"]
+            df.loc[i, "param"] = name + "_n"
+            df.loc[i + 1, "param"] = name + "_i"
+            df.loc[i - 1] = (
+                df.loc[i] + df.loc[i + 1]
+            )  # The name without suffix becomes sum of neutrals and ions
+            df.loc[i - 1, "param"] = name
+
     # Remove all None junk
     df = df[~df["param"].isna()]
 
@@ -1919,109 +2079,119 @@ def read_display_tallies(path):
         df[i] = df[i].astype(float)
 
     # Parse the volumetric regions
-    dfreg = df[((df["param"].str.contains("x|y") == False) & (df["param"].str.contains("reg") == True))]
-    dfreg = dfreg.rename({
-        0 : "total",
-        1 : "inner_core",
-        2 : "inner_sol",
-        3 : "inner_lower_target",
-        4 : "inner_upper_target",
-        5 : "outer_core",
-        6 : "outer_sol",
-        7 : "outer_upper_target",
-        8 : "outer_lower_target"
-    }, axis = 1
+    dfreg = df[
+        (
+            (df["param"].str.contains("x|y") == False)
+            & (df["param"].str.contains("reg") == True)
+        )
+    ]
+    dfreg = dfreg.rename(
+        {
+            0: "total",
+            1: "inner_core",
+            2: "inner_sol",
+            3: "inner_lower_target",
+            4: "inner_upper_target",
+            5: "outer_core",
+            6: "outer_sol",
+            7: "outer_upper_target",
+            8: "outer_lower_target",
+        },
+        axis=1,
     ).dropna(axis=1)
 
     # Parse the fluxes between regions in the X direction
-    dfxreg = df[((df["param"].str.contains("xreg") == True))]
-    dfxreg = dfxreg.rename({
-        0 : "total",
-        1 : "inner_lower_target",
-        2 : "inner_lower_entrance",
-        3 : "inner_upper_entrance",
-        4 : "inner_upper_target",
-        5 : "outer_upper_target",
-        6 : "outer_upper_entrance",
-        7 : "outer_lower_entrance",
-        8 : "outer_lower_target",
-        9 : "lower_inner_pfr_to_inner_core",
-        10 : "inner_core_to_inner_upper_pfr",
-        11 : "outer_upper_pfr_to_outer_core",
-        12 : "outer_core_to_outer_lower_pfr"
-    }, axis = 1
+    dfxreg = df[(df["param"].str.contains("xreg") == True)]
+    dfxreg = dfxreg.rename(
+        {
+            0: "total",
+            1: "inner_lower_target",
+            2: "inner_lower_entrance",
+            3: "inner_upper_entrance",
+            4: "inner_upper_target",
+            5: "outer_upper_target",
+            6: "outer_upper_entrance",
+            7: "outer_lower_entrance",
+            8: "outer_lower_target",
+            9: "lower_inner_pfr_to_inner_core",
+            10: "inner_core_to_inner_upper_pfr",
+            11: "outer_upper_pfr_to_outer_core",
+            12: "outer_core_to_outer_lower_pfr",
+        },
+        axis=1,
     ).dropna(axis=1)
-    
+
     # Parse the fluxes between regions in the Y direction
-    dfyreg = df[((df["param"].str.contains("yreg") == True))]
-    dfyreg = dfyreg.rename({
-        0 : "total",
-        1 : "inner_lower_pfr",
-        2 : "inner_core",
-        3 : "inner_upper_pfr",
-        4 : "inner_separatrix",
-        5 : "inner_lower_sol",
-        6 : "inner_sol",
-        7 : "inner_upper_sol",
-        8 : "outer_upper_pfr",
-        9 : "outer_core",
-        10 : "outer_lower_pfr",
-        11 : "outer_separatrix",
-        12 : "outer_upper_sol",
-        13 : "outer_sol",
-        14 : "outer_lower_sol"
-    }, axis = 1
+    dfyreg = df[(df["param"].str.contains("yreg") == True)]
+    dfyreg = dfyreg.rename(
+        {
+            0: "total",
+            1: "inner_lower_pfr",
+            2: "inner_core",
+            3: "inner_upper_pfr",
+            4: "inner_separatrix",
+            5: "inner_lower_sol",
+            6: "inner_sol",
+            7: "inner_upper_sol",
+            8: "outer_upper_pfr",
+            9: "outer_core",
+            10: "outer_lower_pfr",
+            11: "outer_separatrix",
+            12: "outer_upper_sol",
+            13: "outer_sol",
+            14: "outer_lower_sol",
+        },
+        axis=1,
     ).dropna(axis=1)
-    
+
     for dfout in [dfreg, dfxreg, dfyreg]:
         dfout.index = dfout.pop("param")
 
-    return {"reg":dfreg, "xreg":dfxreg, "yreg":dfyreg }
+    return {"reg": dfreg, "xreg": dfxreg, "yreg": dfyreg}
+
 
 def extract_eirene_spectra(logpath):
     """
     Extracts EIRENE spectra saved to log file.
     WARNING: WILL ONLY GET THE FIRST INSTANCE!
-    
+
     """
     ## Extract spectrum relevant lines
     lines = []
     read = False
-    with open(logpath, 'r') as f:
+    with open(logpath, "r") as f:
         for line in f:
-            
             if "THIS IS THE SUM OVER THE STRATA" in line:
                 read = True
             if "B2-EIRENE GLOBAL BALANCES" in line:
                 read = False
-                
+
             if read:
                 lines.append(line.rstrip())
-                
+
     ## Parse for stats and locate data
     for i, line in enumerate(lines):
         if "NUMBER OF MONTE CARLO HISTORIES" in line:
-            n_histories = float(lines[i+1].split()[-1])
+            n_histories = float(lines[i + 1].split()[-1])
         if "SPECTRUM CALCULATED FOR SCORING CELL" in line:
             cell_id = int(line.split()[-1])
         if "INTEGRAL OF SPECTRUM" in line:
             spectrum_integral = float(line.split()[-1])
-        
+
         if "B-LEFT" in line:
-            line_data_bin0 = i+1
-            line_data_start = i+3
-            
+            line_data_bin0 = i + 1
+            line_data_start = i + 3
+
         if "TEST PARTICLE INFLUX FROM SOURCE (AMP)" in line:
-            line_data_end = i-5
-            line_data_lastbin = i-3
-        
-    ## Extract lines with spectrum data    
+            line_data_end = i - 5
+            line_data_lastbin = i - 3
+
+    ## Extract lines with spectrum data
     spectrum_lines = []
     spectrum_lines.append(lines[line_data_bin0])
     for i in range(line_data_start, line_data_end):
         spectrum_lines.append(lines[i])
-        
-        
+
     ## Extract data from lines
     bin = []
     B_left = []
@@ -2029,13 +2199,11 @@ def extract_eirene_spectra(logpath):
     flux_per_bin = []
 
     for i, line in enumerate(spectrum_lines):
-            
-            line_split = line.strip().split(" ")
-            bin.append(int(line_split[0]))
-            B_left.append(float(line_split[2]))
-            B_right.append(float(line_split[4]))
-            flux_per_bin.append(float(line_split[6]))
-
+        line_split = line.strip().split(" ")
+        bin.append(int(line_split[0]))
+        B_left.append(float(line_split[2]))
+        B_right.append(float(line_split[4]))
+        flux_per_bin.append(float(line_split[6]))
 
     out = {}
     out["B_left"] = np.array(B_left)
@@ -2046,8 +2214,9 @@ def extract_eirene_spectra(logpath):
     out["n_histories"] = n_histories
     out["spectrum_integral"] = spectrum_integral
     out["cell_id"] = cell_id
-    
+
     return out
+
 
 def returnll(R, Z):
     # return the poloidal distances from the target for a given configuration
@@ -2080,6 +2249,3 @@ def returnS(R, Z, B, Bpol):
         PrevR = R[i]
         PrevZ = Z[i]
     return s
-
-
-

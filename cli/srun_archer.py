@@ -11,14 +11,14 @@ import time
 
 # https://realpython.com/python-subprocess/
 
-parser = argparse.ArgumentParser(description = "Run case")
-parser.add_argument("casepath", type=str, help = "Case to run")
-parser.add_argument("-b", type=str, help = "Branch (build folder name)")
-parser.add_argument("-c", type=str, help = "Number of cores", default = 120)
-parser.add_argument("-t", type=str, help = "Time in hh:mm:ss", default = "24:00:00")
-parser.add_argument("-N", type=str, help = "Number of nodes", default = 1)
-parser.add_argument("-restart", action="store_true", help = "Restart?")
-parser.add_argument("-append", action="store_true", help = "Append?")
+parser = argparse.ArgumentParser(description="Run case")
+parser.add_argument("casepath", type=str, help="Case to run")
+parser.add_argument("-b", type=str, help="Branch (build folder name)")
+parser.add_argument("-c", type=str, help="Number of cores", default=120)
+parser.add_argument("-t", type=str, help="Time in hh:mm:ss", default="24:00:00")
+parser.add_argument("-N", type=str, help="Number of nodes", default=1)
+parser.add_argument("-restart", action="store_true", help="Restart?")
+parser.add_argument("-append", action="store_true", help="Append?")
 
 hermes_path = "/work/e281/e281/mkryjak/hermes-3"
 # hermes_path = "/mnt/lustre/rdfaas/epsrc/e281/e281/mkryjak/hermes-3"
@@ -28,7 +28,7 @@ args = parser.parse_args()
 if args.b == None:
     print("Please specify branch with --b <branch_name>")
     quit()
-    
+
 if args.c == None:
     print("Please specify number of cores with --c <core_count>")
     quit()
@@ -52,8 +52,7 @@ cores_per_node = int(int(args.c) / int(args.N))
 partition = "standard"
 
 
-slurmcommand = \
-f"""#!/bin/bash 
+slurmcommand = f"""#!/bin/bash 
 #SBATCH --job-name={jobname}
 #SBATCH --nodes={nodes}
 #SBATCH --tasks-per-node={cores_per_node}

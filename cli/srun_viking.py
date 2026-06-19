@@ -11,15 +11,17 @@ import time
 
 # https://realpython.com/python-subprocess/
 
-parser = argparse.ArgumentParser(description = "Run case")
-parser.add_argument("casepath", type=str, help = "Case to run")
-parser.add_argument("-b", type=str, help = "Branch (build folder name)")
-parser.add_argument("-c", type=str, help = "Number of cores", default = "40")
-parser.add_argument("-N", type=str, help = "Number of nodes", default = "2")
-parser.add_argument("-t", type=str, help = "Time in hh:mm:ss", default = "3:00:00")
-parser.add_argument("-restart", action="store_true", help = "Restart?")
-parser.add_argument("-append", action="store_true", help = "Append?")
-parser.add_argument("-bout", action="store_true", help = "Run BOUT++ instead of Hermes-3?")
+parser = argparse.ArgumentParser(description="Run case")
+parser.add_argument("casepath", type=str, help="Case to run")
+parser.add_argument("-b", type=str, help="Branch (build folder name)")
+parser.add_argument("-c", type=str, help="Number of cores", default="40")
+parser.add_argument("-N", type=str, help="Number of nodes", default="2")
+parser.add_argument("-t", type=str, help="Time in hh:mm:ss", default="3:00:00")
+parser.add_argument("-restart", action="store_true", help="Restart?")
+parser.add_argument("-append", action="store_true", help="Append?")
+parser.add_argument(
+    "-bout", action="store_true", help="Run BOUT++ instead of Hermes-3?"
+)
 
 
 args = parser.parse_args()
@@ -27,11 +29,11 @@ args = parser.parse_args()
 if args.b == None and args.bout is False:
     print("Please specify branch with --b <branch_name>")
     quit()
-    
+
 if args.c == None:
     print("Please specify number of cores with --c <core_count>")
     quit()
-    
+
 if args.N == None:
     print("Please specify number of nodes with --n <core_count>")
     quit()
@@ -51,17 +53,16 @@ if args.restart == False and args.append == False:
 
 jobname = casename
 nodes = int(args.N)
-cores_per_node = int(int(args.c)/nodes)
+cores_per_node = int(int(args.c) / nodes)
 partition = "nodes"
 time = args.t
 
 if args.bout:
-    runcommand = f"mpirun -n {nodes*cores_per_node} /users/mjk557/scratch/BOUT-7152948/BOUT-dev/build/examples/hasegawa-wakatani-3d/hw3d -d {abscasepath} {restartappend}"
+    runcommand = f"mpirun -n {nodes * cores_per_node} /users/mjk557/scratch/BOUT-7152948/BOUT-dev/build/examples/hasegawa-wakatani-3d/hw3d -d {abscasepath} {restartappend}"
 else:
-    runcommand = f"mpirun -n {nodes*cores_per_node} /users/mjk557/scratch/hermes-3/{args.b}/hermes-3 -d {abscasepath} {restartappend}"
+    runcommand = f"mpirun -n {nodes * cores_per_node} /users/mjk557/scratch/hermes-3/{args.b}/hermes-3 -d {abscasepath} {restartappend}"
 
-slurmcommand = \
-f"""#!/bin/bash 
+slurmcommand = f"""#!/bin/bash 
 #SBATCH -J {jobname}
 #SBATCH -N {nodes}
 #SBATCH --tasks-per-node={cores_per_node}

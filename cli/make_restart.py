@@ -21,8 +21,12 @@ def parse_args():
         )
     )
     parser.add_argument("casepath", help="Path to the input case directory")
-    parser.add_argument("output_path", help="Directory where restart files will be written")
-    parser.add_argument("time_ms", type=float, help="Target simulation time in milliseconds")
+    parser.add_argument(
+        "output_path", help="Directory where restart files will be written"
+    )
+    parser.add_argument(
+        "time_ms", type=float, help="Target simulation time in milliseconds"
+    )
     parser.add_argument(
         "--overwrite",
         action="store_true",

@@ -14,75 +14,74 @@ from hermes3.case_db import CaseDB
 from hermes3.accessors import *
 
 import warnings
+
 warnings.filterwarnings("ignore")
 
-def heavyplot(casename, save = True):
+
+def heavyplot(casename, save=True):
     """
     Computationally heavy plots
-    
+
     Inputs
     -----
 
     """
     tstart = tm.time()
-    db = CaseDB(case_dir = r"/home/mike/work/cases", grid_dir = r"/home/mike/work/cases")
+    db = CaseDB(case_dir=r"/home/mike/work/cases", grid_dir=r"/home/mike/work/cases")
     casename = casename.split(r"/")[-1]
-    case = db.load_case_2D(casename, use_squash = False)
+    case = db.load_case_2D(casename, use_squash=False)
     case.extract_2d_tokamak_geometry()
     ds = case.ds
-        
+
     tlen = ds.sizes["t"]
     if tlen > 10:
         tres = 10
     else:
         tres = tlen
-        
-    ts = np.linspace(0, tlen-1, tres, dtype = int)
 
+    ts = np.linspace(0, tlen - 1, tres, dtype=int)
 
     colors = [plt.cm.get_cmap("Spectral_r", tres)(x) for x in range(tres)]
 
     toplot = {}
     for t in ts:
         time_ms = ds.isel(t=t)["t"].values * 1e3
-        toplot[f"t={time_ms:.3f}ms"] = ds.isel(t=t, x = slice(2,-2))
+        toplot[f"t={time_ms:.3f}ms"] = ds.isel(t=t, x=slice(2, -2))
 
     if save is True:
         save_name = f"mon_prof_{casename}"
     else:
         save_name = ""
 
-
-
     lineplot(
         toplot,
-        params = ["Te", "Td",  "Ne", "Nd", "NVd+", "NVd"],
-        regions = ["omp", "outer_lower_target", "field_line"],
-        colors = colors,
-        save_name = save_name,
-        combine_regions = True,
+        params=["Te", "Td", "Ne", "Nd", "NVd+", "NVd"],
+        regions=["omp", "outer_lower_target", "field_line"],
+        colors=colors,
+        save_name=save_name,
+        combine_regions=True,
     )
 
     if save is True:
         print(f"Saved plot to {os.path.abspath(save_name)}.png")
 
     tend = tm.time()
-    print(f"Executed in {tend-tstart:.1f} seconds")
-        
-#------------------------------------------------------------
+    print(f"Executed in {tend - tstart:.1f} seconds")
+
+
+# ------------------------------------------------------------
 # PARSER
-#------------------------------------------------------------
+# ------------------------------------------------------------
 
 if __name__ == "__main__":
-    
     # Define arguments
-    parser = argparse.ArgumentParser(description = "Case monitor")
-    parser.add_argument("path", type=str, help = "Path to case")
+    parser = argparse.ArgumentParser(description="Case monitor")
+    parser.add_argument("path", type=str, help="Path to case")
     # parser.add_argument("-p", action="store_true", help = "Plot?")
     # parser.add_argument("-t", action="store_true", help = "Table?")
     # parser.add_argument("-s", action="store_true", help = "Save figure?")
     # parser.add_argument("-neutrals", action="store_true", help = "Neutral focused plot?")
-    
+
     # Extract arguments and call function
     args = parser.parse_args()
     heavyplot(args.path)

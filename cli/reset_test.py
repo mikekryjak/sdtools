@@ -41,7 +41,9 @@ def read_sim_time(path):
     """
     try:
         t = float(collect("tt", path=path, prefix="BOUT.restart", info=False))
-        omega_ci = float(collect("Omega_ci", path=path, prefix="BOUT.restart", info=False))
+        omega_ci = float(
+            collect("Omega_ci", path=path, prefix="BOUT.restart", info=False)
+        )
         return t, t / omega_ci
     except Exception:
         return None
@@ -82,7 +84,9 @@ def reset_test(casepath):
         )
         for path in output_files:
             print(f"  {os.path.basename(path)}")
-        answer = input("Delete these files and reset the case? [yes/no] ").strip().lower()
+        answer = (
+            input("Delete these files and reset the case? [yes/no] ").strip().lower()
+        )
         if answer not in ("y", "yes"):
             print("Aborted: no files were deleted or reset.")
             return

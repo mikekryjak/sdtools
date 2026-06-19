@@ -14,12 +14,12 @@ import xarray as xr
 # def _get_poloidal_range(ds, region):
 #     """
 #     Returns poloidal region start and end indices in a tuple.
-#     Each region is a quarter of a CDN topology corresponding to a 
+#     Each region is a quarter of a CDN topology corresponding to a
 #     divertor. The regions are all in a positive index order.
 #     The regions extend past the midplane by one point.
 #     """
 #     m = ds.metadata
-    
+
 #     if m["topology"] == "connected-double-null":
 
 #         ## This comes from _select_custom_sol_ring
@@ -50,21 +50,23 @@ import xarray as xr
 
 #         else:
 #             raise ValueError(f"Unknown region {region} for poloidal range")
-        
+
 #     else:
 #         raise ValueError(f"Topology {m['topology']} not yet supported")
-    
+
 #     return (start,end)
 
-def get_1d_radial_data(ds, 
-                       params, 
-                       region = None, 
-                       poloidal_index = None, 
-                       guards = False,
-                       sol = True,
-                       core = True,
-                       debug = False
-                       ):
+
+def get_1d_radial_data(
+    ds,
+    params,
+    region=None,
+    poloidal_index=None,
+    guards=False,
+    sol=True,
+    core=True,
+    debug=False,
+):
     """
     Return a Pandas Dataframe with a radial slice of data in the given region
     The dataframe contains a radial distance normalised to the separatrix.
@@ -97,40 +99,36 @@ def get_1d_radial_data(ds,
         if z.size == 2 or np.any(np.isclose(np.diff(z), 0.0)):
             return float(np.interp(0.0, z, y))
 
-        denom0 = (z[0]-z[1])*(z[0]-z[2])
-        denom1 = (z[1]-z[0])*(z[1]-z[2])
-        denom2 = (z[2]-z[0])*(z[2]-z[1])
-        if np.isclose(denom0,0) or np.isclose(denom1,0) or np.isclose(denom2,0):
+        denom0 = (z[0] - z[1]) * (z[0] - z[2])
+        denom1 = (z[1] - z[0]) * (z[1] - z[2])
+        denom2 = (z[2] - z[0]) * (z[2] - z[1])
+        if np.isclose(denom0, 0) or np.isclose(denom1, 0) or np.isclose(denom2, 0):
             return float(np.interp(0.0, z, y))
-        w0 = (z[1]*z[2]) / denom0
-        w1 = (z[0]*z[2]) / denom1
-        w2 = (z[0]*z[1]) / denom2
-        return float(y[0]*w0 + y[1]*w1 + y[2]*w2)
+        w0 = (z[1] * z[2]) / denom0
+        w1 = (z[0] * z[2]) / denom1
+        w2 = (z[0] * z[1]) / denom2
+        return float(y[0] * w0 + y[1] * w1 + y[2] * w2)
 
     # ---- start of original logic ----
     df = pd.DataFrame()
     m = ds.metadata
-    
+
     xslice = slice(None, None)
-        
+
     if region is None and poloidal_index is None:
         raise Exception("Please specify region or poloidal_index")
-    
-    translate_dict = {
-        "outer_midplane" : "omp",
-        "inner_midplane" : "imp"
-    }
+
+    translate_dict = {"outer_midplane": "omp", "inner_midplane": "imp"}
     if region in translate_dict:
         region = translate_dict[region]
-    
+
     # Interpolate to Z = 0 for IMP or OMP
     if region == "omp" or region == "imp":
-
         omp_a = xhermes.selector_poloidal(ds, "outer_upper_midplane")
         omp_b = xhermes.selector_poloidal(ds, "outer_lower_midplane")
         imp_a = xhermes.selector_poloidal(ds, "inner_upper_midplane")
         imp_b = xhermes.selector_poloidal(ds, "inner_lower_midplane")
-        
+
         # slice a narrow band around the midplane
         if region == "omp":
             reg = ds.isel(x=xslice, theta=slice(omp_a - 2, omp_b + 2))
@@ -158,12 +156,15 @@ def get_1d_radial_data(ds,
         for p in wanted:
             out[p] = xr.apply_ufunc(
                 _quad_at_zero,
-                reg["Z"], reg[p],
+                reg["Z"],
+                reg[p],
                 input_core_dims=[["theta"], ["theta"]],
                 output_core_dims=[[]],
                 vectorize=True,
                 dask="parallelized",
-                dask_gufunc_kwargs={"allow_rechunk": True},  # Each core dim must be single chunk
+                dask_gufunc_kwargs={
+                    "allow_rechunk": True
+                },  # Each core dim must be single chunk
                 output_dtypes=[float],
             )
         mid = xr.Dataset(out)
@@ -173,21 +174,23 @@ def get_1d_radial_data(ds,
         df = df.drop(columns=["t"], errors="ignore")
 
     else:
-
         if poloidal_index is not None and region is not None:
-            raise Exception("Please specify only one of region or poloidal_index, not both")
+            raise Exception(
+                "Please specify only one of region or poloidal_index, not both"
+            )
 
         if poloidal_index is not None:
             reg = ds.isel(x=xslice, theta=poloidal_index).squeeze()
 
         # Take region directly from named selection
         if region is not None:
-            if region in xhermes.selector_poloidal(ds, return_available = True):
-                reg = ds.hermes.select_region(radial_region = "domain_guards", poloidal_region = region).squeeze()
+            if region in xhermes.selector_poloidal(ds, return_available=True):
+                reg = ds.hermes.select_region(
+                    radial_region="domain_guards", poloidal_region=region
+                ).squeeze()
             else:
                 raise ValueError(f"Unknown region {region}.")
-            
-    
+
         df["dr"] = reg["dr"].values
 
         for param in params:
@@ -195,17 +198,16 @@ def get_1d_radial_data(ds,
                 df[param] = reg[param].values
             else:
                 print(f"Parameter {param} not found")
-    
 
     # Calculate radial distance from separatrix (vectorized)
     dr = df["dr"].to_numpy()
     df["Srad"] = np.cumsum(dr) - 0.5 * dr
-    
+
     df["sep"] = 0
     sepind = ds.metadata["ixseps1"]
     df.loc[sepind, "sep"] = 1
     dfsep = df[df["sep"] == 1]
-    
+
     # Correct so 0 is in between the cell centres straddling separatrix
     sepcorr = (df["Srad"][sepind] - df["Srad"][sepind - 1]) / 2
     df["Srad"] -= dfsep["Srad"].values - sepcorr
@@ -221,27 +223,23 @@ def get_1d_radial_data(ds,
     # NOTE: you must preserve the original index here!
     if not guards:
         df = df.iloc[m["MXG"] : -m["MXG"]]
-    
+
     # Cut off SOL or core if necessary
     if sol is False and core is False:
         raise Exception("Please specify sol or core to be True")
-    
+
     if sol is False:
         df = df[df["Srad"] < 0]
-    
+
     if core is False:
-        df = df[df["Srad"] > 0]    
-    
+        df = df[df["Srad"] > 0]
+
     return df
 
-def get_1d_radial_data_old(ds, 
-                       params, 
-                       region = None, 
-                       poloidal_index = None, 
-                       guards = False,
-                       sol = True,
-                       core = True
-                       ):
+
+def get_1d_radial_data_old(
+    ds, params, region=None, poloidal_index=None, guards=False, sol=True, core=True
+):
     """
     Return a Pandas Dataframe with a radial slice of data in the given region
     The dataframe contains a radial distance normalised to the separatrix.
@@ -249,65 +247,67 @@ def get_1d_radial_data_old(ds,
     Regions = omp, imp, inner_lower, inner_upper, outer_lower, outer_upper.
     alternatively, you can specify a poloidal index to get data at that index.
     """
-   
+
     df = pd.DataFrame()
     m = ds.metadata
-    
+
     if guards:
         xslice = slice(None, None)
     else:
         xslice = slice(m["MXG"], -m["MXG"])
-        
+
     if region is None and poloidal_index is None:
         raise Exception("Please specify region or poloidal_index")
-    
+
     # Catch alternative names for some regions
-    translate_dict = {
-        "outer_midplane" : "omp",
-        "inner_midplane" : "imp"
-    }
+    translate_dict = {"outer_midplane": "omp", "inner_midplane": "imp"}
     if region in translate_dict:
         region = translate_dict[region]
-    
+
     ## Choose region and get data
     # Interpolate to Z = 0 for IMP or OMP
     if region == "omp" or region == "imp":
-       
-       # Take 2 cells on either side to then interpolate in the middle
+        # Take 2 cells on either side to then interpolate in the middle
         if region == "omp":
-            reg = ds.isel(x = xslice, theta = slice(m["omp_a"] - 2, m["omp_b"] + 2))
+            reg = ds.isel(x=xslice, theta=slice(m["omp_a"] - 2, m["omp_b"] + 2))
         else:
-            reg = ds.isel(x = xslice, theta = slice(m["imp_a"] - 2, m["imp_b"] + 2))
-            
+            reg = ds.isel(x=xslice, theta=slice(m["imp_a"] - 2, m["imp_b"] + 2))
+
         for param in params:
             if param not in ds.data_vars:
                 print(f"Parameter {param} not found")
-        
-        # For every parameter, collect the value interpolated at Z = 0 
+
+        # For every parameter, collect the value interpolated at Z = 0
         for i in reg.coords["x"].values:
             ring = reg.sel(x=i)
             Z = ring["Z"].values
-            
+
             # Put parameters into dataframe
             for param in ["dr"] + params:
                 if param in ring:
-                    interp = scipy.interpolate.interp1d(Z, ring[param].values, kind = "quadratic")
+                    interp = scipy.interpolate.interp1d(
+                        Z, ring[param].values, kind="quadratic"
+                    )
                     df.loc[i, param] = interp(0)
-                
-            
-        df.reset_index(inplace = True, drop = True)
-    
+
+        df.reset_index(inplace=True, drop=True)
+
     else:
         # Take region directly from named selection
-        if region in ["inner_lower_target", "inner_upper_target", "outer_lower_target", "outer_upper_target"]:
+        if region in [
+            "inner_lower_target",
+            "inner_upper_target",
+            "outer_lower_target",
+            "outer_upper_target",
+        ]:
             reg = ds.hermesm.select_region(region).squeeze()
-        
+
         # Get data by poloidal index
         elif poloidal_index is None:
             raise Exception("If not requesting midplane, please pass poloidal_index")
         else:
-            reg = ds.isel(x = xslice, theta = poloidal_index).squeeze()
-    
+            reg = ds.isel(x=xslice, theta=poloidal_index).squeeze()
+
         df["dr"] = reg["dr"].values
 
         for param in params:
@@ -315,46 +315,49 @@ def get_1d_radial_data_old(ds,
                 df[param] = reg[param].values
             else:
                 print(f"Parameter {param} not found")
-    
+
     ## Calculate radial distance from separatrix
     for i, _ in enumerate(df["dr"]):
         if i == 0:
             df.loc[i, "Srad"] = df.loc[i, "dr"] / 2
         else:
-            df.loc[i, "Srad"] = df.loc[i-1, "Srad"] + df.loc[i-1, "dr"]/2 + df.loc[i, "dr"]/2
-        
+            df.loc[i, "Srad"] = (
+                df.loc[i - 1, "Srad"] + df.loc[i - 1, "dr"] / 2 + df.loc[i, "dr"] / 2
+            )
+
     df["sep"] = 0
-    
+
     sepind = ds.metadata["ixseps1g"]
     df.loc[sepind, "sep"] = 1
     dfsep = df[df["sep"] == 1]
-    
+
     # Correct so 0 is inbetween the cell centres straddling separatrix
-    sepcorr = (df["Srad"][sepind] - df["Srad"][sepind-1]) / 2
+    sepcorr = (df["Srad"][sepind] - df["Srad"][sepind - 1]) / 2
 
     df["Srad"] -= dfsep["Srad"].values - sepcorr
-    
+
     ## Cut off SOL or core if necessary
     if sol is False and core is False:
         raise Exception("Please specify sol or core to be True")
-    
+
     if sol is False:
         df = df[df["Srad"] < 0]
-    
+
     if core is False:
-        df = df[df["Srad"] > 0]    
-        
+        df = df[df["Srad"] > 0]
+
     return df
+
 
 def _interpolate_exact_poloidal_ring(
     ds,
     params,
     region,
-    sepadd = None,
-    sepdist = None,
+    sepadd=None,
+    sepdist=None,
     radial_start_region="auto",
-    debug = False,
-    ):
+    debug=False,
+):
     """
     This returns poloidal data radially interpolated to the same psi value as a desired
     separatrix distance at the midplane. This means the data is not affected by radial resolution.
@@ -362,7 +365,7 @@ def _interpolate_exact_poloidal_ring(
 
     NOTE: Only poloidally contiguous regions are supported, i.e. those that you can get with
     _get_poloidal_range.
-    
+
     Parameters
     ----------
     ds : Dataset to use (must be loaded with guards)
@@ -371,7 +374,7 @@ def _interpolate_exact_poloidal_ring(
     radial_start_region : string, region to use for the radial slice on which separatrix distance is defined
     sepdist : float, distance from separatrix to extract data from (use either this or sepadd, not both)
     sepadd : int, SOL ring index to extract data from (starting from one after separatrix)
-    
+
     Returns
     -------
     df : DataFrame with data along the field line to be used by get_1d_poloidal_data
@@ -379,7 +382,14 @@ def _interpolate_exact_poloidal_ring(
 
     if region == "all":
         region = "sol"
-    elif region in ["inner", "outer", "inner_lower", "inner_upper", "outer_lower", "outer_upper"]:
+    elif region in [
+        "inner",
+        "outer",
+        "inner_lower",
+        "inner_upper",
+        "outer_lower",
+        "outer_upper",
+    ]:
         region = f"{region}_sol"
 
     if any([name in region for name in ["sol", "upstream", "divertor"]]):
@@ -393,13 +403,19 @@ def _interpolate_exact_poloidal_ring(
         if sepadd is not None and sepadd > 0:
             raise ValueError("sepadd must be negative for core or PFR regions")
 
-    
     m = ds.metadata
-    extra_params = ["R", "Z", "psi_poloidal", "dpol", "Bxy", "Bpxy"]  # Needed in get_1d_poloidal_data
+    extra_params = [
+        "R",
+        "Z",
+        "psi_poloidal",
+        "dpol",
+        "Bxy",
+        "Bpxy",
+    ]  # Needed in get_1d_poloidal_data
     all_params = extra_params + params
 
     ## This comes from _select_custom_sol_ring
-    # start, end = _get_poloidal_range(ds, region)   
+    # start, end = _get_poloidal_range(ds, region)
     poloidal_selection = xhermes.selector_poloidal(ds, region)
     poloidal_indices = ds["theta_idx"].values[poloidal_selection]
 
@@ -422,11 +438,15 @@ def _interpolate_exact_poloidal_ring(
         elif region == "upper_pfr":
             radial_start_region = "outer_upper_target"
 
-    radial_slice = get_1d_radial_data(ds, params = all_params, region = radial_start_region, core = True)
+    radial_slice = get_1d_radial_data(
+        ds, params=all_params, region=radial_start_region, core=True
+    )
 
     # Find exact psi at chosen separatrix distance
     if sepdist is not None:
-        psi = scipy.interpolate.interp1d(radial_slice["Srad"], radial_slice["psi_poloidal"])(sepdist)
+        psi = scipy.interpolate.interp1d(
+            radial_slice["Srad"], radial_slice["psi_poloidal"]
+        )(sepdist)
     elif sepadd is not None:
         psi = radial_slice.loc[radial_slice.index[sepadd], "psi_poloidal"]
     else:
@@ -435,27 +455,37 @@ def _interpolate_exact_poloidal_ring(
     ## Interpolate data on the same psi and return
     df = pd.DataFrame()
     if debug:
-        fig, ax = plt.subplots(dpi = 150)
-        ds["Td"].bout.polygon(ax = ax, grid_only = True, linecolor = "k", linewidth = 0.1, antialias = True, separatrix = False, add_colorbar = False)
+        fig, ax = plt.subplots(dpi=150)
+        ds["Td"].bout.polygon(
+            ax=ax,
+            grid_only=True,
+            linecolor="k",
+            linewidth=0.1,
+            antialias=True,
+            separatrix=False,
+            add_colorbar=False,
+        )
 
     # For every poloidal index, get the radial data, interpolate to the correct sepdist and append to dataframe
     for i in poloidal_indices:
-        radial = get_1d_radial_data(ds, params = all_params, poloidal_index = i, core = True)
-        
+        radial = get_1d_radial_data(ds, params=all_params, poloidal_index=i, core=True)
+
         if debug:
-            ax.plot(radial["R"], radial["Z"], "o", markersize = 3, alpha = 0.5)
-        
+            ax.plot(radial["R"], radial["Z"], "o", markersize=3, alpha=0.5)
+
         for param in all_params:
-            df.loc[i, param] = scipy.interpolate.interp1d(radial["psi_poloidal"], radial[param])(psi)
-            
+            df.loc[i, param] = scipy.interpolate.interp1d(
+                radial["psi_poloidal"], radial[param]
+            )(psi)
+
     df = df.reset_index(drop=True)
 
     if debug:
-        ax.plot(df["R"], df["Z"], c = "deeppink")
+        ax.plot(df["R"], df["Z"], c="deeppink")
         ax.set_title("")
-        
-    
+
     return df
+
 
 def get_1d_poloidal_data_double(
     ds,
@@ -483,27 +513,29 @@ def get_1d_poloidal_data_double(
 
     return fl
 
+
 def get_1d_poloidal_data(
-    ds, 
-    params, 
-    region, 
-    sepdist = None, 
-    sepadd = None,
-    guards = False, 
-    target_first = False,
-    interpolate_midplane = True,
-    interpolate_radial = False,
-    radial_start_region = None,
-    interpolate_poloidal = False,
-    interpolate_poloidal_resolution = 100,
-    debug = False):
+    ds,
+    params,
+    region,
+    sepdist=None,
+    sepadd=None,
+    guards=False,
+    target_first=False,
+    interpolate_midplane=True,
+    interpolate_radial=False,
+    radial_start_region=None,
+    interpolate_poloidal=False,
+    interpolate_poloidal_resolution=100,
+    debug=False,
+):
     """
     Return a dataframe with data along a field line as well as poloidal and parallel connection lengths.
-    Refer to get_custom_sol_ring for the indexing routine. 
+    Refer to get_custom_sol_ring for the indexing routine.
     Select the field line by either sepdist or sepadd, but not both.
-    Only supports one divertor leg at a time. 
-    
-    
+    Only supports one divertor leg at a time.
+
+
     Parameters
     ----------
     ds : Dataset to use (must be loaded with guards)
@@ -515,54 +547,60 @@ def get_1d_poloidal_data(
 
     """
 
-
     m = ds.metadata
 
     if "t" in ds.sizes:
         raise Exception("get_1d_poloidal_data doesn't support multiple time slices")
-    
+
     if "guards" in region or "extra" in region:
-        raise ValueError("Region should not include 'guards' or 'extra', these are added automatically based on the region and flags")
-    
+        raise ValueError(
+            "Region should not include 'guards' or 'extra', these are added automatically based on the region and flags"
+        )
+
     if "core" in region and any([target_first, interpolate_midplane]):
-        raise Exception("target_first and interpolate_midplane are incompatible with region=core")
+        raise Exception(
+            "target_first and interpolate_midplane are incompatible with region=core"
+        )
 
     if any([x in region for x in ["pfr", "core"]]) and interpolate_midplane:
-        raise ValueError("interpolate_midplane is incompatible with PFR/core as they don't include the midplane!")
-    
+        raise ValueError(
+            "interpolate_midplane is incompatible with PFR/core as they don't include the midplane!"
+        )
+
     selector_region = region
-    
+
     # Include guards if requested and if the region has guards
     if any([name in region for name in ["sol", "divertor", "pfr"]]):
         if guards:
             selector_region = f"{region}_guards"
-    
+
     # Include cell beyond the midplane if interpolating to midplane
     if any([name in region for name in ["sol", "upstream"]]):
         if interpolate_midplane:
             selector_region = f"{region}_extra"
-    
 
     ## Select SOL region
     # This is always in index ascending order, and goes one point past the midplane
-    
-    # 1. Get it at an arbitrary sepdist using radial interpolation 
+
+    # 1. Get it at an arbitrary sepdist using radial interpolation
     if interpolate_radial:
         if sepdist is None:
             raise Exception("sepdist must be specified if interpolate_radial is True")
-        
+
         df = _interpolate_exact_poloidal_ring(
-            ds, 
-            params, 
-            selector_region, 
-            sepdist = sepdist, 
-            radial_start_region = radial_start_region,
-            debug = False
+            ds,
+            params,
+            selector_region,
+            sepdist=sepdist,
+            radial_start_region=radial_start_region,
+            debug=False,
         )
-    
+
     # 2. Or get it at a specific SOL ring index, or the closest SOL ring to a given sepdist
     else:
-        reg = ds.hermesm.select_custom_sol_ring(selector_region, sepadd = sepadd, sepdist = sepdist).squeeze()
+        reg = ds.hermesm.select_custom_sol_ring(
+            selector_region, sepadd=sepadd, sepdist=sepdist
+        ).squeeze()
 
         df = pd.DataFrame()
         df["R"] = reg["R"].values
@@ -577,53 +615,66 @@ def get_1d_poloidal_data(
                 df[param] = reg[param].values
             else:
                 print(f"Parameter {param} not found")
-    
+
     # Calculate geometry bits
     df["dpar"] = df["dpol"] * abs(df["Bxy"] / abs(df["Bpxy"]))  # Parallel cell width
-    df["Spol"] = df["dpol"].cumsum()   # Poloidal connection length
-    df["Spar"] = df["dpar"].cumsum()   # Parallel connection length
+    df["Spol"] = df["dpol"].cumsum()  # Poloidal connection length
+    df["Spar"] = df["dpar"].cumsum()  # Parallel connection length
 
-
-    # Optionally increase poloidal/parallel resolution            
+    # Optionally increase poloidal/parallel resolution
     if interpolate_poloidal:
         df_interp = pd.DataFrame()
         Z = df["Z"].values
         R = df["R"].values
-        ds_pol = np.sqrt(np.diff(R)**2 + np.diff(Z)**2)
+        ds_pol = np.sqrt(np.diff(R) ** 2 + np.diff(Z) ** 2)
         s = np.concatenate(([0], np.cumsum(ds_pol)))  # shape (N,)
-        
+
         # R_spline = scipy.interpolate.UnivariateSpline(s, R, s=0)
         # Z_spline = scipy.interpolate.UnivariateSpline(s, Z, s=0)
-        
+
         # CubicSpline better than UniveriateSpline cause it allows boundaries.
         # Setting it to clamped helps match at edges.
-        R_spline = scipy.interpolate.CubicSpline(s, R, bc_type = "clamped", extrapolate = False)
-        Z_spline = scipy.interpolate.CubicSpline(s, Z, bc_type = "clamped", extrapolate = False)
-        
+        R_spline = scipy.interpolate.CubicSpline(
+            s, R, bc_type="clamped", extrapolate=False
+        )
+        Z_spline = scipy.interpolate.CubicSpline(
+            s, Z, bc_type="clamped", extrapolate=False
+        )
+
         s_fine = np.linspace(s[0], s[-1], interpolate_poloidal_resolution)
         df_interp["R"] = R_spline(s_fine)
         df_interp["Z"] = Z_spline(s_fine)
-        
+
         for param in df.columns.drop(["R", "Z"]):
             # param_spline = scipy.interpolate.UnivariateSpline(s, df[param].values, s=0)
-            param_spline = scipy.interpolate.CubicSpline(s, df[param].values, bc_type = "clamped", extrapolate = False)
+            param_spline = scipy.interpolate.CubicSpline(
+                s, df[param].values, bc_type="clamped", extrapolate=False
+            )
             df_interp[param] = param_spline(s_fine)
-            
+
         df = df_interp
-        
-        
+
     # Flip outer upper and inner lower so that the regions have a
     # consistent orientation across all legs.
-    if any([name in region for name in [
-        "outer_upper_sol", "inner_lower_sol",
-        "outer_upper_upstream", "inner_lower_upstream",
-        "outer_upper_divertor", "inner_lower_divertor",
-        "outer_upper_pfr", "inner_lower_pfr"
-        ]]):
+    if any(
+        [
+            name in region
+            for name in [
+                "outer_upper_sol",
+                "inner_lower_sol",
+                "outer_upper_upstream",
+                "inner_lower_upstream",
+                "outer_upper_divertor",
+                "inner_lower_divertor",
+                "outer_upper_pfr",
+                "inner_lower_pfr",
+            ]
+        ]
+    ):
         df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
         df["Spar"] = df["Spar"].iloc[-1] - df["Spar"]
-        df = df.iloc[::-1].reset_index(drop = True)
-        
+        df = df.iloc[::-1].reset_index(drop=True)
+
     # Check and delete any extraneous points upstream of the midplane
     if interpolate_midplane:
         signs = np.sign(df["Z"])
@@ -632,23 +683,22 @@ def get_1d_poloidal_data(
         if len(change_indices) > 1:
             raise Exception("Multiple sign changes in Z. Haven't considered this yet")
 
-        idx_before_mp = change_indices[0]-1
-        df = df.iloc[idx_before_mp:].reset_index(drop = True)
+        idx_before_mp = change_indices[0] - 1
+        df = df.iloc[idx_before_mp:].reset_index(drop=True)
 
     # Interpolate start of field line onto Z = 0  (between midplane_a and midplane_b)
     # Assumes only one point upstream of midplane
     if interpolate_midplane:
         for param in df.columns.drop(["Z", "theta_idx"]):
-            interp = scipy.interpolate.interp1d(df["Z"], df[param], kind = "linear")
+            interp = scipy.interpolate.interp1d(df["Z"], df[param], kind="linear")
             df.loc[0, param] = interp(0)
-        df.loc[0,"Z"] = 0 
+        df.loc[0, "Z"] = 0
         df.loc[0, "theta_idx"] = np.nan
         df["Spol"] -= df["Spol"].iloc[0]  # Now 0 is at Z = 0
         df["Spar"] -= df["Spar"].iloc[0]  # Now 0 is at Z = 0
 
-
     if "sol" in region:
-        xpoint_index_name = f"{region.replace("_sol","")}_xpoint"
+        xpoint_index_name = f"{region.replace('_sol', '')}_xpoint"
         global_xpoint_index = xhermes.selector_poloidal(ds, xpoint_index_name)
 
         Xpoint_index = df[df["theta_idx"] == global_xpoint_index].index[0]
@@ -668,12 +718,12 @@ def get_1d_poloidal_data(
         df["region"] = "core"
     else:
         raise ValueError(f"Unknown region {region} for region labeling")
-    
+
     # Take out guard cell if needed
     # NOTE: Shouldn't be necessary as now guard selection is at the selector level
     # if not guards and "guards" in region:
     #     df = df.iloc[:-2]
-            
+
     # Flip data so target is first if needed
     if target_first:
         df["Spol"] = df["Spol"].iloc[-1] - df["Spol"]
@@ -681,19 +731,19 @@ def get_1d_poloidal_data(
         df = df.iloc[::-1]
 
     if debug:
-        fig, ax = plt.subplots(dpi = 150)
+        fig, ax = plt.subplots(dpi=150)
         ds["Td"].bout.polygon(
-            ax = ax,
-            grid_only = True,
-            linecolor = "k",
-            linewidth = 0.1,
-            antialias = True,
-            separatrix = False,
-            add_colorbar = False,
+            ax=ax,
+            grid_only=True,
+            linecolor="k",
+            linewidth=0.1,
+            antialias=True,
+            separatrix=False,
+            add_colorbar=False,
         )
-        ax.plot(df["R"], df["Z"], "-", c = "deeppink", markersize = 3)
-        ax.plot(df.iloc[0]["R"], df.iloc[0]["Z"], "o", markersize = 5, c = "green")
-        ax.plot(df.iloc[-1]["R"], df.iloc[-1]["Z"], "o", markersize = 5, c = "red")
+        ax.plot(df["R"], df["Z"], "-", c="deeppink", markersize=3)
+        ax.plot(df.iloc[0]["R"], df.iloc[0]["Z"], "o", markersize=5, c="green")
+        ax.plot(df.iloc[-1]["R"], df.iloc[-1]["Z"], "o", markersize=5, c="red")
         ax.set_title("")
-        
+
     return df

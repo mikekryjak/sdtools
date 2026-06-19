@@ -1,197 +1,156 @@
-
 vars = {
-    
     ##########################################################################
     # GEOMETRY
     ##########################################################################
-    
-    "crx" : dict(
-        name = "R coordinates of cell corners",
-        units = "m",
-        notes = "Order: lower left, lower right, upper left, upper right. Centre missing",
+    "crx": dict(
+        name="R coordinates of cell corners",
+        units="m",
+        notes="Order: lower left, lower right, upper left, upper right. Centre missing",
     ),
-    "cry" : dict(
-        name = "Z coordinates of cell corners",
-        units = "m",
-        notes = "Order: lower left, lower right, upper left, upper right. Centre missing",
+    "cry": dict(
+        name="Z coordinates of cell corners",
+        units="m",
+        notes="Order: lower left, lower right, upper left, upper right. Centre missing",
     ),
-    
     ##########################################################################
     # EIRENE
     ##########################################################################
-    
-    "eirene_mc_papl_sna_bal" : dict(
-        name = "Particle source (bulk ions) from atom-plasma coll.",
-        units = "A cm-3",
-        notes = "",
-        origin = "balance.nc"
+    "eirene_mc_papl_sna_bal": dict(
+        name="Particle source (bulk ions) from atom-plasma coll.",
+        units="A cm-3",
+        notes="",
+        origin="balance.nc",
     ),
-    
-    "eirene_mc_pmpl_sna_bal" : dict(
-        name = "Particle source (bulk ions) from molecule-plasma coll.",
-        units = "A cm-3",
-        notes = "",
-        origin = "balance.nc"
+    "eirene_mc_pmpl_sna_bal": dict(
+        name="Particle source (bulk ions) from molecule-plasma coll.",
+        units="A cm-3",
+        notes="",
+        origin="balance.nc",
     ),
-    
-    "eirene_mc_pipl_sna_bal" : dict(
-        name = "Particle source (bulk ions) from test ion-plasma coll.",
-        units = "A cm-3",
-        notes = "",
-        origin = "balance.nc"
+    "eirene_mc_pipl_sna_bal": dict(
+        name="Particle source (bulk ions) from test ion-plasma coll.",
+        units="A cm-3",
+        notes="",
+        origin="balance.nc",
     ),
-    
-    "eirene_mc_pppl_sna_bal" : dict(
-        name = "Primary particle sources rate (Bulk ions)",
-        units = "A cm-3",
-        notes = "",
-        origin = "balance.nc"
+    "eirene_mc_pppl_sna_bal": dict(
+        name="Primary particle sources rate (Bulk ions)",
+        units="A cm-3",
+        notes="",
+        origin="balance.nc",
     ),
-    
-    "wldnek" : dict(
-        name = "Heat transferred by neutrals",
-        units = "W",
-        notes = "Per stratum",
-        origin = "fort.44"
+    "wldnek": dict(
+        name="Heat transferred by neutrals",
+        units="W",
+        notes="Per stratum",
+        origin="fort.44",
     ),
-    
-    "wldnep" : dict(
-        name = "Potential energy released by neutrals",
-        units = "W",
-        notes = "Per stratum",
-        origin = "fort.44"
+    "wldnep": dict(
+        name="Potential energy released by neutrals",
+        units="W",
+        notes="Per stratum",
+        origin="fort.44",
     ),
-    
-    "wldna" : dict(
-        name = "Flux of atoms impinging on surface",
-        units = "A",
-        notes = "Per stratum",
-        origin = "fort.44"
+    "wldna": dict(
+        name="Flux of atoms impinging on surface",
+        units="A",
+        notes="Per stratum",
+        origin="fort.44",
     ),
-    
-    "ewlda" : dict(
-        name = "Average energy of impinging atoms on surface",
-        units = "eV",
-        notes = "Per stratum",
-        origin = "fort.44"
+    "ewlda": dict(
+        name="Average energy of impinging atoms on surface",
+        units="eV",
+        notes="Per stratum",
+        origin="fort.44",
     ),
-    
-    "wldnm" : dict(
-        name = "Flux of molecules impinging on surface",
-        units = "A",
-        notes = "Per stratum",
-        origin = "fort.44"
+    "wldnm": dict(
+        name="Flux of molecules impinging on surface",
+        units="A",
+        notes="Per stratum",
+        origin="fort.44",
     ),
-    
-    "ewldnm" : dict(
-        name = "Average energy of molecules impinging on surface",
-        units = "eV",
-        notes = "Per stratum",
-        origin = "fort.44"
+    "ewldnm": dict(
+        name="Average energy of molecules impinging on surface",
+        units="eV",
+        notes="Per stratum",
+        origin="fort.44",
     ),
-    
-    "wldra" : dict(
-        name = "Flux of reflected atoms from surface",
-        units = "A",
-        notes = "Per stratum",
-        origin = "fort.44"
+    "wldra": dict(
+        name="Flux of reflected atoms from surface",
+        units="A",
+        notes="Per stratum",
+        origin="fort.44",
     ),
-    
-    "wldrm" : dict(
-        name = "Flux of reflected molecules from surface",
-        units = "A",
-        notes = "Per stratum",
-        origin = "fort.44"
+    "wldrm": dict(
+        name="Flux of reflected molecules from surface",
+        units="A",
+        notes="Per stratum",
+        origin="fort.44",
     ),
-    
-    "wldpp" : dict(
-        name = "Flux of plasma ions impinging on surface",
-        units = "A",
-        notes = "Per stratum",
-        origin = "fort.44"
+    "wldpp": dict(
+        name="Flux of plasma ions impinging on surface",
+        units="A",
+        notes="Per stratum",
+        origin="fort.44",
     ),
-    
-    "wldpa" : dict(
-        name = "Net flux of atoms emitted from surface",
-        units = "A",
-        notes = "Per stratum",
-        origin = "fort.44"
+    "wldpa": dict(
+        name="Net flux of atoms emitted from surface",
+        units="A",
+        notes="Per stratum",
+        origin="fort.44",
     ),
-    
-    "wldpm" : dict(
-        name = "Net flux of molecules emitted from surface",
-        units = "A",
-        notes = "Per stratum",
-        origin = "fort.44"
+    "wldpm": dict(
+        name="Net flux of molecules emitted from surface",
+        units="A",
+        notes="Per stratum",
+        origin="fort.44",
     ),
-    
-    "wldpeb" : dict(
-        name = "Power carried by particles emitted from surface",
-        units = "W",
-        notes = "Per stratum",
-        origin = "fort.44"
+    "wldpeb": dict(
+        name="Power carried by particles emitted from surface",
+        units="W",
+        notes="Per stratum",
+        origin="fort.44",
     ),
-    
-    "wlarea" : dict(
-        name = "Surface area",
-        units = "m2",
-        notes = "",
-        origin = "fort.44"
-    ),
-    
+    "wlarea": dict(name="Surface area", units="m2", notes="", origin="fort.44"),
     ##########################################################################
     # display_tallies
     ##########################################################################
-    
-    
-    "rdneureg" : dict(
-        name = "Total radiation from EIRENE neutrals",
-        units = "W",
-        notes = "",
-        origin = "display_tallies"
+    "rdneureg": dict(
+        name="Total radiation from EIRENE neutrals",
+        units="W",
+        notes="",
+        origin="display_tallies",
     ),
-    
-    "rqradreg" : dict(
-        name = "Line radiation",
-        units = "W",
-        notes = "",
-        origin = "display_tallies"
+    "rqradreg": dict(
+        name="Line radiation", units="W", notes="", origin="display_tallies"
     ),
-    
-    "rqradreg" : dict(
-        name = "Line radiation",
-        units = "W",
-        notes = "",
-        origin = "display_tallies"
+    "rqradreg": dict(
+        name="Line radiation", units="W", notes="", origin="display_tallies"
     ),
-    
-    
-
-# eirene_mc_core_sna_bal
-# eirene_mc_mapl_smo_bal
-# eirene_mc_mmpl_smo_bal
-# eirene_mc_mipl_smo_bal
-# eirene_mc_cppv_smo_bal
-# eirene_mc_paat_sna_bal
-# eirene_mc_pmat_sna_bal
-# eirene_mc_piat_sna_bal
-# eirene_mc_paml_sna_bal
-# eirene_mc_pmml_sna_bal
-# eirene_mc_piml_sna_bal
-# eirene_mc_paio_sna_bal
-# eirene_mc_pmio_sna_bal
-# eirene_mc_piio_sna_bal
-# eirene_mc_pael_sne_bal
-# eirene_mc_pmel_sne_bal
-# eirene_mc_eael_she_bal
-# eirene_mc_emel_she_bal
-# eirene_mc_eiel_she_bal
-# eirene_mc_epel_she_bal
-# eirene_mc_eapl_shi_bal
-# eirene_mc_empl_shi_bal
-# eirene_mc_eipl_shi_bal
-# eirene_mc_eppl_shi_bal
-    
+    # eirene_mc_core_sna_bal
+    # eirene_mc_mapl_smo_bal
+    # eirene_mc_mmpl_smo_bal
+    # eirene_mc_mipl_smo_bal
+    # eirene_mc_cppv_smo_bal
+    # eirene_mc_paat_sna_bal
+    # eirene_mc_pmat_sna_bal
+    # eirene_mc_piat_sna_bal
+    # eirene_mc_paml_sna_bal
+    # eirene_mc_pmml_sna_bal
+    # eirene_mc_piml_sna_bal
+    # eirene_mc_paio_sna_bal
+    # eirene_mc_pmio_sna_bal
+    # eirene_mc_piio_sna_bal
+    # eirene_mc_pael_sne_bal
+    # eirene_mc_pmel_sne_bal
+    # eirene_mc_eael_she_bal
+    # eirene_mc_emel_she_bal
+    # eirene_mc_eiel_she_bal
+    # eirene_mc_epel_she_bal
+    # eirene_mc_eapl_shi_bal
+    # eirene_mc_empl_shi_bal
+    # eirene_mc_eipl_shi_bal
+    # eirene_mc_eppl_shi_bal
 }
 
 

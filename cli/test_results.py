@@ -104,7 +104,9 @@ def _git(repo, *args):
     try:
         res = subprocess.run(
             ["git", "-C", repo, *args],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         return res.stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
@@ -131,10 +133,15 @@ def git_lookup(repo, commit):
         if cur and cur != "HEAD":  # "HEAD" means detached (common for submodules)
             branch = cur
     if not branch:
-        contains = _git(repo, "branch", "--contains", commit, "--format=%(refname:short)")
+        contains = _git(
+            repo, "branch", "--contains", commit, "--format=%(refname:short)"
+        )
         if contains:
-            names = [b.strip() for b in contains.splitlines()
-                     if b.strip() and not b.strip().startswith("(")]  # drop detached-HEAD line
+            names = [
+                b.strip()
+                for b in contains.splitlines()
+                if b.strip() and not b.strip().startswith("(")
+            ]  # drop detached-HEAD line
             branch = ", ".join(names) if names else None
 
     return {"branch": branch, "date": date, "repo": repo}
@@ -193,7 +200,11 @@ def _line(label, value, note=None):
 
 def print_report(info):
     print(f"Run statistics: {info['casepath']}  [{info['logfile']}]")
-    print(_line("Originator", info["originator"], "assumes script runs as the run user/host"))
+    print(
+        _line(
+            "Originator", info["originator"], "assumes script runs as the run user/host"
+        )
+    )
     print(_line("Run started", info["run_started"]))
     print(_line("Run finished", info["run_finished"]))
 
@@ -205,18 +216,42 @@ def print_report(info):
 
     print(_line("Hermes-3 commit", info["hermes_commit"]))
     hg = info["hermes_git"]
-    print(_line("Hermes-3 branch", hg["branch"],
-                "from local git, not run dir" if hg["branch"] else "needs --git / local repo"))
-    print(_line("Hermes-3 commit date", hg["date"],
-                "from local git, not run dir" if hg["date"] else "needs --git / local repo"))
+    print(
+        _line(
+            "Hermes-3 branch",
+            hg["branch"],
+            "from local git, not run dir"
+            if hg["branch"]
+            else "needs --git / local repo",
+        )
+    )
+    print(
+        _line(
+            "Hermes-3 commit date",
+            hg["date"],
+            "from local git, not run dir" if hg["date"] else "needs --git / local repo",
+        )
+    )
 
     print(_line("BOUT++ version", info["bout_version"]))
     print(_line("BOUT++ commit", info["bout_commit"]))
     bg = info["bout_git"]
-    print(_line("BOUT++ branch", bg["branch"],
-                "from local git, not run dir" if bg["branch"] else "needs --git / local repo"))
-    print(_line("BOUT++ commit date", bg["date"],
-                "from local git, not run dir" if bg["date"] else None))
+    print(
+        _line(
+            "BOUT++ branch",
+            bg["branch"],
+            "from local git, not run dir"
+            if bg["branch"]
+            else "needs --git / local repo",
+        )
+    )
+    print(
+        _line(
+            "BOUT++ commit date",
+            bg["date"],
+            "from local git, not run dir" if bg["date"] else None,
+        )
+    )
 
 
 # ------------------------------------------------------------
@@ -225,14 +260,27 @@ def print_report(info):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Summarise how/when/where a Hermes-3 run was produced, "
-                    "using metadata from the simulation directory's BOUT.log file."
+        "using metadata from the simulation directory's BOUT.log file."
     )
-    parser.add_argument("casepath", nargs="?", default=os.getcwd(),
-                        help="Path to the simulation directory (default: cwd)")
-    parser.add_argument("--git", dest="git", action="store_true", default=True,
-                        help="Resolve branches/commit dates from local git repos (default: on)")
-    parser.add_argument("--no-git", dest="git", action="store_false",
-                        help="Use only information found in the simulation directory")
+    parser.add_argument(
+        "casepath",
+        nargs="?",
+        default=os.getcwd(),
+        help="Path to the simulation directory (default: cwd)",
+    )
+    parser.add_argument(
+        "--git",
+        dest="git",
+        action="store_true",
+        default=True,
+        help="Resolve branches/commit dates from local git repos (default: on)",
+    )
+    parser.add_argument(
+        "--no-git",
+        dest="git",
+        action="store_false",
+        help="Use only information found in the simulation directory",
+    )
     args = parser.parse_args()
 
     info = test_results(args.casepath, use_git=args.git)

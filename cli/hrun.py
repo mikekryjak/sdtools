@@ -11,12 +11,12 @@ import time
 
 # https://realpython.com/python-subprocess/
 
-parser = argparse.ArgumentParser(description = "Run case")
-parser.add_argument("case", type=str, help = "Case to run")
-parser.add_argument("--restart", action="store_true", help = "Restart?")
-parser.add_argument("--append", action="store_true", help = "Append?")
-parser.add_argument("--b2", action="store_true", help = "Use 2nd build?")
-parser.add_argument("--np", type = int, nargs = "?", help = "Number of cores to use")
+parser = argparse.ArgumentParser(description="Run case")
+parser.add_argument("case", type=str, help="Case to run")
+parser.add_argument("--restart", action="store_true", help="Restart?")
+parser.add_argument("--append", action="store_true", help="Append?")
+parser.add_argument("--b2", action="store_true", help="Use 2nd build?")
+parser.add_argument("--np", type=int, nargs="?", help="Number of cores to use")
 
 args = parser.parse_args()
 
@@ -25,7 +25,7 @@ sep = os.path.sep
 
 casepath = cwd + sep + args.case
 sd1dpath = "/ssd_scratch/hermes3/"
-runscriptpath = os.path.join(casepath,"run.sh")
+runscriptpath = os.path.join(casepath, "run.sh")
 
 build_folder = "master"
 
@@ -52,7 +52,9 @@ else:
     mpicommand = ""
     parallel = False
 
-runcommand = f'{mpicommand} {sd1dpath}{build_folder}/hermes-3 -d {casepath} {restartappend}'
+runcommand = (
+    f"{mpicommand} {sd1dpath}{build_folder}/hermes-3 -d {casepath} {restartappend}"
+)
 with open(runscriptpath, "w") as f:
     f.write(runcommand)
 
@@ -71,4 +73,3 @@ print("-> Case {} deployed. Here is what it's doing:".format(args.case))
 
 time.sleep(10)
 show_log(args.case, 10)
-

@@ -31,7 +31,9 @@ def read_sim_time(path):
     """
     try:
         tt = float(collect("tt", path=path, prefix="BOUT.restart", info=False))
-        omega_ci = float(collect("Omega_ci", path=path, prefix="BOUT.restart", info=False))
+        omega_ci = float(
+            collect("Omega_ci", path=path, prefix="BOUT.restart", info=False)
+        )
         return tt / omega_ci
     except Exception:
         return None
@@ -54,8 +56,11 @@ def main():
     parser = argparse.ArgumentParser(
         description="Print the simulation time of each case matching a pattern."
     )
-    parser.add_argument("patterns", nargs="+",
-                        help="Case name pattern(s), shell-style wildcards (quote to avoid shell expansion)")
+    parser.add_argument(
+        "patterns",
+        nargs="+",
+        help="Case name pattern(s), shell-style wildcards (quote to avoid shell expansion)",
+    )
     args = parser.parse_args()
 
     cases = find_cases(args.patterns)

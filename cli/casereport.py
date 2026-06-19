@@ -33,19 +33,25 @@ from hermes3.accessors import *
 # from code_comparison.viewer_2d import *
 
 
-parser = argparse.ArgumentParser(description = "Perform report")
-parser.add_argument("gridpath", type=str, help = "Grid to use")
-parser.add_argument("casepath", type=str, help = "Case to run")
+parser = argparse.ArgumentParser(description="Perform report")
+parser.add_argument("gridpath", type=str, help="Grid to use")
+parser.add_argument("casepath", type=str, help="Case to run")
 
 
 args = parser.parse_args()
 
-x = np.linspace(1,10,10)
-y = np.linspace(1,10,10)
-plt.plot(x,y)
+x = np.linspace(1, 10, 10)
+y = np.linspace(1, 10, 10)
+plt.plot(x, y)
 plt.savefig("report.png")
 
-case = Load.case_2D(args.casepath, args.gridpath, double_load = False, keep_xboundaries = True, 
-                    keep_yboundaries = True, unnormalise_geom = True)
+case = Load.case_2D(
+    args.casepath,
+    args.gridpath,
+    double_load=False,
+    keep_xboundaries=True,
+    keep_yboundaries=True,
+    unnormalise_geom=True,
+)
 
-Monitor(case, [["sep_ne", "sep_te", "target_temp","radiation"]], save = True)
+Monitor(case, [["sep_ne", "sep_te", "target_temp", "radiation"]], save=True)

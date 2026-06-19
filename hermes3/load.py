@@ -23,134 +23,148 @@ from hermes3.plotting import *
 from hermes3.fluxes import *
 
 
-
 class Load:
     def __init__(self):
         pass
 
-    def case_1D(casepath, 
-                guard_replace = True, 
-                squeeze = True, 
-                use_xhermes = True, 
-                use_squash = False,
-                force_squash = False,
-                verbose = True,
-                unnormalise = True):
-        
+    def case_1D(
+        casepath,
+        guard_replace=True,
+        squeeze=True,
+        use_xhermes=True,
+        use_squash=False,
+        force_squash=False,
+        verbose=True,
+        unnormalise=True,
+    ):
+
         loadfilepath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
-        squashfilepath = os.path.join(casepath, "BOUT.squash.nc") # Squashoutput hardcoded to this filename
-        
+        squashfilepath = os.path.join(
+            casepath, "BOUT.squash.nc"
+        )  # Squashoutput hardcoded to this filename
+
         if use_squash is True:
-            squash(casepath, verbose = verbose, force = force_squash)
+            squash(casepath, verbose=verbose, force=force_squash)
             loadfilepath = squashfilepath
-        
+
         if use_xhermes is True:
             ds = xhermes.load.open_hermesdataset(
-                datapath = loadfilepath, 
-                inputfilepath = inputfilepath, 
-                info = False,
+                datapath=loadfilepath,
+                inputfilepath=inputfilepath,
+                info=False,
                 keep_yboundaries=True,
-                cache = False,
-                unnormalise = unnormalise
-                )
+                cache=False,
+                unnormalise=unnormalise,
+            )
         else:
-
             ds = xbout.load.open_boutdataset(
-                    datapath = loadfilepath, 
-                    inputfilepath = inputfilepath, 
-                    info = False,
-                    keep_yboundaries=True,
-                    cache = False
-                    )
+                datapath=loadfilepath,
+                inputfilepath=inputfilepath,
+                info=False,
+                keep_yboundaries=True,
+                cache=False,
+            )
 
-        if squeeze is True: ds = ds.squeeze(drop = True)
+        if squeeze is True:
+            ds = ds.squeeze(drop=True)
 
         if use_xhermes:
             unnormalise_in_sdtools = False
         else:
             unnormalise_in_sdtools = unnormalise
-            
-        return Case(ds, casepath, unnormalise_geom = True, unnormalise = unnormalise_in_sdtools,
-                    guard_replace = guard_replace, use_xhermes = use_xhermes)
+
+        return Case(
+            ds,
+            casepath,
+            unnormalise_geom=True,
+            unnormalise=unnormalise_in_sdtools,
+            guard_replace=guard_replace,
+            use_xhermes=use_xhermes,
+        )
 
     def case_2D(
-                casepath,
-                gridfilepath,
-                verbose = False, 
-                squeeze = True, 
-                unnormalise_geom = True,
-                unnormalise = True,
-                use_squash = False,
-                force_squash = False,
-                use_xhermes = True,
-                
-                **xbout_kwargs):
-        
-        default_xbout_kwargs = dict(
-            keep_xboundaries = True,
-            keep_yboundaries = True,
-            info = False,
-            cache = False)
-        
-        xbout_kwargs = {**default_xbout_kwargs, **xbout_kwargs}
+        casepath,
+        gridfilepath,
+        verbose=False,
+        squeeze=True,
+        unnormalise_geom=True,
+        unnormalise=True,
+        use_squash=False,
+        force_squash=False,
+        use_xhermes=True,
+        **xbout_kwargs,
+    ):
 
+        default_xbout_kwargs = dict(
+            keep_xboundaries=True, keep_yboundaries=True, info=False, cache=False
+        )
+
+        xbout_kwargs = {**default_xbout_kwargs, **xbout_kwargs}
 
         if verbose:
             print(f"- Reading case {os.path.split(casepath)[-1]}")
             print("-----------------------")
-            
+
         loadfilepath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
-        squashfilepath = os.path.join(casepath, "BOUT.squash.nc") # Squashoutput hardcoded to this filename
+        squashfilepath = os.path.join(
+            casepath, "BOUT.squash.nc"
+        )  # Squashoutput hardcoded to this filename
 
         if use_squash is True:
-            squash(casepath, verbose = verbose, force = force_squash)
+            squash(casepath, verbose=verbose, force=force_squash)
             loadfilepath = squashfilepath
-                
-        if use_xhermes is True:
 
+        if use_xhermes is True:
             ds = xhermes.open_hermesdataset(
-                        datapath = loadfilepath, 
-                        inputfilepath = inputfilepath, 
-                        gridfilepath = gridfilepath,
-                        geometry = "toroidal",
-                        unnormalise = unnormalise,
-                        **xbout_kwargs
-                        )
+                datapath=loadfilepath,
+                inputfilepath=inputfilepath,
+                gridfilepath=gridfilepath,
+                geometry="toroidal",
+                unnormalise=unnormalise,
+                **xbout_kwargs,
+            )
         else:
             ds = xbout.load.open_boutdataset(
-                            datapath = loadfilepath, 
-                            inputfilepath = inputfilepath, 
-                            gridfilepath = gridfilepath,
-                            geometry = "toroidal",
-                            unnormalise = unnormalise,
-                            **xbout_kwargs
-                            )
-        
+                datapath=loadfilepath,
+                inputfilepath=inputfilepath,
+                gridfilepath=gridfilepath,
+                geometry="toroidal",
+                unnormalise=unnormalise,
+                **xbout_kwargs,
+            )
+
         if squeeze:
-            ds = ds.squeeze(drop = False)
-            
+            ds = ds.squeeze(drop=False)
+
         # Only calculate Mach number if the required variables exist
         if all(var in ds for var in ["Vd+", "Td+", "Te"]):
-            ds["M"] = ds["Vd+"] / np.sqrt(constants("q_e")*(ds["Td+"] + ds["Te"])/(constants("mass_p")*2))  # NOTE: will break for multiple ions
-            
+            ds["M"] = ds["Vd+"] / np.sqrt(
+                constants("q_e") * (ds["Td+"] + ds["Te"]) / (constants("mass_p") * 2)
+            )  # NOTE: will break for multiple ions
+
         print("")
-            
-        return Case(ds, casepath, 
-                    unnormalise_geom,
-                    unnormalise = unnormalise,
-                    use_xhermes = use_xhermes)
-        
+
+        return Case(
+            ds,
+            casepath,
+            unnormalise_geom,
+            unnormalise=unnormalise,
+            use_xhermes=use_xhermes,
+        )
 
 
 class Case:
-
-    def __init__(self, ds, casepath, 
-                 unnormalise_geom = False,
-                 unnormalise = True,
-                 guard_replace = True,
-                 use_xhermes = False):
+    def __init__(
+        self,
+        ds,
+        casepath,
+        unnormalise_geom=False,
+        unnormalise=True,
+        guard_replace=True,
+        use_xhermes=False,
+    ):
 
         self.ds = ds
         self.name = os.path.split(casepath)[-1]
@@ -163,7 +177,15 @@ class Case:
         else:
             self.is_2d = False
 
-        self.ds.metadata["colors"] = ["teal", "darkorange", "firebrick", "limegreen", "deeppink", "navy", "crimson"]
+        self.ds.metadata["colors"] = [
+            "teal",
+            "darkorange",
+            "firebrick",
+            "limegreen",
+            "deeppink",
+            "navy",
+            "crimson",
+        ]
 
         if unnormalise is True and use_xhermes is False:
             self.unnormalise(unnormalise_geom)
@@ -172,11 +194,11 @@ class Case:
             print("Skipping unnormalisation")
         if use_xhermes is True and unnormalise is True:
             print("Unnormalising with xHermes")
-            
+
         # xhermes now does the derivations
         if use_xhermes is False:
             self.derive_vars()
-        
+
         if self.is_2d is True:
             pass
         else:
@@ -184,18 +206,15 @@ class Case:
                 print("Replacing guard cells")
                 self.ds = self.ds.hermes.guard_replace_1d()
             # self.clean_guards()
-            
+
         # self.ds = calculate_radial_fluxes(ds)
         # self.ds = calculate_target_fluxes(ds)
 
-    
-
     def unnormalise(self, unnormalise_geom):
-        
+
         # self.ds = self.unnormalise_xhermes(self.ds)
-        
+
         self.calc_norms()
-        
 
         if unnormalise_geom == False:
             list_skip = ["g11", "g_22", "dx", "dy", "J"]
@@ -207,38 +226,37 @@ class Case:
             # Unnormalise variables and coordinates
             if data_var in self.ds.variables or data_var in self.ds.coords:
                 if data_var not in self.normalised_vars and data_var not in list_skip:
-                    self.ds[data_var] = self.ds[data_var] * self.norms[data_var]["conversion"]
+                    self.ds[data_var] = (
+                        self.ds[data_var] * self.norms[data_var]["conversion"]
+                    )
                     self.normalised_vars.append(data_var)
                 self.ds[data_var].attrs.update(self.norms[data_var])
-    
-    
+
     ## DEPRECATED, NOW IN XHERMES
     # def derive_vars(self):
     #     ds = self.ds
     #     m = ds.metadata
     #     q_e = constants("q_e")
-        
+
     #     m["Pnorm"] = m["Nnorm"] * m["Tnorm"] * q_e
-        
+
     #     # From Hypnotoad trim_yboundaries() in compare_grid_files
     #     if ds.metadata["jyseps2_1"] != ds.metadata["jyseps1_2"]:
     #         ds.metadata["null_config"] = "cdn"
     #     else:
     #         ds.metadata["null_config"] = "sn"
-            
+
     #     ds.metadata["species"] = [x.split("P")[1] for x in self.ds.data_vars if x.startswith("P") and len(x) < 4]
     #     ds.metadata["charged_species"] = [x for x in ds.metadata["species"] if "e" in x or "+" in x]
     #     ds.metadata["ion_species"] = [x for x in ds.metadata["species"] if "+" in x]
     #     ds.metadata["neutral_species"] = list(set(ds.metadata["species"]).difference(set(ds.metadata["charged_species"])))
-        
+
     #     ds.metadata["recycle_pair"] = dict()
     #     for ion in ds.metadata["ion_species"]:
     #         if "recycle_as" in ds.options[ion].keys():
     #             ds.metadata["recycle_pair"][ion] = ds.options[ion]["recycle_as"]
     #         else:
     #             print(f"No recycling partner found for {ion}")
-        
-        
 
     #     if "Ph+" in ds.data_vars:
     #         ds["Th+"] = ds["Ph+"] / (ds["Nh+"] * q_e)
@@ -275,20 +293,19 @@ class Case:
     #             "standard_name": "ion temperature (d+)",
     #             "long_name": "Ion temperature (d+)",
     #             })
-            
-        # Mach number
-        
+
+    # Mach number
 
     # def clean_guards(self):
-        
+
     #     to_clean = ["Dd_Dpar", "Ed+_iz","Ed+_rec", "Ed_Dpar", "Edd+_cx",
     #                 "Fd+_iz", "Fd+_rec", "Fd_Dpar", "Fdd+_cx", "Rd+_ex",
     #                 "Rd+_rec", "Sd+_iz", "Sd+_rec", "Sd+_src", "Sd_Dpar",
     #                 "Sd_src"]
-        
+
     #     for param in to_clean:
     #         self.ds[param]
-        
+
     # Now in xHermes
     # def guard_replace(self):
     #     pass
@@ -304,20 +321,19 @@ class Case:
     #             if self.guard_replaced == False:
     #                 for var_name in self.ds.data_vars:
     #                     var = self.ds[var_name]
-                        
+
     #                     if "pos" in var.dims:
     #                         var[{"pos":-2}] = (var[{"pos":-3}] + var[{"pos":-2}])/2
     #                         var[{"pos":1}] = (var[{"pos":1}] + var[{"pos":2}])/2
-                            
+
     #             else:
     #                 raise Exception("Guards already replaced!")
-                        
+
     #             self.guard_replaced = True
     #         else:
     #             raise Exception("Y guards are missing from file!")
     #     else:
     #         raise Exception("2D guard replacement not done yet!")
-
 
     def unnormalise_xhermes(self, ds):
         # Normalisation
@@ -423,7 +439,8 @@ class Case:
 
             # List of components
             component_list = [
-                c.strip() for c in options["hermes"]["components"].strip(" ()\t").split(",")
+                c.strip()
+                for c in options["hermes"]["components"].strip(" ()\t").split(",")
             ]
 
             # Turn into a dictionary
@@ -442,565 +459,528 @@ class Case:
             ds.attrs["components"] = components
 
         return ds
-    
-    
+
     def calc_norms(self):
-        
+
         m = self.ds.metadata
         q_e = constants("q_e")
         d = {
-
-        "dx": {
-            "conversion": m["rho_s0"]**2 * m["Bnorm"],
-            "units": "Wb",
-            "standard_name": "radial cell width",
-            "long_name": "Radial cell width in flux space",
-        },
-        
-        "dy": {
-            "conversion": 1,
-            "units": "radian",
-            "standard_name": "poloidal cell angular width",
-            "long_name": "Poloidal cell angular width",
-        },
-        
-        "J": {
-            "conversion": m["rho_s0"] / m["Bnorm"],
-            "units": "m/radianT",
-            "standard_name": "Jacobian",
-            "long_name": "Jacobian to translate from flux to cylindrical coordinates in real space",
-        },
-        
-        "g22": {
-            "conversion": 1/(m["rho_s0"] * m["rho_s0"]),
-            "units": "m-2",
-            "standard_name": "g22",
-            "long_name": "g22, 1/h_theta^2",
-        },
-        
-        "g_22": {
-            "conversion": m["rho_s0"] * m["rho_s0"],
-            "units": "m2",
-            "standard_name": "g_22",
-            "long_name": "g_22, B^2*h_theta^2/Bpol^2",
-        },
-        
-        "g_33": {
-            "conversion": m["rho_s0"] * m["rho_s0"],
-            "units": "m2",
-            "standard_name": "g_22",
-            "long_name": "g_22, R^2",
-        },
-        
-        "g11": {
-            "conversion": (m["Bnorm"] * m["rho_s0"])**2,
-            "units": "T-2m-2",
-            "standard_name": "g11",
-            "long_name": "g11",
-        },
-        
-        "Th+": {
-            "conversion": m["Tnorm"],
-            "units": "eV",
-            "standard_name": "ion temperature (h+)",
-            "long_name": "Ion temperature (h+)",
-        },
-        
-        "Td+": {
-            "conversion": m["Tnorm"],
-            "units": "eV",
-            "standard_name": "ion temperature (d+)",
-            "long_name": "Ion temperature (d+)",
-        },
-        
-        "Td": {
-            "conversion": m["Tnorm"],
-            "units": "eV",
-            "standard_name": "neutral temperature (d)",
-            "long_name": "Neutral temperature (d)",
-        },
-
-        "Te": {
-            "conversion": m["Tnorm"],
-            "units": "eV",
-            "standard_name": "electron temperature",
-            "long_name": "Electron temperature",
-        },
-
-        "Ne": {
-            "conversion": m["Nnorm"],
-            "units": "m-3",
-            "standard_name": "density",
-            "long_name": "Electron density"
-        },
-
-        "Nh+": {
-            "conversion": m["Nnorm"],
-            "units": "Pa",
-            "standard_name": "ion density (h+)",
-            "long_name": "Ion density (h+)"
-        },
-
-        "Nd+": {
-            "conversion": m["Nnorm"],
-            "units": "Pa",
-            "standard_name": "ion density (d+)",
-            "long_name": "Ion density (d+)"
-        },
-
-        "Nd": {
-            "conversion": m["Nnorm"],
-            "units": "Pa",
-            "standard_name": "neutral density (d)",
-            "long_name": "Neutral density (d)"
-        },
-
-        "Pe": {
-            "conversion": m["Nnorm"] * m["Tnorm"] * q_e,
-            "units": "Pa",
-            "standard_name": "electron pressure",
-            "long_name": "Electron pressure"
-        },
-
-        "Ph+": {
-            "conversion": m["Nnorm"] * m["Tnorm"] * q_e,
-            "units": "Pa",
-            "standard_name": "ion pressure (h+)",
-            "long_name": "Ion pressure (h+)"
-        },
-        
-        "Pd": {
-            "conversion": m["Nnorm"] * m["Tnorm"] * q_e,
-            "units": "Pa",
-            "standard_name": "neutral pressure (d)",
-            "long_name": "Neutral pressure (d)"
-        },
-
-        "Pd+": {
-            "conversion": m["Nnorm"] * m["Tnorm"] * q_e,
-            "units": "Pa",
-            "standard_name": "ion pressure (d+)",
-            "long_name": "Ion pressure (d+)"
-        },
-
-        "Pd+_src": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Pa/s",
-            "standard_name": "ion pressure source (d+)",
-            "long_name": "Ion pressure source (d+)"
-        },
-        
-        "Pd_src": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Pa/s",
-            "standard_name": "neutral pressure source (d)",
-            "long_name": "Neutral pressure source (d)"
-        },
-        
-        "Pe_src": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Pa/s",
-            "standard_name": "electron pressure source (d)",
-            "long_name": "Electron pressure source (d)"
-        },
-        
-        "SPd+": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Pa/s",
-            "standard_name": "d+ net pressure source",
-            "long_name": "d+ net pressure source"
-        },
-        
-        "SPe": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "e net pressure source",
-            "long_name": "e net pressure source"
-        },
-        
-        "Sd_src": {
-            "conversion": m["Nnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "neutral density source (d)",
-            "long_name": "Neutral density source (d)"
-        },
-        
-        "Sd+_src": {
-            "conversion": m["Nnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "neutral density source (d)",
-            "long_name": "Neutral density source (d)"
-        },
-
-        "Rd+_ex": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "exciation radiation (d+)",
-            "long_name": "Multi-step ionisation radiation (d+)"
-        },
-        
-        "Rd+_rec": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "recombination radiation (d+)",
-            "long_name": "Recombination radiation (d+)"
-        },
-        
-        "Ed+_rec": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "recombination plasma energy source (d+)",
-            "long_name": "Recombination plasma energy source (d+)"
-        },
-        
-        "Ed+_iz": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "ionisation plasma energy source (d+)",
-            "long_name": "Ionization plasma energy source (d+)"
-        },
-        
-        "Edd+_cx": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "ionisation plasma energy source (d+)",
-            "long_name": "Ionization plasma energy source (d+)"
-        },
-        
-        "Rar": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "argon radiation",
-            "long_name": "Argon radiation"
-        },
-        
-        "Rc": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "argon radiation",
-            "long_name": "Argon radiation"
-        },
-        
-        "Rne": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "argon radiation",
-            "long_name": "Argon radiation"
-        },
-        
-        "Rn": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "argon radiation",
-            "long_name": "Argon radiation"
-        },
-
-
-        "Sd+_iz": {
-            "conversion": m["Nnorm"] * m["Omega_ci"],
-            "units": "m-3s-1",
-            "standard_name": "ionisation",
-            "long_name": "Ionisation ion source (d+)"
-        },
-        
-        "Sd+_rec": {
-            "conversion": m["Nnorm"] * m["Omega_ci"],
-            "units": "m-3s-1",
-            "standard_name": "recombination",
-            "long_name": "Recombination ion source (d+)"
-        },
-        
-        "Sd+_feedback": {
-            "conversion": m["Nnorm"] * m["Omega_ci"],
-            "units": "m-3s-1",
-            "standard_name": "density source",
-            "long_name": "Upstream density feedback source"
-        },
-        
-        "density_source_shape_d+": {
-            "conversion": m["Nnorm"] * m["Omega_ci"],
-            "units": "m-3s-1",
-            "standard_name": "density source shape",
-            "long_name": "Upstream density feedback source shape"
-        },
-        
-        "Sd_pfr_recycle": {
-            "conversion": m["Nnorm"] * m["Omega_ci"],
-            "units":"m-3s-1",
-            "standard_name": "PFR recycle neutral density source (d)",
-            "long_name": "PFR recycling neutral density source (d)"
-        },
-        
-        "Sd_sol_recycle": {
-            "conversion": m["Nnorm"] * m["Omega_ci"],
-            "units":"m-3s-1",
-            "standard_name": "SOL recycle neutral density source (d)",
-            "long_name": "SOL recycling neutral density source (d)"
-        },
-        
-        "Sd_wall_recycle": {
-            "conversion": m["Nnorm"] * m["Omega_ci"],
-            "units":"m-3s-1",
-            "standard_name": "wall recycle neutral density source (d)",
-            "long_name": "wall recycling neutral density source (d)"
-        },
-        
-        "Sd_pump": {
-            "conversion": m["Nnorm"] * m["Omega_ci"],
-            "units":"m-3s-1",
-            "standard_name": "pump recycle neutral density source (d)",
-            "long_name": "pump recycling neutral density source (d)"
-        },
-        
-        "Sd_target_recycle": {
-            "conversion": m["Nnorm"] * m["Omega_ci"],
-            "units":"m-3s-1",
-            "standard_name": "Target recycle neutral density source (d)",
-            "long_name": "Target recycling neutral density source (d)"
-        },
-        
-        "Ed_pfr_recycle": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "PFR recycle neutral energy source",
-            "long_name": "PFR recycle neutral energy source"
-        },
-        
-        "Ed_sol_recycle": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "SOL recycle neutral energy source",
-            "long_name": "SOL recycle neutral energy source"
-        },
-        
-        "Ed_target_recycle": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "Target recycle neutral energy source",
-            "long_name": "Target recycle neutral energy source"
-        },
-        
-        "Ed_wall_recycle": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "Target recycle neutral energy source",
-            "long_name": "Target recycle neutral energy source"
-        },
-        
-        "Ed_wall_refl": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "Wall reflection neutral energy source",
-            "long_name": "Wall reflection neutral energy source"
-        },
-        
-        "Ed_target_refl": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "Target reflection neutral energy source",
-            "long_name": "Target reflection neutral energy source"
-        },
-        
-        "Ed_pump": {
-            "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
-            "units": "Wm-3",
-            "standard_name": "Pump neutral energy source",
-            "long_name": "Pump neutral energy source"
-        },
-        
-        "ParticleFlow_d+_xlow": {
-            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Omega_ci"],
-            "units":"s-1",
-            "standard_name": "X flow of d+",
-            "long_name": "X flow of d+"
-        },
-        
-        "ParticleFlow_d+_ylow": {
-            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Omega_ci"],
-            "units":"s-1",
-            "standard_name": "Y flow of d+",
-            "long_name": "Y flow of d+"
-        },
-        
-        "EnergyFlow_d+_xlow": {
-            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Tnorm"] * constants("q_e") * m["Omega_ci"],
-            "units":"W",
-            "standard_name": "X flow of d+ energy",
-            "long_name": "X flow of d+ energy"
-        },
-        
-        "EnergyFlow_e_xlow": {
-            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Tnorm"] * constants("q_e") * m["Omega_ci"],
-            "units":"W",
-            "standard_name": "X flow of e energy",
-            "long_name": "X flow of e energy"
-        },
-        
-        "EnergyFlow_d+_ylow": {
-            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Tnorm"] * constants("q_e") * m["Omega_ci"],
-            "units":"W",
-            "standard_name": "Y flow of e energy",
-            "long_name": "Y flow of e energy"
-        },
-        
-        "EnergyFlow_e_ylow": {
-            "conversion": m["rho_s0"] * m["rho_s0"]**2 * m["Nnorm"] * m["Tnorm"] * constants("q_e") * m["Omega_ci"],
-            "units":"W",
-            "standard_name": "Y flow of e energy",
-            "long_name": "Y flow of e energy"
-        },
-        
-        "NVd+": {
-            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"],
-            "units": "kgms-1",
-            "standard_name": "ion momentum",
-            "long_name": "Ion momentum (d+)"
-        },
-        
-        "NVd": {
-            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"],
-            "units": "kgms-1",
-            "standard_name": "neutral momentum",
-            "long_name": "Neutral momentum (d+)"
-        },
-
-        "Fdd+_cx": {
-            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"] * m["Omega_ci"],
-            "units": "kgm-3s-2",
-            "standard_name": "CX momentum transfer",
-            "long_name": "CX momentum transfer"
-        },
-        
-        "Fd+_iz": {
-            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"] * m["Omega_ci"],
-            "units": "kgm-3s-2",
-            "standard_name": "IZ momentum transfer",
-            "long_name": "IZ momentum transfer"
-        },
-        
-        "Fd+_rec": {
-            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"] * m["Omega_ci"],
-            "units": "kgm-3s-2",
-            "standard_name": "Rec momentum transfer",
-            "long_name": "Rec momentum transfer"
-        },
-        
-        "SNVd+": {
-            "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"] * m["Omega_ci"],
-            "units": "kgm-3s-2",
-            "standard_name": "Net momentum transfer",
-            "long_name": "Net momentum transfer"
-        },
-        
-        "Vd": {
-            "conversion": m["Cs0"],
-            "units": "ms-1",
-            "standard_name": "neutral velocity",
-            "long_name": "Neutral velocity (d+)"
-        },
-        
-        "Vd+": {
-            "conversion": m["Cs0"],
-            "units": "ms-1",
-            "standard_name": "ion velocity",
-            "long_name": "Ion velocity (d+)"
-        },
-        
-        "anomalous_D_e": {
-            "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
-            "units": "m2s-1",
-            "standard_name": "anomalous density diffusion (e)",
-            "long_name": "anomalous density diffusion (e)"
-        },
-        
-        "anomalous_D_d+": {
-            "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
-            "units": "m2s-1",
-            "standard_name": "anomalous density diffusion (d+)",
-            "long_name": "anomalous density diffusion (d+)"
-        },
-        
-        "anomalous_Chi_e": {
-            "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
-            "units": "m2s-1",
-            "standard_name": "anomalous thermal diffusion (e)",
-            "long_name": "anomalous thermal diffusion (e)"
-        },
-        
-        "anomalous_Chi_d+": {
-            "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
-            "units": "m2s-1",
-            "standard_name": "anomalous thermal diffusion (d+)",
-            "long_name": "anomalous thermal diffusion (d+)"
-        },
-        
-        "Dnnd": {
-            "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
-            "units": "m2s-1",
-            "standard_name": "Neutral diffusion (d)",
-            "long_name": "Neutral diffusion (d)"
-        },
-        
-        "t": {
-            "conversion": 1/m["Omega_ci"],
-            "units": "s",
-            "standard_name": "time",
-            "long_name": "Time"
-        },
-        
-
-        
-        
+            "dx": {
+                "conversion": m["rho_s0"] ** 2 * m["Bnorm"],
+                "units": "Wb",
+                "standard_name": "radial cell width",
+                "long_name": "Radial cell width in flux space",
+            },
+            "dy": {
+                "conversion": 1,
+                "units": "radian",
+                "standard_name": "poloidal cell angular width",
+                "long_name": "Poloidal cell angular width",
+            },
+            "J": {
+                "conversion": m["rho_s0"] / m["Bnorm"],
+                "units": "m/radianT",
+                "standard_name": "Jacobian",
+                "long_name": "Jacobian to translate from flux to cylindrical coordinates in real space",
+            },
+            "g22": {
+                "conversion": 1 / (m["rho_s0"] * m["rho_s0"]),
+                "units": "m-2",
+                "standard_name": "g22",
+                "long_name": "g22, 1/h_theta^2",
+            },
+            "g_22": {
+                "conversion": m["rho_s0"] * m["rho_s0"],
+                "units": "m2",
+                "standard_name": "g_22",
+                "long_name": "g_22, B^2*h_theta^2/Bpol^2",
+            },
+            "g_33": {
+                "conversion": m["rho_s0"] * m["rho_s0"],
+                "units": "m2",
+                "standard_name": "g_22",
+                "long_name": "g_22, R^2",
+            },
+            "g11": {
+                "conversion": (m["Bnorm"] * m["rho_s0"]) ** 2,
+                "units": "T-2m-2",
+                "standard_name": "g11",
+                "long_name": "g11",
+            },
+            "Th+": {
+                "conversion": m["Tnorm"],
+                "units": "eV",
+                "standard_name": "ion temperature (h+)",
+                "long_name": "Ion temperature (h+)",
+            },
+            "Td+": {
+                "conversion": m["Tnorm"],
+                "units": "eV",
+                "standard_name": "ion temperature (d+)",
+                "long_name": "Ion temperature (d+)",
+            },
+            "Td": {
+                "conversion": m["Tnorm"],
+                "units": "eV",
+                "standard_name": "neutral temperature (d)",
+                "long_name": "Neutral temperature (d)",
+            },
+            "Te": {
+                "conversion": m["Tnorm"],
+                "units": "eV",
+                "standard_name": "electron temperature",
+                "long_name": "Electron temperature",
+            },
+            "Ne": {
+                "conversion": m["Nnorm"],
+                "units": "m-3",
+                "standard_name": "density",
+                "long_name": "Electron density",
+            },
+            "Nh+": {
+                "conversion": m["Nnorm"],
+                "units": "Pa",
+                "standard_name": "ion density (h+)",
+                "long_name": "Ion density (h+)",
+            },
+            "Nd+": {
+                "conversion": m["Nnorm"],
+                "units": "Pa",
+                "standard_name": "ion density (d+)",
+                "long_name": "Ion density (d+)",
+            },
+            "Nd": {
+                "conversion": m["Nnorm"],
+                "units": "Pa",
+                "standard_name": "neutral density (d)",
+                "long_name": "Neutral density (d)",
+            },
+            "Pe": {
+                "conversion": m["Nnorm"] * m["Tnorm"] * q_e,
+                "units": "Pa",
+                "standard_name": "electron pressure",
+                "long_name": "Electron pressure",
+            },
+            "Ph+": {
+                "conversion": m["Nnorm"] * m["Tnorm"] * q_e,
+                "units": "Pa",
+                "standard_name": "ion pressure (h+)",
+                "long_name": "Ion pressure (h+)",
+            },
+            "Pd": {
+                "conversion": m["Nnorm"] * m["Tnorm"] * q_e,
+                "units": "Pa",
+                "standard_name": "neutral pressure (d)",
+                "long_name": "Neutral pressure (d)",
+            },
+            "Pd+": {
+                "conversion": m["Nnorm"] * m["Tnorm"] * q_e,
+                "units": "Pa",
+                "standard_name": "ion pressure (d+)",
+                "long_name": "Ion pressure (d+)",
+            },
+            "Pd+_src": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Pa/s",
+                "standard_name": "ion pressure source (d+)",
+                "long_name": "Ion pressure source (d+)",
+            },
+            "Pd_src": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Pa/s",
+                "standard_name": "neutral pressure source (d)",
+                "long_name": "Neutral pressure source (d)",
+            },
+            "Pe_src": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Pa/s",
+                "standard_name": "electron pressure source (d)",
+                "long_name": "Electron pressure source (d)",
+            },
+            "SPd+": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Pa/s",
+                "standard_name": "d+ net pressure source",
+                "long_name": "d+ net pressure source",
+            },
+            "SPe": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "e net pressure source",
+                "long_name": "e net pressure source",
+            },
+            "Sd_src": {
+                "conversion": m["Nnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "neutral density source (d)",
+                "long_name": "Neutral density source (d)",
+            },
+            "Sd+_src": {
+                "conversion": m["Nnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "neutral density source (d)",
+                "long_name": "Neutral density source (d)",
+            },
+            "Rd+_ex": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "exciation radiation (d+)",
+                "long_name": "Multi-step ionisation radiation (d+)",
+            },
+            "Rd+_rec": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "recombination radiation (d+)",
+                "long_name": "Recombination radiation (d+)",
+            },
+            "Ed+_rec": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "recombination plasma energy source (d+)",
+                "long_name": "Recombination plasma energy source (d+)",
+            },
+            "Ed+_iz": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "ionisation plasma energy source (d+)",
+                "long_name": "Ionization plasma energy source (d+)",
+            },
+            "Edd+_cx": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "ionisation plasma energy source (d+)",
+                "long_name": "Ionization plasma energy source (d+)",
+            },
+            "Rar": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "argon radiation",
+                "long_name": "Argon radiation",
+            },
+            "Rc": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "argon radiation",
+                "long_name": "Argon radiation",
+            },
+            "Rne": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "argon radiation",
+                "long_name": "Argon radiation",
+            },
+            "Rn": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "argon radiation",
+                "long_name": "Argon radiation",
+            },
+            "Sd+_iz": {
+                "conversion": m["Nnorm"] * m["Omega_ci"],
+                "units": "m-3s-1",
+                "standard_name": "ionisation",
+                "long_name": "Ionisation ion source (d+)",
+            },
+            "Sd+_rec": {
+                "conversion": m["Nnorm"] * m["Omega_ci"],
+                "units": "m-3s-1",
+                "standard_name": "recombination",
+                "long_name": "Recombination ion source (d+)",
+            },
+            "Sd+_feedback": {
+                "conversion": m["Nnorm"] * m["Omega_ci"],
+                "units": "m-3s-1",
+                "standard_name": "density source",
+                "long_name": "Upstream density feedback source",
+            },
+            "density_source_shape_d+": {
+                "conversion": m["Nnorm"] * m["Omega_ci"],
+                "units": "m-3s-1",
+                "standard_name": "density source shape",
+                "long_name": "Upstream density feedback source shape",
+            },
+            "Sd_pfr_recycle": {
+                "conversion": m["Nnorm"] * m["Omega_ci"],
+                "units": "m-3s-1",
+                "standard_name": "PFR recycle neutral density source (d)",
+                "long_name": "PFR recycling neutral density source (d)",
+            },
+            "Sd_sol_recycle": {
+                "conversion": m["Nnorm"] * m["Omega_ci"],
+                "units": "m-3s-1",
+                "standard_name": "SOL recycle neutral density source (d)",
+                "long_name": "SOL recycling neutral density source (d)",
+            },
+            "Sd_wall_recycle": {
+                "conversion": m["Nnorm"] * m["Omega_ci"],
+                "units": "m-3s-1",
+                "standard_name": "wall recycle neutral density source (d)",
+                "long_name": "wall recycling neutral density source (d)",
+            },
+            "Sd_pump": {
+                "conversion": m["Nnorm"] * m["Omega_ci"],
+                "units": "m-3s-1",
+                "standard_name": "pump recycle neutral density source (d)",
+                "long_name": "pump recycling neutral density source (d)",
+            },
+            "Sd_target_recycle": {
+                "conversion": m["Nnorm"] * m["Omega_ci"],
+                "units": "m-3s-1",
+                "standard_name": "Target recycle neutral density source (d)",
+                "long_name": "Target recycling neutral density source (d)",
+            },
+            "Ed_pfr_recycle": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "PFR recycle neutral energy source",
+                "long_name": "PFR recycle neutral energy source",
+            },
+            "Ed_sol_recycle": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "SOL recycle neutral energy source",
+                "long_name": "SOL recycle neutral energy source",
+            },
+            "Ed_target_recycle": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "Target recycle neutral energy source",
+                "long_name": "Target recycle neutral energy source",
+            },
+            "Ed_wall_recycle": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "Target recycle neutral energy source",
+                "long_name": "Target recycle neutral energy source",
+            },
+            "Ed_wall_refl": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "Wall reflection neutral energy source",
+                "long_name": "Wall reflection neutral energy source",
+            },
+            "Ed_target_refl": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "Target reflection neutral energy source",
+                "long_name": "Target reflection neutral energy source",
+            },
+            "Ed_pump": {
+                "conversion": q_e * m["Nnorm"] * m["Tnorm"] * m["Omega_ci"],
+                "units": "Wm-3",
+                "standard_name": "Pump neutral energy source",
+                "long_name": "Pump neutral energy source",
+            },
+            "ParticleFlow_d+_xlow": {
+                "conversion": m["rho_s0"]
+                * m["rho_s0"] ** 2
+                * m["Nnorm"]
+                * m["Omega_ci"],
+                "units": "s-1",
+                "standard_name": "X flow of d+",
+                "long_name": "X flow of d+",
+            },
+            "ParticleFlow_d+_ylow": {
+                "conversion": m["rho_s0"]
+                * m["rho_s0"] ** 2
+                * m["Nnorm"]
+                * m["Omega_ci"],
+                "units": "s-1",
+                "standard_name": "Y flow of d+",
+                "long_name": "Y flow of d+",
+            },
+            "EnergyFlow_d+_xlow": {
+                "conversion": m["rho_s0"]
+                * m["rho_s0"] ** 2
+                * m["Nnorm"]
+                * m["Tnorm"]
+                * constants("q_e")
+                * m["Omega_ci"],
+                "units": "W",
+                "standard_name": "X flow of d+ energy",
+                "long_name": "X flow of d+ energy",
+            },
+            "EnergyFlow_e_xlow": {
+                "conversion": m["rho_s0"]
+                * m["rho_s0"] ** 2
+                * m["Nnorm"]
+                * m["Tnorm"]
+                * constants("q_e")
+                * m["Omega_ci"],
+                "units": "W",
+                "standard_name": "X flow of e energy",
+                "long_name": "X flow of e energy",
+            },
+            "EnergyFlow_d+_ylow": {
+                "conversion": m["rho_s0"]
+                * m["rho_s0"] ** 2
+                * m["Nnorm"]
+                * m["Tnorm"]
+                * constants("q_e")
+                * m["Omega_ci"],
+                "units": "W",
+                "standard_name": "Y flow of e energy",
+                "long_name": "Y flow of e energy",
+            },
+            "EnergyFlow_e_ylow": {
+                "conversion": m["rho_s0"]
+                * m["rho_s0"] ** 2
+                * m["Nnorm"]
+                * m["Tnorm"]
+                * constants("q_e")
+                * m["Omega_ci"],
+                "units": "W",
+                "standard_name": "Y flow of e energy",
+                "long_name": "Y flow of e energy",
+            },
+            "NVd+": {
+                "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"],
+                "units": "kgms-1",
+                "standard_name": "ion momentum",
+                "long_name": "Ion momentum (d+)",
+            },
+            "NVd": {
+                "conversion": constants("mass_p") * m["Nnorm"] * m["Cs0"],
+                "units": "kgms-1",
+                "standard_name": "neutral momentum",
+                "long_name": "Neutral momentum (d+)",
+            },
+            "Fdd+_cx": {
+                "conversion": constants("mass_p")
+                * m["Nnorm"]
+                * m["Cs0"]
+                * m["Omega_ci"],
+                "units": "kgm-3s-2",
+                "standard_name": "CX momentum transfer",
+                "long_name": "CX momentum transfer",
+            },
+            "Fd+_iz": {
+                "conversion": constants("mass_p")
+                * m["Nnorm"]
+                * m["Cs0"]
+                * m["Omega_ci"],
+                "units": "kgm-3s-2",
+                "standard_name": "IZ momentum transfer",
+                "long_name": "IZ momentum transfer",
+            },
+            "Fd+_rec": {
+                "conversion": constants("mass_p")
+                * m["Nnorm"]
+                * m["Cs0"]
+                * m["Omega_ci"],
+                "units": "kgm-3s-2",
+                "standard_name": "Rec momentum transfer",
+                "long_name": "Rec momentum transfer",
+            },
+            "SNVd+": {
+                "conversion": constants("mass_p")
+                * m["Nnorm"]
+                * m["Cs0"]
+                * m["Omega_ci"],
+                "units": "kgm-3s-2",
+                "standard_name": "Net momentum transfer",
+                "long_name": "Net momentum transfer",
+            },
+            "Vd": {
+                "conversion": m["Cs0"],
+                "units": "ms-1",
+                "standard_name": "neutral velocity",
+                "long_name": "Neutral velocity (d+)",
+            },
+            "Vd+": {
+                "conversion": m["Cs0"],
+                "units": "ms-1",
+                "standard_name": "ion velocity",
+                "long_name": "Ion velocity (d+)",
+            },
+            "anomalous_D_e": {
+                "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
+                "units": "m2s-1",
+                "standard_name": "anomalous density diffusion (e)",
+                "long_name": "anomalous density diffusion (e)",
+            },
+            "anomalous_D_d+": {
+                "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
+                "units": "m2s-1",
+                "standard_name": "anomalous density diffusion (d+)",
+                "long_name": "anomalous density diffusion (d+)",
+            },
+            "anomalous_Chi_e": {
+                "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
+                "units": "m2s-1",
+                "standard_name": "anomalous thermal diffusion (e)",
+                "long_name": "anomalous thermal diffusion (e)",
+            },
+            "anomalous_Chi_d+": {
+                "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
+                "units": "m2s-1",
+                "standard_name": "anomalous thermal diffusion (d+)",
+                "long_name": "anomalous thermal diffusion (d+)",
+            },
+            "Dnnd": {
+                "conversion": m["rho_s0"] * m["rho_s0"] * m["Omega_ci"],
+                "units": "m2s-1",
+                "standard_name": "Neutral diffusion (d)",
+                "long_name": "Neutral diffusion (d)",
+            },
+            "t": {
+                "conversion": 1 / m["Omega_ci"],
+                "units": "s",
+                "standard_name": "time",
+                "long_name": "Time",
+            },
         }
 
         self.norms = d
-        
+
     def select_symmetric_puff(self, width, center_half_gap):
         """
         Select region meant for setting outboard neutral puff.
         The region is a poloidal row of cells in the radial coordinate
         of the final radial fluid cell.
         There are two puffs symmetric about the midplane axis.
-        
+
         Parameters:
             - width: size of each puff region in no. of cells
             - center_half_gap: half of the gap between the puffs in no. of cells
         """
-        
+
         # width = 3
         # center_half_gap = 1
 
         midplane_a = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g
         midplane_b = int((self.j2_2g - self.j1_2g) / 2) + self.j1_2g + 1
 
-        selection =  (-self.MXG-1, 
-                    np.r_[
-                        slice(midplane_b+center_half_gap, midplane_b+center_half_gap+width),
-                        slice(midplane_b-center_half_gap-width, midplane_b-center_half_gap),
-                        ])
+        selection = (
+            -self.MXG - 1,
+            np.r_[
+                slice(
+                    midplane_b + center_half_gap, midplane_b + center_half_gap + width
+                ),
+                slice(
+                    midplane_b - center_half_gap - width, midplane_b - center_half_gap
+                ),
+            ],
+        )
 
-        return self.ds.isel(x = selection[0], theta = selection[1])
-    
+        return self.ds.isel(x=selection[0], theta=selection[1])
+
     def select_custom_core_ring(self, i):
-            return self.ds.hermesm.select_custom_core_ring(i)
-        
-        
-        
-        
-        
-    def select_custom_sol_ring(self, region, sepadd = None, sepdist = None, radial_start_region="auto"):
-            return self.ds.hermesm.select_custom_sol_ring(
-                region,
-                sepadd = sepadd,
-                sepdist = sepdist,
-                radial_start_region = radial_start_region,
-            )
+        return self.ds.hermesm.select_custom_core_ring(i)
 
-
+    def select_custom_sol_ring(
+        self, region, sepadd=None, sepdist=None, radial_start_region="auto"
+    ):
+        return self.ds.hermesm.select_custom_sol_ring(
+            region,
+            sepadd=sepadd,
+            sepdist=sepdist,
+            radial_start_region=radial_start_region,
+        )
 
     def select_region(self, name):
         return self.ds.hermesm.select_region(name)
-    
+
     def select_domain_boundary(self):
         """
         Extract R,Z coordinates of the model boundary using cell corner information
@@ -1009,14 +989,14 @@ class Case:
         z = []
 
         loc = {
-            "inner_lower_target" : "xy_lower_left_corners",
-            "inner_sol_edge" : "xy_lower_right_corners",
-            "inner_upper_target" : "xy_upper_right_corners",
-            "upper_pfr_edge" : "xy_upper_left_corners",
-            "outer_upper_target" : "xy_lower_left_corners",
-            "outer_sol_edge" : "xy_lower_right_corners",
-            "outer_lower_target" : "xy_upper_right_corners",
-            "lower_pfr_edge" : "xy_upper_left_corners"
+            "inner_lower_target": "xy_lower_left_corners",
+            "inner_sol_edge": "xy_lower_right_corners",
+            "inner_upper_target": "xy_upper_right_corners",
+            "upper_pfr_edge": "xy_upper_left_corners",
+            "outer_upper_target": "xy_lower_left_corners",
+            "outer_sol_edge": "xy_lower_right_corners",
+            "outer_lower_target": "xy_upper_right_corners",
+            "lower_pfr_edge": "xy_upper_left_corners",
         }
 
         for region in loc.keys():
@@ -1028,10 +1008,9 @@ class Case:
 
         r = np.concatenate(r)
         z = np.concatenate(z)
-        
-        return r,z
-        
-    
+
+        return r, z
+
     def extract_1d_tokamak_geometry(self):
         print("Extracting 1D geometry with sdtools")
         ds = self.ds
@@ -1041,43 +1020,48 @@ class Case:
         dy = ds.coords["dy"].values
         n = len(dy)
         pos = np.zeros(n)
-        pos[0] = -0.5*dy[1]
-        pos[1] = 0.5*dy[1]
+        pos[0] = -0.5 * dy[1]
+        pos[1] = 0.5 * dy[1]
 
-        for i in range(2,n):
-            pos[i] = pos[i-1] + 0.5*dy[i-1] + 0.5*dy[i]
-            
+        for i in range(2, n):
+            pos[i] = pos[i - 1] + 0.5 * dy[i - 1] + 0.5 * dy[i]
+
         # pos = ds.coords["y"].values.copy()
 
         # Guard replace to get position at boundaries
-        pos[-2] = (pos[-3] + pos[-2])/2
-        pos[1] = (pos[1] + pos[2])/2 
+        pos[-2] = (pos[-3] + pos[-2]) / 2
+        pos[1] = (pos[1] + pos[2]) / 2
 
         # Set 0 to be at first cell boundary in domain
         pos = pos - pos[1]
         self.pos = pos
         self.ds["pos"] = (["y"], pos)
-        self.ds = self.ds.swap_dims({"y":"pos"})
+        self.ds = self.ds.swap_dims({"y": "pos"})
         self.ds.coords["pos"].attrs = self.ds.coords["y"].attrs
 
         # Replace y in dataset with the new one
         # ds.coords["y"] = pos
-        
-        self.ds["da"] = self.ds.dx * self.ds.dz * self.ds.J / np.sqrt(ds.g_22)
-        
-        self.ds["da"].attrs.update({
-            "conversion" : 1,
-            "units" : "m2",
-            "standard_name" : "cross-sectional area",
-            "long_name" : "Cell parallel cross-sectional area"})
-        
-        self.ds["dv"] = self.ds.J * self.ds.dy * self.ds.dx * self.ds.dz
-        self.ds["dv"].attrs.update({
-            "conversion" : self.metadata["rho_s0"]**3,
-            "units" : "m3",
-            "standard_name" : "cell volume",
-            "long_name" : "Cell Volume"})
 
+        self.ds["da"] = self.ds.dx * self.ds.dz * self.ds.J / np.sqrt(ds.g_22)
+
+        self.ds["da"].attrs.update(
+            {
+                "conversion": 1,
+                "units": "m2",
+                "standard_name": "cross-sectional area",
+                "long_name": "Cell parallel cross-sectional area",
+            }
+        )
+
+        self.ds["dv"] = self.ds.J * self.ds.dy * self.ds.dx * self.ds.dz
+        self.ds["dv"].attrs.update(
+            {
+                "conversion": self.metadata["rho_s0"] ** 3,
+                "units": "m3",
+                "standard_name": "cell volume",
+                "long_name": "Cell Volume",
+            }
+        )
 
     def extract_2d_tokamak_geometry(self):
         """
@@ -1085,52 +1069,53 @@ class Case:
         """
         ds = self.ds
         m = self.ds.metadata
-        
+
         # Add theta index to coords so that both X and theta can be accessed index-wise
         # It is surprisingly hard to extract the index of coordinates in Xarray...
         ds.coords["theta_idx"] = (["theta"], range(len(ds.coords["theta"])))
-        
+
         if "single-null" in ds.metadata["topology"]:
             ds.metadata["targets"] = ["inner_lower", "outer_lower"]
         elif "double-null" in ds.metadata["topology"]:
-            ds.metadata["targets"] = ["inner_lower", "outer_lower", "inner_upper", "outer_upper"]
-            
+            ds.metadata["targets"] = [
+                "inner_lower",
+                "outer_lower",
+                "inner_upper",
+                "outer_upper",
+            ]
+
         num_targets = len(ds.metadata["targets"])
 
         # self.Rxy = meta["Rxy"]    # R coordinate array
         # self.Zxy = meta["Zxy"]    # Z coordinate array
-        
-        
+
         if m["keep_xboundaries"] == 0:
             m["nxg"] = m["nx"] - m["MXG"] * 2  # Take guards into account
             m["MXG"] = 0
         else:
             m["nxg"] = m["nx"]
-            
+
         if m["keep_yboundaries"] == 0:
-            m["nyg"] = m["ny"]    # Already doesn't include guard cells
+            m["nyg"] = m["ny"]  # Already doesn't include guard cells
             m["MYG"] = 0
         else:
-            m["nyg"] = m["ny"] + m["MYG"] * num_targets   # ny taking guards into account
-            
-            
-          
+            m["nyg"] = m["ny"] + m["MYG"] * num_targets  # ny taking guards into account
+
         # nyg, nxg: cell counts which are always with guard cells if they exist, or not if they don't
-              
-        
-        m["nyg"] = m["ny"] + m["MYG"] * num_targets   # ny taking guards into account
-            
+
+        m["nyg"] = m["ny"] + m["MYG"] * num_targets  # ny taking guards into account
+
         m["j1_1"] = m["jyseps1_1"]
         m["j1_2"] = m["jyseps1_2"]
         m["j2_1"] = m["jyseps2_1"]
         m["j2_2"] = m["jyseps2_2"]
-        
+
         # Jyseps accounting for guard cells
         m["j1_1g"] = m["j1_1"] + m["MYG"]
         m["j1_2g"] = m["j1_2"] + m["MYG"] * (num_targets - 1)
         m["j2_1g"] = m["j2_1"] + m["MYG"]
         m["j2_2g"] = m["j2_2"] + m["MYG"] * (num_targets - 1)
-        
+
         # Separatrix index accounting for guard cells
         if m["MXG"] == 0:
             m["ixseps1g"] = m["ixseps1"] - 2
@@ -1138,162 +1123,211 @@ class Case:
         else:
             m["ixseps1g"] = m["ixseps1"]
             m["ixseps2g"] = m["ixseps2"]
-        
+
         # Poloidal midplane indices
         m["omp_a"] = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"]
         m["omp_b"] = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"] + 1
         m["imp_a"] = int((m["j2_1g"] - m["j1_1g"]) / 2) + m["j1_1g"] + 1
         m["imp_b"] = int((m["j2_1g"] - m["j1_1g"]) / 2) + m["j1_1g"]
-        
+
         ds.metadata.update(m)  # Update metadata with new values
-        
-            
+
         # Array of radial (x) indices and of poloidal (y) indices for each cell
-        ds["x_idx"] = (["x", "theta"], np.array([np.array(range(m["nxg"]))] * int(m["nyg"])).transpose())
-        ds["y_idx"] = (["x", "theta"], np.array([np.array(range(m["nyg"]))] * int(m["nxg"])))
-        
+        ds["x_idx"] = (
+            ["x", "theta"],
+            np.array([np.array(range(m["nxg"]))] * int(m["nyg"])).transpose(),
+        )
+        ds["y_idx"] = (
+            ["x", "theta"],
+            np.array([np.array(range(m["nyg"]))] * int(m["nxg"])),
+        )
+
         # Cell areas in flux space
-        ds["dv"] = (["x", "theta"], ds["dx"].data * ds["dy"].data * ds["dz"].data * ds["J"].data)
-        ds["dv"].attrs.update({
-            "conversion" : m["rho_s0"]**3,
-            "units" : "m3",
-            "standard_name" : "cell volume",
-            "long_name" : "Cell volume",
-            "source" : "xHermes"})
-        
+        ds["dv"] = (
+            ["x", "theta"],
+            ds["dx"].data * ds["dy"].data * ds["dz"].data * ds["J"].data,
+        )
+        ds["dv"].attrs.update(
+            {
+                "conversion": m["rho_s0"] ** 3,
+                "units": "m3",
+                "standard_name": "cell volume",
+                "long_name": "Cell volume",
+                "source": "xHermes",
+            }
+        )
+
         # Cell areas in real space - comes from Jacobian
         # TODO: Check these against dx/dy to ensure volume is the same
         # dV = (hthe/Bpol) * (R*Bpol*dr) * dy*2pi = hthe * dy * dr * 2pi * R
         # self.dr = self.dx / (self.ds.R * self.ds.Bpxy)    # Length of cell in radial direction
         # self.hthe = self.J * self.ds["Bpxy"]    # poloidal arc length per radian
         # self.dl = self.dy * self.hthe    # poloidal arc length
-        
-        # ds["dr"] = (["x", "theta"], ds.dx.data / (ds.R.data * ds.Bpxy.data))  # eqv. to dr = dx/sqrt(g11)
-        ds["dr"] = (["x", "theta"], ds.dx.data/np.sqrt(ds.g11.data))  # eqv. to dr = dx/sqrt(g11)
-        ds["dr"].attrs.update({
-            "conversion" : 1,
-            "units" : "m",
-            "standard_name" : "radial length",
-            "long_name" : "Length of cell in the radial direction",
-            "source" : "xHermes"})
-        
-        ds["hthe"] = (["x", "theta"], ds["J"].data * ds["Bpxy"].data)    # h_theta
-        ds["hthe"].attrs.update({
-            "conversion" : 1,
-            "units" : "m/radian",
-            "standard_name" : "h_theta: poloidal arc length per radian",
-            "long_name" : "h_theta: poloidal arc length per radian",
-            "source" : "xHermes"})
-        
-        ds["dl"] = (["x", "theta"], ds["dy"].data * ds["hthe"].data)    # eqv to dl = dy / sqrt(g22): poloidal arc length
-        ds["dl"].attrs.update({
-            "conversion" : 1,
-            "units" : "m",
-            "standard_name" : "poloidal arc length",
-            "long_name" : "Poloidal arc length",
-            "source" : "xHermes"})
-        
-        ds["dtor"] = (["x", "theta"], ds["dz"].data * np.sqrt(ds["g_33"].data))   # Toroidal length
-        ds["dtor"].attrs.update({
-            "conversion" : 1,
-            "units" : "m",
-            "standard_name" : "Toroidal length",
-            "long_name" : "Toroidal length",
-            "source" : "xHermes"})
-        
-        ds["dpol"] = (["x", "theta"], ds["dy"].data * ds["hthe"].data)   # Poloidal length
-        ds["dpol"].attrs.update({
-            "conversion" : 1,
-            "units" : "m",
-            "standard_name" : "Poloidal length",
-            "long_name" : "Poloidal length",
-            "source" : "xHermes"})
-        
-        
 
-        
+        # ds["dr"] = (["x", "theta"], ds.dx.data / (ds.R.data * ds.Bpxy.data))  # eqv. to dr = dx/sqrt(g11)
+        ds["dr"] = (
+            ["x", "theta"],
+            ds.dx.data / np.sqrt(ds.g11.data),
+        )  # eqv. to dr = dx/sqrt(g11)
+        ds["dr"].attrs.update(
+            {
+                "conversion": 1,
+                "units": "m",
+                "standard_name": "radial length",
+                "long_name": "Length of cell in the radial direction",
+                "source": "xHermes",
+            }
+        )
+
+        ds["hthe"] = (["x", "theta"], ds["J"].data * ds["Bpxy"].data)  # h_theta
+        ds["hthe"].attrs.update(
+            {
+                "conversion": 1,
+                "units": "m/radian",
+                "standard_name": "h_theta: poloidal arc length per radian",
+                "long_name": "h_theta: poloidal arc length per radian",
+                "source": "xHermes",
+            }
+        )
+
+        ds["dl"] = (
+            ["x", "theta"],
+            ds["dy"].data * ds["hthe"].data,
+        )  # eqv to dl = dy / sqrt(g22): poloidal arc length
+        ds["dl"].attrs.update(
+            {
+                "conversion": 1,
+                "units": "m",
+                "standard_name": "poloidal arc length",
+                "long_name": "Poloidal arc length",
+                "source": "xHermes",
+            }
+        )
+
+        ds["dtor"] = (
+            ["x", "theta"],
+            ds["dz"].data * np.sqrt(ds["g_33"].data),
+        )  # Toroidal length
+        ds["dtor"].attrs.update(
+            {
+                "conversion": 1,
+                "units": "m",
+                "standard_name": "Toroidal length",
+                "long_name": "Toroidal length",
+                "source": "xHermes",
+            }
+        )
+
+        ds["dpol"] = (
+            ["x", "theta"],
+            ds["dy"].data * ds["hthe"].data,
+        )  # Poloidal length
+        ds["dpol"].attrs.update(
+            {
+                "conversion": 1,
+                "units": "m",
+                "standard_name": "Poloidal length",
+                "long_name": "Poloidal length",
+                "source": "xHermes",
+            }
+        )
+
     def collect_boundaries(self):
         self.boundaries = dict()
-        for target_name in ["inner_lower_target", "inner_upper_target", "outer_upper_target", "outer_lower_target"]:
+        for target_name in [
+            "inner_lower_target",
+            "inner_upper_target",
+            "outer_upper_target",
+            "outer_lower_target",
+        ]:
             self.boundaries[target_name] = Target(self, target_name)
-            
 
     def summarise_grid(self):
         meta = self.ds.metadata
-        print(f' - ixseps1: {meta["ixseps1"]}    // id of first cell after separatrix 1')
-        print(f' - ixseps2: {meta["ixseps2"]}    // id of first cell after separatrix 2')
-        print(f' - jyseps1_1: {meta["jyseps1_1"]}    // near lower inner')
-        print(f' - jyseps1_2: {meta["jyseps1_2"]}    // near lower outer')
-        print(f' - jyseps2_1: {meta["jyseps2_1"]}    // near upper outer')
-        print(f' - jyseps2_2: {meta["jyseps2_2"]}    // near lower outer')
-        print(f' - ny_inner: {meta["ny_inner"]}    // no. poloidal cells in-between divertor regions')
-        print(f' - ny: {meta["ny"]}    // total cells in Y (poloidal, does not include guard cells)')
-        print(f' - nx: {meta["nx"]}    // total cells in X (radial, includes guard cells)')
+        print(
+            f" - ixseps1: {meta['ixseps1']}    // id of first cell after separatrix 1"
+        )
+        print(
+            f" - ixseps2: {meta['ixseps2']}    // id of first cell after separatrix 2"
+        )
+        print(f" - jyseps1_1: {meta['jyseps1_1']}    // near lower inner")
+        print(f" - jyseps1_2: {meta['jyseps1_2']}    // near lower outer")
+        print(f" - jyseps2_1: {meta['jyseps2_1']}    // near upper outer")
+        print(f" - jyseps2_2: {meta['jyseps2_2']}    // near lower outer")
+        print(
+            f" - ny_inner: {meta['ny_inner']}    // no. poloidal cells in-between divertor regions"
+        )
+        print(
+            f" - ny: {meta['ny']}    // total cells in Y (poloidal, does not include guard cells)"
+        )
+        print(
+            f" - nx: {meta['nx']}    // total cells in X (radial, includes guard cells)"
+        )
 
 
-
-
-
-def squash(casepath, verbose = True, force = False):
+def squash(casepath, verbose=True, force=False):
     """
-    Checks if squashed file exists. If it doesn't, or if it's older than the dmp files, 
+    Checks if squashed file exists. If it doesn't, or if it's older than the dmp files,
     then it creates a new squash file.
-    
+
     Inputs
     ------
     Casepath is the path to the case directory
     verbose gives you extra info prints
     force always recreates squash file
     """
-    
+
     datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
     inputfilepath = os.path.join(casepath, "BOUT.inp")
-    squashfilepath = os.path.join(casepath, "BOUT.squash.nc") # Squashoutput hardcoded to this filename
+    squashfilepath = os.path.join(
+        casepath, "BOUT.squash.nc"
+    )  # Squashoutput hardcoded to this filename
 
-    recreate = True if force is True else False   # Override to recreate squashoutput
+    recreate = True if force is True else False  # Override to recreate squashoutput
     squash_exists = False
-    
-    if verbose is True: print(f"- Looking for squash file")
-        
+
+    if verbose is True:
+        print(f"- Looking for squash file")
+
     if "BOUT.squash.nc" in os.listdir(casepath):  # Squash file found?
-        
         squash_exists = True
-        
+
         squash_date = os.path.getmtime(squashfilepath)
         dmp_date = os.path.getmtime(os.path.join(casepath, "BOUT.dmp.0.nc"))
-        
-        squash_date_string = dt.strftime(dt.fromtimestamp(squash_date), r"%m/%d/%Y, %H:%M:%S")
+
+        squash_date_string = dt.strftime(
+            dt.fromtimestamp(squash_date), r"%m/%d/%Y, %H:%M:%S"
+        )
         dmp_date_string = dt.strftime(dt.fromtimestamp(dmp_date), r"%m/%d/%Y, %H:%M:%S")
-        
-        if verbose is True: print(f"- Squash file found. squash date {squash_date_string}, dmp file date {dmp_date_string}") 
-        
-        if dmp_date > squash_date:   #Recreate if squashoutput is too old
+
+        if verbose is True:
+            print(
+                f"- Squash file found. squash date {squash_date_string}, dmp file date {dmp_date_string}"
+            )
+
+        if dmp_date > squash_date:  # Recreate if squashoutput is too old
             recreate = True
-            print(f"- dmp files are newer than the squash file! Recreating...") 
-            
+            print(f"- dmp files are newer than the squash file! Recreating...")
+
     else:
-        if verbose is True: print(f"- Squashoutput file not found, creating...")
+        if verbose is True:
+            print(f"- Squashoutput file not found, creating...")
         recreate = True
-        
 
     if recreate is True:
-        
-        if squash_exists is True:  # Squashoutput will not overwrite, so we delete the file first
+        if (
+            squash_exists is True
+        ):  # Squashoutput will not overwrite, so we delete the file first
             os.remove(squashfilepath)
-            
+
         squashoutput(
-            datadir = casepath,
-            outputname = squashfilepath,
-            xguards = True,   # Take all xguards
-            yguards = "include_upper",  # Take all yguards (yes, confusing name)
-            parallel = False,   # Seems broken atm
-            quiet = verbose
+            datadir=casepath,
+            outputname=squashfilepath,
+            xguards=True,  # Take all xguards
+            yguards="include_upper",  # Take all yguards (yes, confusing name)
+            parallel=False,  # Seems broken atm
+            quiet=verbose,
         )
-        
-        if verbose is True: print(f"- Done")
-            
 
-
-
-
-
+        if verbose is True:
+            print(f"- Done")

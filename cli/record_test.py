@@ -38,10 +38,20 @@ DEFAULT_CSV = os.path.join(SCRIPT_DIR, "run_records.csv")
 RECIPE_SECTIONS = ("solver", "petsc")
 
 CSV_COLUMNS = [
-    "case", "originator", "run_started", "run_time_str", "run_time_s",
-    "recipe", "diffs", "note",
-    "hermes_branch", "hermes_commit", "hermes_commit_date",
-    "bout_version", "bout_commit", "recorded_at",
+    "case",
+    "originator",
+    "run_started",
+    "run_time_str",
+    "run_time_s",
+    "recipe",
+    "diffs",
+    "note",
+    "hermes_branch",
+    "hermes_commit",
+    "hermes_commit_date",
+    "bout_version",
+    "bout_commit",
+    "recorded_at",
 ]
 
 _LOG_TIME_FMT = "%a %b %d %H:%M:%S %Y"
@@ -105,8 +115,9 @@ def find_repo_root(start_path):
 
 def _git(repo, *args):
     try:
-        res = subprocess.run(["git", "-C", repo, *args],
-                             capture_output=True, text=True, check=True)
+        res = subprocess.run(
+            ["git", "-C", repo, *args], capture_output=True, text=True, check=True
+        )
         return res.stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None
@@ -258,7 +269,9 @@ def record_test(casepath, recipe_path, note="", branch=None):
         "originator": _originator(hermes_repo),
         "run_started": info["run_started"] or "",
         "run_time_str": info["run_time_str"] or "",
-        "run_time_s": "" if info["wall_seconds"] is None else int(round(info["wall_seconds"])),
+        "run_time_s": ""
+        if info["wall_seconds"] is None
+        else int(round(info["wall_seconds"])),
         "recipe": recipe_name,
         "diffs": "; ".join(diffs),
         "note": note,
@@ -306,18 +319,30 @@ if __name__ == "__main__":
         description="Record a perftest run (metadata + solver recipe diff) as a CSV row."
     )
     parser.add_argument("casepath", help="Path to the case folder")
-    parser.add_argument("--recipe", required=True,
-                        help="Path to the base solver recipe file")
-    parser.add_argument("--csv", default=DEFAULT_CSV,
-                        help=f"CSV file to append to (default: ./{DEFAULT_CSV} in the current directory)")
-    parser.add_argument("--note", default="", help="Optional free-text note for this run")
-    parser.add_argument("--branch",
-                        help="Hermes-3 branch the run was on (not recoverable from "
-                             "the log). Defaults to the hermes repo's current checkout.")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Print the row but do not write to the CSV")
-    parser.add_argument("-y", "--yes", action="store_true",
-                        help="Skip the branch confirmation prompt")
+    parser.add_argument(
+        "--recipe", required=True, help="Path to the base solver recipe file"
+    )
+    parser.add_argument(
+        "--csv",
+        default=DEFAULT_CSV,
+        help=f"CSV file to append to (default: ./{DEFAULT_CSV} in the current directory)",
+    )
+    parser.add_argument(
+        "--note", default="", help="Optional free-text note for this run"
+    )
+    parser.add_argument(
+        "--branch",
+        help="Hermes-3 branch the run was on (not recoverable from "
+        "the log). Defaults to the hermes repo's current checkout.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the row but do not write to the CSV",
+    )
+    parser.add_argument(
+        "-y", "--yes", action="store_true", help="Skip the branch confirmation prompt"
+    )
     args = parser.parse_args()
 
     row = record_test(args.casepath, args.recipe, note=args.note, branch=args.branch)

@@ -13,7 +13,9 @@ _COEFF_ROW_RE = re.compile(
     rf"(?P<v1>{_DFLOAT_PATTERN})\s+"
     rf"(?P<v2>{_DFLOAT_PATTERN})\s*$"
 )
-_SECTION_RE = re.compile(r"\\section\{(?P<header>.*?)\}(?P<body>.*?)(?=(?:\\section\{|\Z))", re.S)
+_SECTION_RE = re.compile(
+    r"\\section\{(?P<header>.*?)\}(?P<body>.*?)(?=(?:\\section\{|\Z))", re.S
+)
 _SUBSECTION_RE = re.compile(
     r"\\subsection\{\s*Reaction\s+(?P<reaction>\S+)(?P<header>.*?)\}(?P<body>.*?)(?=(?:\\subsection\{|\\section\{|\Z))",
     re.S,
@@ -53,7 +55,9 @@ def _positive_array(name: str, value: float | np.ndarray) -> np.ndarray:
     """
     value = np.asarray(value, dtype=float)
     if np.any(value <= 0.0):
-        raise ValueError(f"{name} must be strictly positive because AMJUEL uses logarithms.")
+        raise ValueError(
+            f"{name} must be strictly positive because AMJUEL uses logarithms."
+        )
     return value
 
 
@@ -70,9 +74,7 @@ def extract_fit(name: str, tex_path: str | Path) -> dict[str, object]:
     name = " ".join(name.split())
     name_match = re.fullmatch(r"(H\.\d+)\s+(\S+)", name)
     if name_match is None:
-        raise ValueError(
-            "AMJUEL names must look like 'H.4 2.1.5' or 'H.10 2.1.5'."
-        )
+        raise ValueError("AMJUEL names must look like 'H.4 2.1.5' or 'H.10 2.1.5'.")
     family, reaction = name_match.groups()
     text = Path(tex_path).read_text(encoding="utf-8")
 
@@ -89,7 +91,9 @@ def extract_fit(name: str, tex_path: str | Path) -> dict[str, object]:
         elif re.search(r"\(n[^,]*,T", compact_header):
             second_param = "Ne"
         else:
-            raise ValueError(f"Could not infer the second AMJUEL parameter from section header: {section_header}")
+            raise ValueError(
+                f"Could not infer the second AMJUEL parameter from section header: {section_header}"
+            )
 
         for subsection_match in _SUBSECTION_RE.finditer(section_match.group("body")):
             if subsection_match.group("reaction") != reaction:
@@ -113,7 +117,9 @@ def extract_fit(name: str, tex_path: str | Path) -> dict[str, object]:
 
             for line in coeff_text.splitlines():
                 if "E-Index:" in line:
-                    current_e_indices = [int(index) for index in re.findall(r"\d+", line)]
+                    current_e_indices = [
+                        int(index) for index in re.findall(r"\d+", line)
+                    ]
                     continue
 
                 bound_match = _BOUND_RE.match(line.strip())
@@ -202,7 +208,9 @@ def evaluate_from_coefficients(
         for t_index in range(coeffs.shape[0]):
             te_term = np.power(log_te, t_index)
             for e_index in range(coeffs.shape[1]):
-                log_rate += coeffs[t_index, e_index] * te_term * np.power(log_second, e_index)
+                log_rate += (
+                    coeffs[t_index, e_index] * te_term * np.power(log_second, e_index)
+                )
 
     rate = np.exp(log_rate)
     if not pop_ratio:
