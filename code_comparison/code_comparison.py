@@ -29,6 +29,20 @@ from hermes3.selectors import get_1d_radial_data, get_1d_poloidal_data
 from code_comparison.solps_pp import SOLPScase
 
 
+# Parallel/poloidal velocity & momentum quantities. The SIGNED convention is
+# owned by each code (for SOLPS it is SOLPScase.momentum_sign /
+# reverse_velocities). Here we only take the magnitude on the divertor legs so
+# the comparison plots come out positive on both the inner and outer leg.
+# Radial (perp) quantities are a different axis and are NOT included; 'M' (Mach)
+# is appended explicitly where it is also taken as a magnitude.
+FLOW_PARAMS = [
+    "Vd+", "NVd+",
+    "Vpar_a", "Vpar_m", "Vpar_d", "NVpar_a", "NVpar_m", "NVpar_d",
+    "Vpol_a", "Vpol_m", "Vpol_d", "NVpol_a", "NVpol_m", "NVpol_d",
+    "Va", "Vm", "Vd", "NVa", "NVm", "NVd",
+]
+
+
 def save_last10s_subset(solps_path, destination_path):
     solps = file_read(solps_path)
 
@@ -216,9 +230,11 @@ class SOLEDGEdata:
                 )
 
             if "inner" in region or "outer" in region:
-                self.regions[region]["M"] = np.abs(self.regions[region]["M"])
-                self.regions[region]["Vd+"] = np.abs(self.regions[region]["Vd+"])
-                self.regions[region]["NVd+"] = np.abs(self.regions[region]["NVd+"])
+                for param in FLOW_PARAMS + ["M"]:
+                    if param in self.regions[region]:
+                        self.regions[region][param] = np.abs(
+                            self.regions[region][param]
+                        )
 
     def read_csv(self, path, mode):
 
@@ -438,6 +454,19 @@ class SOLPSdata:
             "M",
         ]
 
+        # EIRENE neutral parallel/poloidal/radial velocity and momentum density,
+        # added to bal by SOLPScase.derive_neutral_momentum (run in the
+        # constructor). Include them only if present (they need fort.33/34/35/46).
+        # Suffix a=atom, m=molecule, d=total; Va/NVa... duplicate the parallel
+        # fields echoing the ion Vd+/NVd+ (match the Hermes-3 Vd/NVd names).
+        if "Vpar_d" in spc.bal:
+            list_params += [
+                "Vpar_a", "Vpar_m", "Vpar_d", "NVpar_a", "NVpar_m", "NVpar_d",
+                "Vpol_a", "Vpol_m", "Vpol_d", "NVpol_a", "NVpol_m", "NVpol_d",
+                "Vperp_a", "Vperp_m", "Vperp_d", "NVperp_a", "NVperp_m", "NVperp_d",
+                "Va", "Vm", "Vd", "NVa", "NVm", "NVd",
+            ]
+
         ### ALL WITH NO GUARDS
 
         # OMP
@@ -495,19 +524,13 @@ class SOLPSdata:
                 else:
                     regions[region].index = regions[region]["Spol"]
 
-                # Now changed in case
-                # for param in ["Vd+", "NVd+"]:
-                #     regions[region][param] = regions[region][param] * -1
-
-            ## ABSOLUTE MOMENTUM AT RADIAL SURFACES
-            if "outer_lower_sol" in region or "inner_lower_sol" in region:
-                for param in ["Vd+", "NVd+", "M"]:
-                    regions[region][param] = np.abs(regions[region][param])
-
-            ## MULTIPLY BY -1 FOR Inner LEG
-            if "inner_fieldline" in region:
-                for param in ["Vd+", "NVd+"]:
-                    regions[region][param] = regions[region][param] * -1
+                # Plot parallel/poloidal momentum & velocity as a magnitude, so
+                # the profile is positive on both the inner and outer leg. The
+                # signed convention itself lives in SOLPScase.momentum_sign /
+                # reverse_velocities() and is applied before this point.
+                for param in FLOW_PARAMS + ["M"]:
+                    if param in regions[region]:
+                        regions[region][param] = np.abs(regions[region][param])
 
         self.regions = regions
 
@@ -659,6 +682,12 @@ class Hermesdata:
             "Sd+_iz",
             "Rd+_ex",
             "Rd+_rec",
+            # Neutral (total, parallel) momentum and velocity. Hermes-3 only has
+            # the field-aligned total neutral, so these compare to the SOLPS
+            # Vd/NVd (= Vpar_d) fields. No molecule/atom split or poloidal/radial
+            # neutral velocity exists in Hermes-3 output.
+            "NVd",
+            "Vd",
         ]
         pass
 
@@ -727,10 +756,13 @@ class Hermesdata:
                 else:
                     self.regions[region].index = self.regions[region]["Spol"]
 
-                # Flip sign of flow related diagnostics for inner
-                if "inner" in region:
-                    for param in ["Vd+", "NVd+", "M"]:
-                        self.regions[region][param] = self.regions[region][param] * -1
+                # Plot parallel/poloidal momentum & velocity as a magnitude, so
+                # the profile is positive on both the inner and outer leg.
+                for param in FLOW_PARAMS + ["M"]:
+                    if param in self.regions[region]:
+                        self.regions[region][param] = np.abs(
+                            self.regions[region][param]
+                        )
 
         # Make distance the index
         for region in self.regions.keys():
@@ -867,7 +899,7 @@ def lineplot_compare(
         elif "Hermes" in case_label:
             data_key = "Hermes-3"
         else:
-            raise ValueError(f"Unknown case type for {case_label}")
+            raise ValueError(f"Code name missing from case name in {case_label}")
 
         resolved_entry = dict(entry)
         resolved_entry["data"] = data_dicts[data_key][entry["name"]]
@@ -894,7 +926,7 @@ def lineplot_compare(
             "Nn": "log",
             "Pe": "log",
             "Pd+": "log",
-            "NVd+": "log",
+            "NVd+": "linear",
             "Vd+": "linear",
             "M": "linear",
         },
@@ -909,8 +941,8 @@ def lineplot_compare(
             "Nm": "log",
             "Pe": "log",
             "Pd+": "log",
-            "NVd+": "log",
-            "Vd+": "log",
+            "NVd+": "linear",
+            "Vd+": "linear",
             "M": "linear",
         },
         "outer_lower_sol": {
