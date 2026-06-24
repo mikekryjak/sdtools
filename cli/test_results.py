@@ -3,7 +3,6 @@
 import argparse
 import getpass
 import os
-import platform
 import re
 import subprocess
 from datetime import datetime
@@ -20,11 +19,12 @@ These fields are written into the log by BOUT++/Hermes-3 at runtime and need
 nothing outside the simulation directory.
 
 Some requested fields are NOT stored in the run directory:
-    - the originator (user@host) the run was performed on (never logged)
+    - the originator (git email) of the run (never logged)
     - the git *branch* and Hermes-3 commit *date* (only hashes are logged)
 
-The originator is read from the machine running this script, assuming it is the
-same user and host that ran the simulation.
+The originator is the email of the active git account (repo-local config wins
+over global), falling back to the OS login name, assuming the machine running
+this script is the same one that ran the simulation.
 
 The branch and commit date can be recovered with --git, which looks the logged
 hashes up in the local git repositories (the Hermes-3 source dir is inferred
@@ -113,6 +113,15 @@ def _git(repo, *args):
         return None
 
 
+def _originator(repo=None):
+    """Email of the active git account (repo-local config wins over global),
+    falling back to the OS login name if git has no email configured."""
+    email = _git(repo, "config", "user.email") if repo else None
+    if not email:
+        email = _git(os.getcwd(), "config", "user.email")  # global / cwd repo
+    return email or getpass.getuser()
+
+
 def git_lookup(repo, commit):
     """Best-effort branch + exact commit date for a hash in a local repo.
 
@@ -171,17 +180,15 @@ def test_results(casepath, use_git=True):
     info = parse_log(logpath)
     info["casepath"] = casepath
     info["logfile"] = os.path.basename(logpath)
-    # The originator (user@host) is never written into the run directory, so we
-    # read it from the machine running this script, assuming it is the same user
-    # and host that ran the simulation.
-    user = getpass.getuser()
-    host = platform.node()
-    info["originator"] = f"{user}@{host}" if (user and host) else (user or host or None)
+    # The originator is never written into the run directory, so we read the git
+    # email from the machine running this script (repo-local config wins),
+    # assuming it is the same machine that ran the simulation.
+    hermes_repo = find_repo_root(info["binary"])
+    info["originator"] = _originator(hermes_repo)
     info["hermes_git"] = {"branch": None, "date": None, "repo": None}
     info["bout_git"] = {"branch": None, "date": None, "repo": None}
 
     if use_git:
-        hermes_repo = find_repo_root(info["binary"])
         info["hermes_git"] = git_lookup(hermes_repo, info["hermes_commit"])
         bout_repo = None
         if hermes_repo:
@@ -202,7 +209,7 @@ def print_report(info):
     print(f"Run statistics: {info['casepath']}  [{info['logfile']}]")
     print(
         _line(
-            "Originator", info["originator"], "assumes script runs as the run user/host"
+            "Originator", info["originator"], "git email; assumes script runs as the run user"
         )
     )
     print(_line("Run started", info["run_started"]))

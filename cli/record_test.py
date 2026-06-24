@@ -31,8 +31,9 @@ Usage:
     record_test.py <case folder> --recipe recipes/SNES-MUMPS-1.txt [--csv path] [--note "..."]
 """
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_CSV = os.path.join(SCRIPT_DIR, "run_records.csv")
+# CSV is written to the terminal's current working directory by default, not
+# next to the script.
+DEFAULT_CSV = "run_records.csv"
 
 # Settings sections compared against the recipe.
 RECIPE_SECTIONS = ("solver", "petsc")
@@ -320,22 +321,25 @@ if __name__ == "__main__":
     )
     parser.add_argument("casepath", help="Path to the case folder")
     parser.add_argument(
-        "--recipe", required=True, help="Path to the base solver recipe file"
+        "-r", "--recipe", required=True, help="Path to the base solver recipe file"
     )
     parser.add_argument(
+        "-c",
         "--csv",
         default=DEFAULT_CSV,
         help=f"CSV file to append to (default: ./{DEFAULT_CSV} in the current directory)",
     )
     parser.add_argument(
-        "--note", default="", help="Optional free-text note for this run"
+        "-n", "--note", default="", help="Optional free-text note for this run"
     )
     parser.add_argument(
+        "-b",
         "--branch",
         help="Hermes-3 branch the run was on (not recoverable from "
         "the log). Defaults to the hermes repo's current checkout.",
     )
     parser.add_argument(
+        "-d",
         "--dry-run",
         action="store_true",
         help="Print the row but do not write to the CSV",
