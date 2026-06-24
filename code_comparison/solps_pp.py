@@ -110,6 +110,15 @@ class SOLPScase:
 
         """
         self.path = path
+
+        # SINGLE control for the SOLPS parallel/poloidal momentum sign
+        # convention. -1 makes the positive direction point towards the outer
+        # target (the SOLPS default); +1 keeps the native SOLPS direction.
+        # Every velocity/momentum quantity (ion Vd+/NVd+ and the neutral
+        # Vpar/Vpol/NV... fields) is multiplied by this, so flipping the
+        # convention is a one-line change here, or a call to reverse_velocities().
+        self.momentum_sign = -1
+
         raw_balance = nc.Dataset(os.path.join(path, "balance.nc"))
 
         ## Need to transpose to get over the backwards convention compared to MATLAB
@@ -290,9 +299,12 @@ class SOLPScase:
             s[name] = (self.psel[name], self.g["sep"])
 
         self.read_b2fgmtry(path_b2fgmtry)
-        # self.reverse_velocities()  # Positive velocity is towards outer target
         self.get_species()
         self.derive_data()
+        self.derive_neutral_momentum()  # Get V_perp, V_pol, V_par of neutrals from EIRENE
+        # Sign convention is set by self.momentum_sign above; call
+        # self.reverse_velocities() to flip it (ion + neutral together).
+        
 
     def read_b2fgmtry(self, path=None, verbose=False, strict=True):
         """
@@ -554,7 +566,9 @@ class SOLPScase:
 
         # flux = bal["fnax_D+1_tot"] / (bal["vol"] / bal["
 
-        bal["Vd+"] = bal["ua"][:, :, 1] * -1  # Note first species is fluid neutral
+        # First species is the fluid neutral; index 1 is the main ion. Sign
+        # convention applied via self.momentum_sign (see __init__).
+        bal["Vd+"] = bal["ua"][:, :, 1] * self.momentum_sign
         bal["NVd+"] = bal["Vd+"] * bal["Ne"] * Mi  # Parallel momentum flux kg/m2/s
         bal["M"] = np.abs(
             bal["Vd+"] / np.sqrt((bal["Te"] * qe + bal["Td+"] * qe) / Mi)
@@ -589,6 +603,222 @@ class SOLPScase:
 
         self.bal = bal
         self.params = list(self.bal.keys())
+
+    def derive_neutral_momentum(self, verbose=True):
+        """
+        Map EIRENE neutral parallel, poloidal and perpendicular (radial)
+        velocity and momentum onto the B2 plasma grid, for comparison with
+        Hermes-3.
+
+        EIRENE momentum tallies live only on the triangle mesh (fort.46), as
+        momentum density [kg m^-2 s^-1] in (R, Z, toroidal) components. SOLPS
+        does not map them to the B2 grid (only densities/temperatures via
+        dab2/dmb2). This method:
+
+          1. reads the triangle mesh + tallies with the self-contained
+             ``eirene_io`` reader (raw fort.33/34/35/46),
+          2. groups triangles by their authoritative B2 cell (fort.35 ``ixiy``)
+             and places each group at the nearest B2 cell centre (crx/cry). This
+             is bijective and aligns with the geometry grid (validated: it
+             reproduces dab2 to within the EIRENE-triangle vs B2-cell volume
+             normalisation difference, ~10-60% in the divertor/X-point),
+          3. forms the volume-weighted mean momentum density and number density
+             per cell, and the mean velocity vector v = NV / (n * m); the
+             velocity is independent of EIRENE's cell-volume normalisation and
+             is therefore the robust quantity,
+          4. projects onto the field (parallel), the poloidal grid direction
+             (poloidal) and the radial grid direction (perpendicular).
+
+        Stores in self.bal (all on the (nx, ny) geometry grid), with species
+        suffix a=atom, m=molecule, d=total neutral:
+            Vpar_{a,m,d},  NVpar_{a,m,d}     parallel velocity / momentum density
+            Vpol_{a,m,d},  NVpol_{a,m,d}     poloidal velocity / momentum density
+            Vperp_{a,m,d}, NVperp_{a,m,d}    radial   velocity / momentum density
+            V{a,m,d},      NV{a,m,d}         duplicate of the parallel fields,
+                                             echoing the ion bal['Vd+']/['NVd+']
+        Velocity is [m/s]; momentum density is [kg m^-2 s^-1].
+
+        Sign conventions:
+          - Parallel uses signed Bpol (bb[:,:,0]) and signed Btor (bb[:,:,2]).
+            Parallel and poloidal both carry the SOLPS convention factor
+            self.momentum_sign (the same factor applied to the ion Vd+), so all
+            flow quantities share one flippable convention (see __init__ /
+            reverse_velocities). With the default momentum_sign=-1, positive is
+            towards the outer target, matching bal['Vd+'].
+          - Poloidal is aligned with parallel via sign(Bpol/Btot) so that a
+            poloidal flow and its parallel counterpart always have the SAME
+            sign, independent of the sign of Bpol.
+          - Radial (perp) is +e_rad (increasing radial index, towards SOL) and
+            is NOT part of the sign convention (different axis).
+
+        Caveats:
+          - Momentum density inherits the EIRENE-triangle (VOLTAL) normalisation,
+            so neutral density differs from bal['Na'] (dab2, B2-cell/VOLB) by the
+            volume ratio (see solps-input-parser b2-eirene-grid-geometry-mismatch).
+            Velocity is normalisation-independent. For momentum consistent with
+            the B2 density, use bal['Na'] * m * bal['Va'] etc.
+          - Masses assume deuterium: atom = 2*m_p, molecule (D2) = 4*m_p.
+        """
+        from collections import defaultdict
+
+        try:
+            from code_comparison import eirene_io
+        except ImportError:
+            import eirene_io
+        from scipy.spatial import cKDTree
+
+        bal, g = self.bal, self.g
+        mp = constants("mass_p")
+        m_atom = 2 * mp  # deuterium atom
+        m_mol = 4 * mp  # D2 molecule
+        nx, ny = g["nx"], g["ny"]
+
+        # --- read triangle mesh and neutral tallies (raw fort.3x/fort.46) ---
+        tri = eirene_io.read_triangles(self.path)
+        f46 = eirene_io.read_fort46(self.path)
+        nt = tri["cells"].shape[0]  # trailing fort.46 cells are off-mesh; drop
+        vol = tri["vol"][:nt]
+        ixiy = tri["ixiy"][:nt].astype(int)
+        tc = tri["nodes"][tri["cells"][:nt]].mean(axis=1)  # centroids (nt, 2)
+
+        # species 0 = main-ion neutral; (R, Z, toroidal) = (vx, vy, vz)
+        pden = {"a": f46["pdena"][:nt, 0], "m": f46["pdenm"][:nt, 0]}
+        mom = {
+            ("a", c): f46[f"v{c}dena"][:nt, 0] for c in ("x", "y", "z")
+        }
+        mom.update({("m", c): f46[f"v{c}denm"][:nt, 0] for c in ("x", "y", "z")})
+
+        # --- map triangles -> geometry grid via ixiy groups + nearest centre ---
+        tree = cKDTree(np.column_stack([g["R"].ravel(), g["Z"].ravel()]))
+        groups = defaultdict(list)
+        for i in range(nt):
+            groups[(ixiy[i, 0], ixiy[i, 1])].append(i)
+
+        keys = ["w", "pa", "pm"] + [f"{s}{c}" for s in "am" for c in "xyz"]
+        acc = {k: np.zeros(nx * ny) for k in keys}
+        for ids in groups.values():
+            if len(ids) > 50:  # off-mesh "additional cell" dump group
+                continue
+            ids = np.asarray(ids)
+            w = vol[ids]
+            _, cell = tree.query(tc[ids].mean(axis=0))
+            acc["w"][cell] += w.sum()
+            acc["pa"][cell] += (pden["a"][ids] * w).sum()
+            acc["pm"][cell] += (pden["m"][ids] * w).sum()
+            for c in "xyz":
+                acc[f"a{c}"][cell] += (mom[("a", c)][ids] * w).sum()
+                acc[f"m{c}"][cell] += (mom[("m", c)][ids] * w).sum()
+
+        W = acc["w"].reshape(nx, ny)
+        good = W > 0
+
+        def vmean(name):
+            """Volume-weighted cell mean of an accumulated triangle density."""
+            out = np.zeros((nx, ny))
+            np.divide(acc[name].reshape(nx, ny), W, out=out, where=good)
+            return out
+
+        def safe_div(num, den):
+            out = np.zeros_like(num)
+            np.divide(num, den, out=out, where=den > 0)
+            return out
+
+        na_t, nm_t = vmean("pa"), vmean("pm")  # fort.46 number densities
+        NVvec = {  # momentum density vectors (R, Z, toroidal)
+            ("a", c): vmean(f"a{c}") for c in "xyz"
+        }
+        NVvec.update({("m", c): vmean(f"m{c}") for c in "xyz"})
+
+        # --- local field-aligned and radial unit vectors from cell corners ---
+        # crx/cry corners: 0=lower-left, 1=lower-right, 2=upper-left, 3=upper-right
+        # (left/right = poloidal x, lower/upper = radial y)
+        crx, cry = g["crx"], g["cry"]
+        epR = 0.5 * ((crx[:, :, 1] + crx[:, :, 3]) - (crx[:, :, 0] + crx[:, :, 2]))
+        epZ = 0.5 * ((cry[:, :, 1] + cry[:, :, 3]) - (cry[:, :, 0] + cry[:, :, 2]))
+        erR = 0.5 * ((crx[:, :, 2] + crx[:, :, 3]) - (crx[:, :, 0] + crx[:, :, 1]))
+        erZ = 0.5 * ((cry[:, :, 2] + cry[:, :, 3]) - (cry[:, :, 0] + cry[:, :, 1]))
+        Lp, Lr = np.hypot(epR, epZ), np.hypot(erR, erZ)
+        epR, epZ = safe_div(epR, Lp), safe_div(epZ, Lp)
+        erR, erZ = safe_div(erR, Lr), safe_div(erZ, Lr)
+
+        Btot = g["Btot"]
+        fp = safe_div(bal["bb"][:, :, 0], Btot)  # signed Bpol / Btot
+        ft = safe_div(bal["bb"][:, :, 2], Btot)  # signed Btor / Btot
+
+        # Projection operators (R=x, Z=y, toroidal=z).
+        #  - parallel: component along the field.
+        #  - poloidal: component along the poloidal direction. Its positive sense
+        #    is aligned with the parallel one via sign(Bpol/Btot) (= sign(fp)),
+        #    so a poloidal flow and the parallel flow of the same motion always
+        #    carry the SAME sign, independent of the sign of Bpol.
+        # Both carry the SOLPS sign convention via self.momentum_sign (the same
+        # factor applied to the ion Vd+), so all flow quantities share one
+        # flippable convention; see __init__ / reverse_velocities().
+        #  - perp (radial): along +e_rad (increasing radial index, towards SOL).
+        #    This is a different axis and is NOT part of the sign convention.
+        sign_fp = np.sign(fp)
+
+        def proj_par(vx, vy, vz):
+            return self.momentum_sign * (fp * (vx * epR + vy * epZ) + ft * vz)
+
+        def proj_pol(vx, vy, vz):
+            return self.momentum_sign * sign_fp * (vx * epR + vy * epZ)
+
+        def proj_perp(vx, vy, vz):
+            return vx * erR + vy * erZ
+
+        masses = {"a": m_atom, "m": m_mol}
+        dens = {"a": na_t, "m": nm_t}
+        rho = na_t * m_atom + nm_t * m_mol  # total neutral mass density
+
+        # Per-direction momentum density and velocity, on the geometry grid.
+        for d, proj in (("par", proj_par), ("pol", proj_pol), ("perp", proj_perp)):
+            for s in ("a", "m"):
+                NVsd = proj(NVvec[(s, "x")], NVvec[(s, "y")], NVvec[(s, "z")])
+                bal[f"NV{d}_{s}"] = NVsd
+                bal[f"V{d}_{s}"] = safe_div(NVsd, dens[s] * masses[s])
+            # total neutral: momentum densities add; velocity is mass-weighted
+            NVtot = bal[f"NV{d}_a"] + bal[f"NV{d}_m"]
+            bal[f"NV{d}_d"] = NVtot
+            bal[f"V{d}_d"] = safe_div(NVtot, rho)
+
+        # Back-compat parallel names without the 'par_' tag (NVa/Va, ... NVd/Vd),
+        # echoing the ion bal['Vd+']/bal['NVd+']. Duplicates of the par_ fields.
+        for s in ("a", "m", "d"):
+            bal[f"NV{s}"] = bal[f"NVpar_{s}"]
+            bal[f"V{s}"] = bal[f"Vpar_{s}"]
+
+        if verbose and "Na" in bal and bal["Na"].shape == (nx, ny):
+            m = (na_t > 0) & (bal["Na"] > 0)
+            rel = np.abs(na_t[m] - bal["Na"][m]) / bal["Na"][m]
+            print(
+                "derive_neutral_momentum: mapped fort.46 atom density vs dab2 "
+                f"(volume-normalisation check): median rel.diff={np.median(rel):.2f}, "
+                f"95pct={np.percentile(rel, 95):.2f}"
+            )
+
+        self.params = list(self.bal.keys())
+
+    def reverse_velocities(self):
+        """
+        Flip the SOLPS parallel/poloidal momentum sign convention, in one place.
+
+        Toggles self.momentum_sign and multiplies every parallel/poloidal
+        velocity and momentum field currently in self.bal (the ion Vd+/NVd+ and
+        the neutral Vpar/Vpol/NV... fields) by -1, so the ion and neutral flow
+        quantities always share a single, consistent convention. Radial (perp)
+        fields are a separate axis and are left unchanged. The Mach number M is
+        stored as a magnitude and is also left unchanged.
+        """
+        self.momentum_sign *= -1
+        for param in [
+            "Vd+", "NVd+",
+            "Vpar_a", "Vpar_m", "Vpar_d", "NVpar_a", "NVpar_m", "NVpar_d",
+            "Vpol_a", "Vpol_m", "Vpol_d", "NVpol_a", "NVpol_m", "NVpol_d",
+            "Va", "Vm", "Vd", "NVa", "NVm", "NVd",
+        ]:
+            if param in self.bal:
+                self.bal[param] = self.bal[param] * -1
 
     def make_custom_sol_ring(self, name, i=None, sep_dist=None):
         """
@@ -810,13 +1040,22 @@ class SOLPScase:
         cells = triangles["cells"]
         triang = mpl.tri.Triangulation(nodes[:, 0], nodes[:, 1], cells)
 
+        # fort.46 tally arrays include a couple of extra (non-triangle) EIRENE
+        # cells at the end, so they are longer than the triangle count. Align to
+        # the triangles and select the main-ion-neutral species (last axis, 0).
+        n_tri = cells.shape[0]
+
+        def _atom0(arr):
+            arr = np.asarray(arr)[:n_tri]
+            return arr[:, 0] if arr.ndim > 1 else arr
+
         if flux:
-            U = f46["vxdena"] / (2 * constants("mass_p"))
-            V = f46["vydena"] / (2 * constants("mass_p"))
+            U = _atom0(f46["vxdena"]) / (2 * constants("mass_p"))
+            V = _atom0(f46["vydena"]) / (2 * constants("mass_p"))
             clabel = "Flux [$m^2/s$]"
         else:
-            U = f46["vxdena"] / f46["pdena"] / (2 * constants("mass_p"))
-            V = f46["vydena"] / f46["pdena"] / (2 * constants("mass_p"))
+            U = _atom0(f46["vxdena"]) / _atom0(f46["pdena"]) / (2 * constants("mass_p"))
+            V = _atom0(f46["vydena"]) / _atom0(f46["pdena"]) / (2 * constants("mass_p"))
             clabel = "Flux [$m/s$]"
 
         speed = np.hypot(U, V)
