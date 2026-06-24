@@ -834,29 +834,45 @@ def plot_selection(ds, selection, dpi=100, rz_only=False, show_selection=True):
         )
 
 
-def plot_performance(cs, logscale=True):
+def plot_performance(dict_ds, logscale=True):
     """
     Do a plot showing simulation speed in ms sim time / 24hrs compute time
-    Takes a dictionary of datasets
+    Takes a dictionary of datasets where the keys are the names.
 
     """
-    fig, ax = plt.subplots(figsize=(12, 6), dpi=120)
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+    
+    for name, ds in dict_ds.items():
+        
 
-    for name in cs:
-        ds = cs[name].ds.isel(t=slice(10, None))
-        m = ds.metadata
-        # data = ds.hermesm.select_region("outer_midplane_a")["Ne"].isel(x=10)
-        wtime = ds["wtime"]
-        t = ds["t"].values * 1000  # ms
-        stime = np.diff(t, prepend=t[0])
-        ms_per_24hrs = (stime) / (wtime / (60 * 60 * 24))  # ms simulated per 24 hours
-        ax.plot(t - t[0], ms_per_24hrs, label=name)
+        df = pd.DataFrame()
+        df["t"] = ds["t"]
+        df["wall_time_per_timestep"] = ds["wtime"].values
+        df["sim_time"] = ds["t"].values * 1000
+        df["wall_time"] = ds["wtime"].cumsum().values / 3600
+        df["speed"] = np.diff(df["sim_time"], prepend=0) / np.diff(
+            df["wall_time"] / 24, prepend=0
+        )
+        df["speed_ma"] = df["speed"].rolling(20).mean()
+        df = df[df["wall_time_per_timestep"] > 1]
 
-    ax.legend()
-    ax.set_title("ms simulation time per 24hrs compute time")
-    ax.set_ylabel("ms / 24hr")
-    ax.set_xlabel("Sim time [ms]")
-    ax.set_yscale("log")
+        kwargs = {"lw": 1.5}
+
+        ax = axes[0]
+        ax.plot(df["wall_time"], df["sim_time"], label=name, **kwargs)
+        ax.set_ylabel("Simulation time [ms]")
+        ax.set_xlabel("Wall time [hr]")
+        ax.set_title("Sim time vs. wall time")
+        ax.set_yscale("log")
+        ax.legend()
+
+
+        ax = axes[1]
+        ax.plot(df["sim_time"], df["speed_ma"], label=name, **kwargs)
+        ax.set_xlabel("Simulation time [ms]")
+        ax.set_ylabel("Speed [ms/24hr]")
+        ax.set_title("Speed vs. simulation time")
+        ax.set_yscale("log")
 
 
 def plot_xy_grid(ds, ax):
