@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # Reading with cache for extra speed
+import glob
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -18,7 +19,50 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-def heavyplot(casename, save=True):
+def _is_case_path(path):
+    return os.path.isdir(path) and (
+        os.path.exists(os.path.join(path, "BOUT.inp"))
+        or bool(glob.glob(os.path.join(path, "BOUT.dmp*")))
+    )
+
+
+def _expand_case_paths(path):
+    if isinstance(path, (str, os.PathLike)):
+        raw_paths = [os.fspath(path)]
+    else:
+        raw_paths = [os.fspath(item) for item in path]
+
+    case_paths = []
+    seen = set()
+
+    for raw_path in raw_paths:
+        matches = (
+            sorted(glob.glob(raw_path)) if glob.has_magic(raw_path) else [raw_path]
+        )
+        matches = [os.path.normpath(match) for match in matches if _is_case_path(match)]
+
+        if not matches:
+            raise FileNotFoundError(f"No case directories match '{raw_path}'")
+
+        for match in matches:
+            if match not in seen:
+                seen.add(match)
+                case_paths.append(match)
+
+    return case_paths
+
+
+def heavyplot(path, save=True):
+    case_paths = _expand_case_paths(path)
+
+    for index, case_path in enumerate(case_paths):
+        if index > 0:
+            print()
+
+        _heavyplot_case(case_path, save=save)
+
+
+def _heavyplot_case(casename, save=True):
     """
     Computationally heavy plots
 
@@ -76,7 +120,7 @@ def heavyplot(casename, save=True):
 if __name__ == "__main__":
     # Define arguments
     parser = argparse.ArgumentParser(description="Case monitor")
-    parser.add_argument("path", type=str, help="Path to case")
+    parser.add_argument("paths", nargs="+", help="Case path(s) or wildcard pattern(s)")
     # parser.add_argument("-p", action="store_true", help = "Plot?")
     # parser.add_argument("-t", action="store_true", help = "Table?")
     # parser.add_argument("-s", action="store_true", help = "Save figure?")
@@ -84,4 +128,4 @@ if __name__ == "__main__":
 
     # Extract arguments and call function
     args = parser.parse_args()
-    heavyplot(args.path)
+    heavyplot(args.paths)
