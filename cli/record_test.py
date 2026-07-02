@@ -57,6 +57,7 @@ CSV_COLUMNS = [
 
 _LOG_TIME_FMT = "%a %b %d %H:%M:%S %Y"
 
+COMMENT_RE = re.compile(r"^(([^'\"#]|\"(\\\"|[^\"])*\"|'(\'|[^'])*')*)#.*$")
 
 # ------------------------------------------------------------
 # Log parsing (from test_results.py)
@@ -162,8 +163,8 @@ def parse_ini(text, sections):
     out = {s: {} for s in sections}
     section = None
     for line in text.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
+        line = COMMENT_RE.sub(r"\1", line).strip()
+        if not line:
             continue
         if line.startswith("[") and line.endswith("]"):
             section = line[1:-1].strip().lower()
