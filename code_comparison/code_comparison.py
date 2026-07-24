@@ -879,30 +879,54 @@ def lineplot_compare(
     title_append="",
 ):
 
+    # The colourwheel used when a Hermes-3 case does not specify its own colour.
+    # Use the `colors` argument if given, otherwise matplotlib's default wheel.
+    from itertools import cycle
+
+    if colors:
+        colourwheel = cycle(colors)
+    else:
+        colourwheel = cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
+
+    # Each case can be given in two ways:
+    #   1. keyed by display label, with an entry holding "name" (lookup) + "color"
+    #   2. keyed by lookup name, with the display label inside the entry as "label"
+    # Both are handled below so the same case dict can be shared with other tools.
     resolved_cases = {}
-    for case_label, entry in cases.items():
-        if "data" in entry:
-            resolved_cases[case_label] = dict(entry)
-            continue
-
-        if "name" not in entry:
-            raise ValueError(f"Case '{case_label}' must define either 'data' or 'name'")
-        if data_dicts is None:
-            raise ValueError(
-                f"Case '{case_label}' uses 'name', but no data_dicts were provided"
-            )
-
-        if "SOLPS" in case_label:
-            data_key = "SOLPS"
-        elif "SOLEDGE" in case_label:
-            data_key = "SOLEDGE2D"
-        elif "Hermes" in case_label:
-            data_key = "Hermes-3"
-        else:
-            raise ValueError(f"Code name missing from case name in {case_label}")
-
+    for case_key, entry in cases.items():
         resolved_entry = dict(entry)
-        resolved_entry["data"] = data_dicts[data_key][entry["name"]]
+
+        # The label shown on the plot. Falls back to the dict key (form 1).
+        case_label = entry.get("label", case_key)
+
+        # Work out which code this case belongs to, from the label text.
+        if "SOLPS" in case_label:
+            code = "SOLPS"
+        elif "SOLEDGE" in case_label:
+            code = "SOLEDGE2D"
+        else:
+            code = "Hermes-3"
+
+        # Resolve the actual dataset. If the entry already carries "data" we
+        # use it directly; otherwise we look it up in data_dicts by name.
+        if "data" not in entry:
+            if data_dicts is None:
+                raise ValueError(
+                    f"Case '{case_label}' has no 'data', but no data_dicts were provided"
+                )
+            # The lookup name is "name" if given, otherwise the dict key (form 2).
+            lookup_name = entry.get("name", case_key)
+            resolved_entry["data"] = data_dicts[code][lookup_name]
+
+        # Assign a colour if the entry did not specify one. Only Hermes-3 cases
+        # take a colour from the wheel, so SOLPS/SOLEDGE cases do not shift the
+        # wheel index. SOLPS/SOLEDGE default to black.
+        if "color" not in resolved_entry:
+            if code == "Hermes-3":
+                resolved_entry["color"] = next(colourwheel)
+            else:
+                resolved_entry["color"] = "black"
+
         resolved_cases[case_label] = resolved_entry
 
     cases = resolved_cases
@@ -1216,6 +1240,7 @@ def lineplot_compare(
                             if val not in ("data", "name"):
                                 custom_kwargs[val] = input_dict[val]
                         style_kwargs = {
+                            "label": name,
                             **styles[code],
                             **custom_kwargs,
                             **atom_override,
@@ -1225,7 +1250,6 @@ def lineplot_compare(
                         axes[i].plot(
                             data.index * xmult,
                             data[parsed_param],
-                            label=name,
                             **style_kwargs,
                         )
 

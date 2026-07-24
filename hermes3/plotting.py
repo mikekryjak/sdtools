@@ -655,7 +655,7 @@ def plot_ddt(
     ax.set_yscale("log")
     ax.grid(which="major", lw=1)
     ax.grid(which="minor", lw=1, alpha=0.3)
-    ax.legend(loc="upper left", bbox_to_anchor=(1, 1))
+    # ax.legend(loc="upper left", bbox_to_anchor=(1, 1))
     ax.set_xlabel("Simulation time [ms]")
     ax.set_ylabel("Cell weighted residual RMS [-]")
     ax.set_title(f"Residual plot: {case.name}")
@@ -665,6 +665,55 @@ def plot_ddt(
     if xlims != (None, None):
         ax.set_xlim(xlims)
 
+    for ax in axes:
+        ax.grid(which="major", lw=1)
+        ax.grid(which="minor", lw=1, alpha=0.3)
+        ax.legend(loc="best", fontsize="x-small")
+
+def compare_ddt(datasets, params, colors=None):
+    """Plot RMS time residuals of ddt(<param>) for several cases.
+
+    Parameters
+    ----------
+    datasets : dict
+        Keys are case names, values are the datasets.
+    params : list of str
+        Variable names whose residuals to plot, e.g. ["Pe", "Pd"].
+        Plotted as ddt(<param>).
+    colors : dict, optional
+        Maps case name -> line colour. Cases missing from the dict (or all
+        cases, if ``colors`` is None) fall back to matplotlib's colour cycle.
+    """
+    colors = colors or {}
+    fig, axes = plt.subplots(
+        1, len(params), figsize=(5 * len(params), 4), squeeze=False
+    )
+    axes = axes[0]
+
+    for ax, param in zip(axes, params):
+        ddt_name = f"ddt({param})"
+        for name, ds in datasets.items():
+            if ds.sizes.get("t", 0) < 2:
+                print(
+                    f"compare_ddt: skipping '{name}' ({ddt_name}) - only "
+                    f"{ds.sizes.get('t', 0)} timestep(s) saved, nothing to plot"
+                )
+                continue
+            res = np.sqrt(np.mean(ds[ddt_name].hermes.clear_guards() ** 2, axis=(1, 2)))
+            plot_kwargs = {"label": name, "lw": 1}
+            if name in colors:
+                plot_kwargs["color"] = colors[name]
+            ax.plot(ds["t"] * 1e3, res, **plot_kwargs)
+        ax.set_yscale("log")
+        ax.set_title(ddt_name)
+        ax.set_xlabel("t [ms]")
+
+    axes[0].set_ylabel("RMS residual")
+
+    for ax in axes:
+        ax.grid()
+        ax.legend(loc="best", fontsize="x-small")
+    # return fig, axes
 
 def plot_monitors(self, to_plot, what=["mean", "max", "min"], ignore=[]):
     """
@@ -834,16 +883,20 @@ def plot_selection(ds, selection, dpi=100, rz_only=False, show_selection=True):
         )
 
 
-def plot_performance(dict_ds, logscale=True):
+def plot_performance(dict_ds, logscale=True, colors=None):
     """
     Do a plot showing simulation speed in ms sim time / 24hrs compute time
     Takes a dictionary of datasets where the keys are the names.
 
+    colors : dict, optional
+        Maps case name -> line colour. Cases missing from the dict (or all
+        cases, if ``colors`` is None) fall back to matplotlib's colour cycle.
     """
+    colors = colors or {}
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-    
+
     for name, ds in dict_ds.items():
-        
+
 
         df = pd.DataFrame()
         df["t"] = ds["t"]
@@ -857,6 +910,8 @@ def plot_performance(dict_ds, logscale=True):
         df = df[df["wall_time_per_timestep"] > 1]
 
         kwargs = {"lw": 1.5}
+        if name in colors:
+            kwargs["color"] = colors[name]
 
         ax = axes[0]
         ax.plot(df["wall_time"], df["sim_time"], label=name, **kwargs)
@@ -864,7 +919,6 @@ def plot_performance(dict_ds, logscale=True):
         ax.set_xlabel("Wall time [hr]")
         ax.set_title("Sim time vs. wall time")
         ax.set_yscale("log")
-        ax.legend()
 
 
         ax = axes[1]
@@ -873,6 +927,11 @@ def plot_performance(dict_ds, logscale=True):
         ax.set_ylabel("Speed [ms/24hr]")
         ax.set_title("Speed vs. simulation time")
         ax.set_yscale("log")
+
+        for ax in axes:
+            ax.grid(which="major", lw=1)
+            ax.grid(which="minor", lw=1, alpha=0.3)
+            ax.legend(loc="best", fontsize = "x-small")
 
 
 def plot_xy_grid(ds, ax):
