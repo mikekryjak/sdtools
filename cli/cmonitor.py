@@ -195,12 +195,20 @@ def _cmonitor_case(
         nniters = get_var("cvode_nniters")
         nfails = get_var("cvode_num_fails")
         lorder = get_var("cvode_last_order")
+        nsteps = get_var("cvode_nsteps")
+        npevals = get_var("cvode_npevals")
+        last_step = get_var("cvode_last_step")
+        nonlin_fails = get_var("cvode_nonlin_fails")
     except:
         cvode = False
         nliters = np.zeros_like(t)
         nniters = np.zeros_like(t)
         nfails = np.zeros_like(t)
         lorder = np.zeros_like(t)
+        nsteps = np.zeros_like(t)
+        npevals = np.zeros_like(t)
+        last_step = np.zeros_like(t)
+        nonlin_fails = np.zeros_like(t)
 
     print("..data", end="")
 
@@ -239,6 +247,17 @@ def _cmonitor_case(
         fails = np.diff(nfails, prepend=nfails[1] * 0.99)
         fails[0] = fails[1]
         lorder[0] = lorder[1]
+
+        # New CVODE row: per-step normalised counters (all raw counters are
+        # cumulative, so difference between outputs gives the per-output value)
+        dsteps = np.diff(nsteps, prepend=nsteps[1] * 0.99)
+        dsteps[dsteps == 0] = np.nan  # avoid div-by-zero spoiling the plot
+        niters_per_step = np.diff(nniters, prepend=nniters[1] * 0.99) / dsteps
+        pevals_per_step = np.diff(npevals, prepend=npevals[1] * 0.99) / dsteps
+        niters_per_step[0] = niters_per_step[1]
+        pevals_per_step[0] = pevals_per_step[1]
+        nlfails = np.diff(nonlin_fails, prepend=nonlin_fails[1] * 0.99)
+        nlfails[0] = nlfails[1]
     ms_per_24hrs[0] = ms_per_24hrs[1]
 
     # ddt
@@ -301,14 +320,14 @@ def _cmonitor_case(
     # Plotting
     if plot is True or save is True:
         scale = 1.3
-        figsize = (8 * scale, 6 * scale)
+        figsize = (8 * scale, 7.5 * scale)
         dpi = 150 / scale
         title_font_size = "medium"
         # fig, axes = plt.subplots(2,4, figsize=figsize, dpi = dpi)
 
         # Use GridSpec for flexible layout
         fig = plt.figure(figsize=figsize, dpi=dpi)
-        gs = fig.add_gridspec(4, 4)  # 3 rows, 4 columns
+        gs = fig.add_gridspec(5, 4)  # 5 rows, 4 columns
 
         # Original two rows of 4 for physics and numerics stuff
         axes = np.empty((2, 4), dtype=object)
@@ -316,12 +335,16 @@ def _cmonitor_case(
             for c in range(4):
                 axes[r, c] = fig.add_subplot(gs[r, c])
 
+        ## Second CVODE row (row 2), only populated for CVODE runs
+        if cvode:
+            cvode_axes = [fig.add_subplot(gs[2, i]) for i in range(4)]
+
         ## Add 1 big column for ddt
-        big_ax = fig.add_subplot(gs[2, slice(None, 3)])
+        big_ax = fig.add_subplot(gs[3, slice(None, 3)])
 
         ## Add 5 columns for log file parser
         if logfile_plots:
-            gs_log = gs[3, :].subgridspec(1, 5)  # 1 row x 5 cols inside the bottom row
+            gs_log = gs[4, :].subgridspec(1, 5)  # 1 row x 5 cols inside the bottom row
             log_axes = [fig.add_subplot(gs_log[0, i]) for i in range(5)]
 
         fig.subplots_adjust(wspace=0.3, hspace=0.5, top=0.85)
@@ -365,27 +388,45 @@ def _cmonitor_case(
         axes[1, 0].plot(t[skip], ms_per_24hrs[skip], c="k", lw=lw)
         axes[1, 0].set_title("ms $t_{sim}$ / 24hr $t_{wall}$", fontsize=title_font_size)
         axes[1, 0].set_yscale("log")
-        # axes[1,0].yaxis.set_major_locator(mpl.ticker.MaxNLocator(nbins=6, min_n_ticks=5))
-        axes[1, 0].yaxis.set_major_locator(mpl.ticker.LogLocator(base=10, numticks=5))
-        axes[1, 0].yaxis.set_minor_locator(mpl.ticker.LogLocator(base=10, subs=[1]))
-        # axes[1,0].yaxis.set_minor_locator(mpl.ticker.LogLocator(base=10, subs='auto'))
-        # axes[1,0].yaxis.set_minor_locator(mpl.ticker.LogLocator(base=10, subs='auto'))
+        # Integer major labels (values are O(1-1000)). Shared log tick/grid
+        # styling is applied to all log panels in the axes-properties loop below.
         axes[1, 0].yaxis.set_major_formatter(mpl.ticker.StrMethodFormatter("{x:.0f}"))
-        axes[1, 0].yaxis.set_minor_formatter(mpl.ticker.StrMethodFormatter("{x:.0f}"))
-        axes[1, 0].grid(True, which="minor", axis="y", c="k", alpha=0.8, lw=0.1)
-        # axes[1,0].tick_params(axis = "y", which = "both", labelsize = 8)
 
         # #CVODE
         if cvode:
-            axes[1, 1].plot(t[skip], lratio[skip], c="k", lw=lw)
-            axes[1, 1].set_title("linear/nonlinear", fontsize=title_font_size)
-            axes[1, 2].plot(
+            ## Row 1: work per step, following the solver nesting
+            ## (step -> Newton iteration -> linear iteration -> precon solve)
+            axes[1, 1].plot(t[skip], niters_per_step[skip], c="k", lw=lw)
+            axes[1, 1].set_title("Newton its / step", fontsize=title_font_size)
+            axes[1, 1].set_ylim(0, None)
+
+            axes[1, 2].plot(t[skip], lratio[skip], c="k", lw=lw)
+            axes[1, 2].set_title("linear its / Newton", fontsize=title_font_size)
+            axes[1, 2].set_ylim(0, None)
+
+            axes[1, 3].plot(t[skip], pevals_per_step[skip], c="k", lw=lw)
+            axes[1, 3].set_title("precon solves / step", fontsize=title_font_size)
+            axes[1, 3].set_ylim(0, None)
+
+            ## Row 2: integrator choices (order, timestep) + the two failure modes
+            cvode_axes[0].plot(t[skip], lorder[skip], c="k", lw=lw)
+            cvode_axes[0].set_title("BDF order", fontsize=title_font_size)
+
+            cvode_axes[1].plot(t[skip], last_step[skip], c="k", lw=lw)
+            cvode_axes[1].set_title("internal timestep", fontsize=title_font_size)
+            cvode_axes[1].set_yscale("log")
+
+            cvode_axes[2].plot(
                 t[skip], np.clip(fails, 0, np.max(fails))[skip], c="k", lw=lw
             )
-            axes[1, 2].set_title("nfails", fontsize=title_font_size)
-            axes[1, 2].set_ylim(0, None)
-            axes[1, 3].plot(t[skip], lorder[skip], c="k", lw=lw)
-            axes[1, 3].set_title("order", fontsize=title_font_size)
+            cvode_axes[2].set_title("error-test fails / output", fontsize=title_font_size)
+            cvode_axes[2].set_ylim(0, None)
+
+            cvode_axes[3].plot(t[skip], np.clip(nlfails, 0, None)[skip], c="k", lw=lw)
+            cvode_axes[3].set_title(
+                "nonlin. conv. fails / output", fontsize=title_font_size
+            )
+            cvode_axes[3].set_ylim(0, None)
 
         ## SNES
         elif logfile_plots and snes_prints_found:
@@ -427,15 +468,31 @@ def _cmonitor_case(
         ### Axes properties
 
         small_axes = list(axes.flatten())
+        if cvode:
+            small_axes += list(cvode_axes)
         if logfile_plots:
             small_axes += list(log_axes)
 
         for ax in small_axes:
+            # Major grid: identical on every panel
             ax.grid(c="k", alpha=0.15)
             ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(min_n_ticks=3, nbins=5))
-            ax.yaxis.set_major_locator(mpl.ticker.MaxNLocator(min_n_ticks=3, nbins=5))
 
-            # ax.xaxis.set_major_locator(mpl.ticker.MultipleLocator(4))
+            if ax.get_yscale() == "log":
+                # Log panels (speed, internal timestep): keep the default
+                # LogLocator majors and give every one the same minor ticks +
+                # minor grid so they look identical. A linear MaxNLocator would
+                # collapse a log axis to a single tick.
+                ax.yaxis.set_minor_locator(
+                    mpl.ticker.LogLocator(base=10, subs=np.arange(2, 10), numticks=12)
+                )
+                ax.yaxis.set_minor_formatter(mpl.ticker.NullFormatter())
+                ax.grid(True, which="minor", axis="y", c="k", alpha=0.07, lw=0.4)
+            else:
+                ax.yaxis.set_major_locator(
+                    mpl.ticker.MaxNLocator(min_n_ticks=3, nbins=5)
+                )
+
             ax.tick_params(axis="x", which="both", labelsize=6)
             ax.tick_params(axis="y", which="both", labelsize=6)
 
