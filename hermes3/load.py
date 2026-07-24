@@ -23,6 +23,45 @@ from hermes3.plotting import *
 from hermes3.fluxes import *
 
 
+def drop_incomplete_final_records(ds):
+    """Drop trailing time records left by an interrupted BOUT++ write.
+
+    When a run is killed mid-output the time dimension is extended but the final
+    ``t_array`` value may not be flushed: xbout reads it back as a NetCDF
+    ``_FillValue`` (a huge finite number) or NaN, and loading that record raises
+    a dask "Array chunk size or shape is unknown" error. ``boutdata``'s
+    ``tind_auto`` does not catch this -- every per-processor file still reports
+    the full length, so the damage is a bad timestamp value, not a short file.
+
+    Keep the leading run of good timestamps (finite, and no dt orders of
+    magnitude above the median step) and slice to it positionally. Boolean /
+    ``isfinite`` masking on the dask-backed arrays would itself yield unknown
+    chunks, so a positional ``slice`` is required.
+    """
+    if "t" not in ds.dims:
+        return ds
+    t = np.asarray(ds["t"].values, dtype="float64")
+    finite = np.isfinite(t)
+    if not finite.all():
+        n = int(np.argmin(finite))                       # first NaN/inf
+    else:
+        dt = np.diff(t)
+        good = dt[dt > 0]
+        bad = (
+            np.where(dt > 1e6 * np.median(good))[0]      # first fill-value jump
+            if good.size
+            else np.array([], dtype=int)
+        )
+        n = int(bad[0]) + 1 if bad.size else t.size
+    if n < t.size:
+        print(
+            f"  WARNING: dropping {t.size - n} incomplete final time record(s) "
+            f"(interrupted write: fill-value/NaN timestamp)"
+        )
+        ds = ds.isel(t=slice(0, n))
+    return ds
+
+
 class Load:
     def __init__(self):
         pass
@@ -68,6 +107,8 @@ class Load:
 
         if squeeze is True:
             ds = ds.squeeze(drop=True)
+
+        ds = drop_incomplete_final_records(ds)
 
         if use_xhermes:
             unnormalise_in_sdtools = False
@@ -137,6 +178,8 @@ class Load:
 
         if squeeze:
             ds = ds.squeeze(drop=False)
+
+        ds = drop_incomplete_final_records(ds)
 
         # Only calculate Mach number if the required variables exist
         if all(var in ds for var in ["Vd+", "Td+", "Te"]):
