@@ -241,6 +241,49 @@ SERIES_FIELDS = [
 ]
 
 
+def _residual_shares(ds):
+    """
+    Per-equation share of the solver's residual norm, per output step.
+
+    This is the reduction that replaces storing the `resid_<var>` fields: seven
+    numbers per step instead of seven full fields, and it is what the analysis
+    reads anyway. Definition follows the residual-norm notebook:
+
+        SS_v(t)    = sum over cells of resid_v(cell, t)**2
+        share_v(t) = SS_v(t) / sum over equations of SS_w(t)
+
+    No volume weighting -- the solver's norm is a plain sum over state-vector
+    entries, so weighting by cell volume would measure something the solver does
+    not feel. Shares rather than magnitudes, because raw residual magnitude
+    scales with the adaptive timestep and cannot be compared across time or
+    between runs, while a share is dimensionless and directly comparable.
+
+    Guard cells are exactly zero in these fields, so summing the whole array is
+    safe.
+    """
+
+    import numpy as np
+    import pandas as pd
+
+    fields = sorted(v for v in ds.data_vars if str(v).startswith("resid_"))
+    if not fields:
+        return None
+
+    dims = [d for d in ("x", "theta", "y", "z") if d in ds[fields[0]].dims]
+    squares = {}
+    for name in fields:
+        equation = str(name)[len("resid_"):]
+        squares[equation] = (ds[name] ** 2).sum(dims).values
+
+    total = np.sum(list(squares.values()), axis=0)
+    out = {"resid_ss_total": total}
+    with np.errstate(invalid="ignore", divide="ignore"):
+        for equation, ss in squares.items():
+            out[f"share_{equation}"] = np.where(total > 0, ss / total, np.nan)
+
+    return pd.DataFrame(out)
+
+
 def _dump_series(ds):
     """
     The per-output-step history, as a table.
@@ -266,7 +309,12 @@ def _dump_series(ds):
         if values.ndim == 1 and values.size == length:
             columns[name] = values
 
-    return pd.DataFrame(columns)
+    frame = pd.DataFrame(columns)
+
+    shares = _residual_shares(ds)
+    if shares is not None and len(shares) == len(frame):
+        frame = pd.concat([frame, shares], axis=1)
+    return frame
 
 
 def _residual_metrics(ds, ncalls):
