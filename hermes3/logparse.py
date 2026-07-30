@@ -330,6 +330,37 @@ _SNES_STEP = re.compile(
 )
 
 
+def build_type(flags):
+    """The CMake build type behind a "Compiled with flags" line.
+
+    CMake does not record its own build type anywhere in the run, so it is read
+    back from the flags it chose. A build assembled by hand, or a future CMake
+    that picks different flags, will not match any of these -- it then gets the
+    optimisation and debug tokens themselves rather than a guessed name, since a
+    wrong build type in the record is worse than an ugly one.
+    """
+
+    if not flags:
+        return None
+    tokens = flags.split()
+    opt = next((t for t in tokens if re.fullmatch(r"-O[0-3sgz]?", t)), None)
+    debug = "-g" in tokens
+    ndebug = "-DNDEBUG" in tokens
+
+    known = {
+        ("-O3", False, True): "Release",
+        ("-O2", True, True): "RelWithDebInfo",
+        ("-Os", False, True): "MinSizeRel",
+        ("-O0", True, False): "Debug",
+        (None, True, False): "Debug",
+    }
+    name = known.get((opt, debug, ndebug))
+    if name:
+        return name
+    return " ".join(t for t in (opt, "-g" if debug else None,
+                                "-DNDEBUG" if ndebug else None) if t) or "unknown"
+
+
 def run_header(case_dir):
     """
     Identity and wall clock from BOUT.log.0. `wall_s` is computed from the start
@@ -350,10 +381,12 @@ def run_header(case_dir):
         "run_started": search(r"^Run started at\s*:\s*(.+)$"),
         "run_finished": search(r"^Run finished at\s*:\s*(.+)$"),
         "check_level": search(r"Runtime error checking enabled, level (\d+)"),
+        "compile_flags": search(r'^\s*Compiled with flags\s*:\s*"(.*)"\s*$'),
         "snes_failed": SNES_FAILED_MARKER in text,
     }
     if info["check_level"] is None and "Runtime error checking disabled" in text:
         info["check_level"] = "0"
+    info["build_type"] = build_type(info["compile_flags"])
 
     info["wall_s"] = None
     info["started_at"] = None
