@@ -18,7 +18,11 @@ import os
 #   snes_steps  -- per INTERNAL solver step, so usually fewer rows than outputs
 #                  once the timestep grows past the output interval
 #   events      -- once per run, the log_view cost breakdown
-TABLES = ("series", "steps", "snes_steps", "events")
+#   resid_regions -- per output step, long: one row per (step, region, equation)
+#   ddt         -- per output step, long: one row per (step, evolved variable)
+#   physics     -- per output step, the monitor quantities
+TABLES = ("series", "steps", "snes_steps", "events", "resid_regions", "ddt",
+          "physics")
 
 
 class Store:

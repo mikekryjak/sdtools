@@ -72,6 +72,7 @@ INDEX_COLUMNS = [
     "limiter",
     "conduction_method",
     "check_level",
+    "build_type",
     "cores",
     "decomposition",
     "slot",
@@ -89,8 +90,29 @@ class IndexProblem(Exception):
     """Something about the index needs a person, not a guess."""
 
 
+def _merge_columns(present):
+    """The file's columns, plus any canonical column the file does not have.
+
+    The file's own order is authoritative -- it is hand-edited and a person has
+    it open in a spreadsheet -- so existing columns are never reordered. A
+    column added to INDEX_COLUMNS since the file was written is spliced in after
+    whichever canonical column precedes it, so the schema can grow without a
+    migration and without the new column landing at the far right where nobody
+    looks.
+    """
+
+    merged = list(present)
+    for i, column in enumerate(INDEX_COLUMNS):
+        if column in merged:
+            continue
+        before = [c for c in INDEX_COLUMNS[:i] if c in merged]
+        at = merged.index(before[-1]) + 1 if before else 0
+        merged.insert(at, column)
+    return merged
+
+
 def read_index(path):
-    """Rows as a list of dicts, and the column order actually in the file.
+    """Rows as a list of dicts, and the column order to write back.
 
     A missing file is not an error: it yields no rows and the canonical column
     order, so the first extraction creates it.
@@ -102,7 +124,7 @@ def read_index(path):
     with open(path, newline="") as f:
         reader = csv.DictReader(f, delimiter="\t")
         rows = [dict(row) for row in reader]
-        columns = list(reader.fieldnames or INDEX_COLUMNS)
+        columns = _merge_columns(list(reader.fieldnames or INDEX_COLUMNS))
 
     return rows, columns
 
