@@ -2247,3 +2247,188 @@ def plot_variable_magnitude(ds, ax=None, ylims=None):
 
     if ylims != (None, None):
         ax.set_ylim(ylims)
+
+
+def plot_runtime_breakdown(entries, n_phases=5, endpoint_ms=None, dpi=110):
+    """Segmented runtime bars -- one horizontal stacked bar per case.
+
+    Total bar length = wall-clock hours to reach a COMMON simulation-time
+    endpoint (default: the shortest final sim-time in the set). The bar is
+    split into `n_phases` equal sim-time bands; a mid-run slowdown shows as a
+    fat segment. Bars are annotated with total hours and CHECK level; a set
+    mixing CHECK levels is flagged in red (wall times then not comparable, as
+    they are also not comparable across different core counts).
+
+    entries: ordered {label: dict(ds=, color=, check=)}.
+    """
+    series = {}
+    for label, e in entries.items():
+        ds = e["ds"]
+        t_ms = np.asarray(ds["t"].values, dtype=float) * 1000.0
+        wall_hr = np.cumsum(np.asarray(ds["wtime"].values, dtype=float)) / 3600.0
+        if t_ms.size < 2 or not np.isfinite(t_ms[-1]) or t_ms[-1] <= 0:
+            continue  # failed / empty run: nothing meaningful to bin
+        xp = np.concatenate(([0.0], t_ms))
+        fp = np.concatenate(([0.0], wall_hr))
+        series[label] = dict(xp=xp, fp=fp, final_ms=float(t_ms[-1]),
+                             color=e.get("color", "grey"), check=e.get("check", "?"))
+
+    if not series:
+        return
+
+    if endpoint_ms is None:
+        endpoint_ms = min(s["final_ms"] for s in series.values())
+    bands = np.linspace(0.0, endpoint_ms, n_phases + 1)
+    alphas = np.linspace(0.35, 1.0, n_phases)
+
+    labels = list(series.keys())
+    y = np.arange(len(labels))[::-1]  # first case at the top
+    fig, ax = plt.subplots(figsize=(11, 0.7 * len(labels) + 2.2), dpi=dpi)
+
+    for yi, label in zip(y, labels):
+        s = series[label]
+        wall_edges = np.interp(bands, s["xp"], s["fp"])
+        seg = np.diff(wall_edges)                       # wall hr per sim-time band
+        left = 0.0
+        for k, w in enumerate(seg):
+            ax.barh(yi, w, left=left, height=0.72, color=s["color"],
+                    alpha=alphas[k], edgecolor="white", linewidth=0.6)
+            left += w
+        total = left
+        reached = s["final_ms"] >= endpoint_ms - 1e-9
+        note = "" if reached else f"  (reached {s['final_ms']:.0f} ms)"
+        ax.text(total, yi, f"  {total:.1f} hr{note}", va="center", ha="left",
+                fontsize=8, color="0.2")
+
+    ax.set_yticks(y)
+    ax.set_yticklabels([f"{l}   [CHK{series[l]['check']}]" for l in labels],
+                       fontsize=8)
+    ax.set_xlabel("Wall time [hr]")
+    ax.set_title(f"Runtime to reach {endpoint_ms:.0f} ms sim-time, "
+                 f"split by sim-time band")
+    ax.margins(x=0.14)  # room for the end-of-bar hour annotations
+    ax.grid(axis="x", which="major", alpha=0.5, lw=0.7)
+    ax.set_axisbelow(True)
+
+    # Flag mixed CHECK levels -- wall times then aren't comparable across bars.
+    checks = {series[l]["check"] for l in labels}
+    if len(checks) > 1:
+        fig.text(0.5, 0.94, f"WARNING: mixed CHECK levels {sorted(checks)} -- "
+                 "wall times NOT directly comparable", ha="center",
+                 color="firebrick", fontsize=9, fontweight="bold")
+
+    # Phase key: grey swatches at the same alpha ramp, labelled by sim-time band.
+    handles = [mpl.patches.Patch(facecolor="0.35", alpha=alphas[k],
+                                 edgecolor="white",
+                                 label=f"{bands[k]:.0f}-{bands[k + 1]:.0f} ms")
+               for k in range(n_phases)]
+    # Outside the axes: with the bars sorted longest-last the in-axes corner
+    # spots can always collide with a bar's hour annotation.
+    ax.legend(handles=handles, title="sim-time band (early -> late)",
+              loc="upper left", bbox_to_anchor=(1.005, 1), fontsize=7,
+              title_fontsize=8, framealpha=0.9)
+
+    fig.tight_layout()
+    return fig
+
+
+def monitor_series(ds, neutrals=False, species="d"):
+    """Time histories of the cmonitor.py top-row quantities for one case.
+
+    Index definitions match cmonitor exactly (its arrays are collected with
+    guards, as are ours -- Load.case_2D defaults keep_x/yboundaries=True):
+      * outer midplane = halfway between the guard-aware j1_2g and j2_2g rows,
+      * separatrix = ixseps1,
+      * target value = average of the last y domain cell and the first y guard
+        cell (indices -3 and -2), i.e. the sheath-entrance value, max over the
+        x domain (x guards stripped),
+      * core average (neutrals page) = plain mean over x in [3, ixseps1) and
+        ALL theta rows.
+
+    neutrals=False gives cmonitor's default top row (Ne/Te); True gives its
+    -neutrals variant (Tn/Nn/Tn-core), for neutral species tag `species`.
+
+    Returns (t_ms, {panel title: series}). Data is SI (xhermes unnormalises on
+    load): densities in m^-3, temperatures in eV.
+    """
+    m = ds.metadata
+    y_omp = int((m["j2_2g"] - m["j1_2g"]) / 2) + m["j1_2g"]
+    x_sep = m["ixseps1"]
+    x_ng = slice(m["MXG"], -m["MXG"] if m["MXG"] else None)
+
+    t_ms = np.asarray(ds["t"].values, dtype=float) * 1000.0
+
+    def sep(var):
+        return ds[var].isel(x=x_sep, theta=y_omp).values
+
+    def targ_max(var):
+        v = 0.5 * (ds[var].isel(theta=-2) + ds[var].isel(theta=-3))
+        return v.isel(x=x_ng).max("x").values
+
+    if neutrals:
+        Tn, Nn = f"T{species}", f"N{species}"
+        core = ds[Tn].isel(x=slice(3, x_sep)).mean(("x", "theta")).values
+        series = {
+            "$N_{e}^{omp,sep}$  [m$^{-3}$]": sep("Ne"),
+            "$T_{n}^{omp,sep}$  [eV]": sep(Tn),
+            "$N_{n}^{targ,max}$  [m$^{-3}$]": targ_max(Nn),
+            "$T_{n}^{core,avg}$  [eV]": core,
+        }
+    else:
+        series = {
+            "$N_{e}^{omp,sep}$  [m$^{-3}$]": sep("Ne"),
+            "$T_{e}^{omp,sep}$  [eV]": sep("Te"),
+            "$N_{e}^{targ,max}$  [m$^{-3}$]": targ_max("Ne"),
+            "$T_{e}^{targ,max}$  [eV]": targ_max("Te"),
+        }
+    return t_ms, series
+
+
+def compare_monitor_physics(datasets, colors=None, neutrals=False, species="d",
+                            dpi=110):
+    """One row of four panels -- the cmonitor.py top row (see monitor_series) --
+    with every case overlaid as a line of its own colour.
+
+    datasets : dict  {label: dataset}
+    colors   : dict, optional  {label: colour}; missing labels fall back to grey
+    """
+    colors = colors or {}
+    fig, axs = plt.subplots(1, 4, figsize=(15, 3.6), dpi=dpi)
+    titles = None
+
+    for label, ds in datasets.items():
+        try:
+            t_ms, series = monitor_series(ds, neutrals=neutrals, species=species)
+        except Exception as e:  # noqa: BLE001 -- keep the other cases
+            print(f"  [compare_monitor_physics] {label}: {e}")
+            continue
+        # cmonitor's bugged-final-record guard: sometimes the last output's
+        # time is garbage (orders of magnitude high); drop it if so.
+        keep = slice(None, -2) if (len(t_ms) > 2 and t_ms[-1] > t_ms[-2] * 1000) \
+            else slice(None)
+        titles = list(series.keys())
+        for ax, (title, y) in zip(axs, series.items()):
+            ax.plot(t_ms[keep], np.asarray(y)[keep],
+                    color=colors.get(label, "grey"), lw=1.5, label=label)
+
+    if titles is None:
+        plt.close(fig)
+        return None
+
+    for ax, title in zip(axs, titles):
+        ax.set_title(title, fontsize=10)
+        ax.set_xlabel("t [ms]")
+        ax.minorticks_on()
+        ax.grid(which="major", alpha=0.6, lw=0.7)
+        ax.grid(which="minor", alpha=0.3, lw=0.4, ls=":")
+
+    handles, labels = axs[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center",
+               ncol=min(len(labels), 3), fontsize=9, frameon=False)
+    fig.suptitle(
+        "cmonitor top-row physics"
+        + (" (-neutrals variant)" if neutrals else " (default)"),
+        fontsize=11,
+    )
+    fig.tight_layout(rect=(0, 0.09, 1, 0.95))
+    return fig
