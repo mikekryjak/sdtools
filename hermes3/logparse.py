@@ -147,7 +147,12 @@ def parse_petsc_logview(path):
             " parsing it as-is would drop events silently."
         )
 
-    return pd.DataFrame.from_dict(rows, orient="index", columns=EVENT_COLUMNS)
+    frame = pd.DataFrame.from_dict(rows, orient="index", columns=EVENT_COLUMNS)
+    # Name the index: the event name IS the data here, and a writer that only
+    # keeps a named index would otherwise store the numbers without saying
+    # which event each row belongs to.
+    frame.index.name = "event"
+    return frame
 
 
 # =============================================================================

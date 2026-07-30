@@ -212,9 +212,61 @@ def _read_dump(case_dir, grid_path, report):
 
     out.update(_residual_metrics(ds, out.get("ncalls")))
     out.update(_physics_gates(ds, report))
+    out["_series"] = _dump_series(ds)
 
     ds.close()
     return out
+
+
+# Per-output-step quantities worth keeping. Scalars in time, so the whole
+# history costs a few kilobytes -- and it is the only record of how a run
+# behaved once the dumps are gone.
+SERIES_FIELDS = [
+    "ncalls",
+    "ncalls_e",
+    "ncalls_i",
+    "wtime",
+    "wtime_rhs",
+    "wtime_invert",
+    "wtime_comms",
+    "wtime_io",
+    "wall_time",
+    "snes_global_residual",
+    "cvode_nsteps",
+    "cvode_nfevals",
+    "cvode_nniters",
+    "cvode_nliters",
+    "cvode_num_fails",
+    "cvode_nonlin_fails",
+]
+
+
+def _dump_series(ds):
+    """
+    The per-output-step history, as a table.
+
+    Without this the bundle holds only end-of-run scalars, and how a run got
+    there -- where it slowed down, when the residual stalled -- dies with the
+    dumps. Solver-specific fields are included when present and skipped when
+    not, so the same function serves SNES and CVODE.
+    """
+
+    import numpy as np
+    import pandas as pd
+
+    if "t" not in ds:
+        return None
+
+    columns = {"t": np.atleast_1d(ds["t"].values)}
+    length = len(columns["t"])
+    for name in SERIES_FIELDS:
+        if name not in ds:
+            continue
+        values = np.atleast_1d(ds[name].values)
+        if values.ndim == 1 and values.size == length:
+            columns[name] = values
+
+    return pd.DataFrame(columns)
 
 
 def _residual_metrics(ds, ncalls):
@@ -353,6 +405,7 @@ def extract_case(
     from hermes3 import logparse as lp
 
     report = Report(case_dir)
+    series = None
     if not os.path.isdir(case_dir):
         report.problems.append("case directory does not exist")
         return report
@@ -445,6 +498,7 @@ def extract_case(
         measured["grid"] = os.path.basename(grid)
         try:
             from_dump = _read_dump(case_dir, grid, report)
+            series = from_dump.pop("_series", None)
             shape = from_dump.pop("grid_shape", None)
             if shape:
                 measured["grid"] = f"{os.path.basename(grid)} ({shape})"
@@ -483,6 +537,30 @@ def extract_case(
     measured = {k: v for k, v in measured.items() if v is not None and v != ""}
     report.record = measured
 
+    index_path = os.path.join(store_dir, index_name)
+    rows, columns = idx.read_index(index_path)
+
+    # test_id is <test>-<start time to the second>, which is NOT unique: runs
+    # launched into different slots routinely start in the same second. Left
+    # alone, the second one silently overwrites the first one's bundle.
+    if report.test_id:
+        key = idx.case_key(case_dir)
+        taken = {
+            r.get("test_id")
+            for r in rows
+            if r.get("test_id") and idx.case_key(r.get("case_dir", "")) != key
+        }
+        if report.test_id in taken:
+            stem, suffix = report.test_id, 2
+            while f"{stem}-{suffix}" in taken:
+                suffix += 1
+            report.test_id = f"{stem}-{suffix}"
+            report.warnings.append(
+                f"another run of this test started in the same second; test_id"
+                f" disambiguated to {report.test_id}"
+            )
+        measured["test_id"] = report.test_id
+
     if dry_run:
         return report
 
@@ -496,14 +574,26 @@ def extract_case(
                 "steps.tsv": steps,
                 "snes_steps.tsv": snes,
                 "events.tsv": events,
+                "series.tsv": series,
             },
             notes,
             report,
         )
 
-    index_path = os.path.join(store_dir, index_name)
-    rows, columns = idx.read_index(index_path)
     position = idx.find_open_row(rows, case_dir)
+
+    if position is None:
+        existing = [
+            i
+            for i, r in enumerate(rows)
+            if idx.case_key(r.get("case_dir", "")) == idx.case_key(case_dir)
+            and r.get("state") in (idx.STATE_RECORDED, idx.STATE_UNPLANNED)
+        ]
+        if existing:
+            position = existing[0]
+            report.warnings.append(
+                "row already recorded for this test_id: re-extracted in place"
+            )
 
     if position is None:
         report.warnings.append("no open row for this case directory: recorded as unplanned")

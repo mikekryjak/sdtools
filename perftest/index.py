@@ -202,11 +202,16 @@ def recompute_concurrency(rows):
     may not be recorded until later. So it is a pass over the whole index,
     re-run after each extraction.
 
-    Counted as the number of runs sharing the machine, including this one: 1
-    means it ran alone, 3 means three at once. Any temporal overlap counts, so a
-    run that only briefly coincided with another still reads as 2 — the field
-    exists to say "this timing may be contaminated", and a brief overlap is
-    exactly the case worth looking at rather than hiding.
+    The TIME-WEIGHTED mean number of runs sharing the machine, including this
+    one: 1.0 means it ran alone throughout, 3.0 means three ran alongside it for
+    its whole life, 2.0 means it averaged two.
+
+    Counting distinct overlapping runs instead is wrong and was the first
+    version of this. A run that starts late and one that finishes early both
+    "overlap" without ever coexisting, so on a three-slot machine that count
+    reached five — a loading that cannot physically happen. Worse, it made a
+    lightly loaded run look heavily loaded, which is the opposite of the fact
+    the column exists to record.
 
     This is what F3 blames for every unattributable comparison so far: slot was
     recorded as free text and loading was never recorded at all.
@@ -223,18 +228,39 @@ def recompute_concurrency(rows):
         except (ValueError, AttributeError):
             intervals.append(None)
             continue
-        intervals.append((t0, t0 + datetime.timedelta(seconds=span)))
+        intervals.append((t0, t0 + datetime.timedelta(seconds=span), span))
 
     changed = 0
     for i, own in enumerate(intervals):
         if own is None:
             continue
-        overlaps = sum(
-            1
-            for j, other in enumerate(intervals)
-            if other is not None and i != j and other[0] < own[1] and own[0] < other[1]
-        )
-        value = str(1 + overlaps)
+        start, end, span = own
+        if span <= 0:
+            continue
+
+        # Integrate the number of simultaneous runs over this run's lifetime, by
+        # splitting it at every point where some other run starts or stops.
+        edges = {0.0, span}
+        for j, other in enumerate(intervals):
+            if other is None or i == j:
+                continue
+            for edge in (other[0] - start, other[1] - start):
+                seconds = edge.total_seconds()
+                if 0.0 < seconds < span:
+                    edges.add(seconds)
+
+        ordered = sorted(edges)
+        weighted = 0.0
+        for lo, hi in zip(ordered, ordered[1:]):
+            middle = start + datetime.timedelta(seconds=(lo + hi) / 2)
+            running = sum(
+                1
+                for other in intervals
+                if other is not None and other[0] <= middle < other[1]
+            )
+            weighted += running * (hi - lo)
+
+        value = f"{weighted / span:.2f}"
         if rows[i].get("concurrency", "") != value:
             rows[i]["concurrency"] = value
             changed += 1
