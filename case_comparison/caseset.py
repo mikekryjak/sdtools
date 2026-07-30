@@ -30,12 +30,23 @@ class CaseLoader:
     `ipython -i analysis.py` cheap to iterate in).
     """
 
-    def __init__(self, case_root, grid_root=None, load_kwargs=None):
+    def __init__(self, case_root, grid_root=None, load_kwargs=None,
+                 dir_fallback=None):
         self.case_root = case_root
         self.grid_root = grid_root or case_root
         self.load_kwargs = dict(use_squash=False, verbose=True)
         if load_kwargs:
             self.load_kwargs.update(load_kwargs)
+        # Second place to resolve a case name, tried only when no directory
+        # exists under case_root: a callable name -> path, or None. A campaign
+        # that keeps an archive of finished runs passes its lookup in here, so
+        # a study outlives the simulation output it was built from. It holds
+        # copied text -- logs, settings -- not datasets, so it answers dir()
+        # and everything provenance reads, and never case().
+        #
+        # Deliberately a plain callable rather than an archive type: what such
+        # an archive contains is the campaign's business, not this package's.
+        self.dir_fallback = dir_fallback
         self._db = None
         self._cases = {}       # name -> sdtools Case
         self._records = {}     # name -> light record, or None if unloadable
@@ -55,6 +66,14 @@ class CaseLoader:
                 # CaseDB would raise a bare KeyError on the directory name,
                 # which says nothing about where it looked. A study outliving
                 # its case directory is common enough to be worth naming.
+                if self._fallback_dir(name) is not None:
+                    raise MissingCase(
+                        f"case '{name}' has no simulation output under "
+                        f"{self.case_root} -- only an archived record, which "
+                        f"holds text and not datasets. A page asked for its "
+                        f"dataset, so either that page cannot be drawn for "
+                        f"this case or the run must be repeated."
+                    )
                 raise MissingCase(
                     f"case directory '{name}' not found under {self.case_root} "
                     f"(a study can outlive its cases -- check the name, or "
@@ -65,10 +84,22 @@ class CaseLoader:
             self._cases[name] = case
         return self._cases[name]
 
+    def _fallback_dir(self, name):
+        """Where dir_fallback says `name` lives, or None. Never raises: a
+        broken lookup must degrade to "no fallback", not kill the report."""
+        if self.dir_fallback is None:
+            return None
+        try:
+            return self.dir_fallback(name)
+        except Exception as e:  # noqa: BLE001
+            print(f"  [fallback lookup failed] {name}: {e}")
+            return None
+
     def missing(self, names):
-        """Which of `names` have no directory under case_root. Cheap -- reads
+        """Which of `names` can be resolved in neither place. Cheap -- reads
         the directory index only, never opens a dataset."""
-        return [n for n in names if n not in self.db.casepaths]
+        return [n for n in names
+                if n not in self.db.casepaths and self._fallback_dir(n) is None]
 
     def record(self, name):
         """A LIGHT reduction of a case: final-time slice + the 1-D t and wtime
@@ -127,8 +158,17 @@ class CaseLoader:
         return self._hermesdata[name]
 
     def dir(self, name):
-        """Case directory on disk as a str, or None if the name is unknown."""
+        """Where to read this case's files from, as a str, or None if unknown.
+
+        The simulation directory when it still exists, otherwise whatever
+        dir_fallback offers. Provenance and option-diff read text files by
+        path, so they keep working off an archived record once the simulation
+        output is gone -- which is the point of having one.
+        """
         d = self.db.casepaths.get(name)
+        if d is not None:
+            return str(d)
+        d = self._fallback_dir(name)
         return str(d) if d is not None else None
 
 

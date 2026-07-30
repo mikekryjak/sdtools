@@ -146,9 +146,18 @@ class Campaign:
     def __init__(self, name, case_root, pages, grid_root=None, outdir=None,
                  repos=None, param_diff_priority=(), palette=None,
                  page_size=(14.0, 9.5), load_kwargs=None,
-                 collection=None, collection_opts=None, numbered=True):
+                 collection=None, collection_opts=None, numbered=True,
+                 needs_dumps=True, dir_fallback=None):
         self.name = name
         self.pages = list(pages)
+        # needs_dumps=False for a campaign whose pages read no simulation
+        # output at all -- every number comes from logs or an archived record.
+        # It skips the pre-load below, which would otherwise open every case's
+        # dataset for nothing and fail outright once the output is deleted.
+        # Pages still get datasets on demand, so this is a pre-load switch, not
+        # a ban. Default True: a campaign that plots fields must keep failing
+        # early rather than half-way through a report.
+        self.needs_dumps = needs_dumps
         # numbered=True gives PDFs an "NN_" prefix recording the study's
         # position in the file (an append-only chronological record). Set False
         # for a campaign whose PDFs are named by subject alone. Studies still
@@ -169,7 +178,8 @@ class Campaign:
         self.outdir = pathlib.Path(outdir) if outdir else _caller_dir() / "output"
         self.outdir.mkdir(parents=True, exist_ok=True)
 
-        self.loader = CaseLoader(case_root, grid_root, load_kwargs)
+        self.loader = CaseLoader(case_root, grid_root, load_kwargs,
+                                 dir_fallback=dir_fallback)
         self._studies = {}  # function name -> dict(fn=, num=)
 
     # --- study registration -------------------------------------------------
@@ -272,7 +282,9 @@ class Campaign:
         conclusion stay recorded in the campaign file.
         """
         cs = self.collection(cases, self.loader, palette=self.palette,
-                             **self.collection_opts).load()
+                             **self.collection_opts)
+        if self.needs_dumps:
+            cs = cs.load()
         ctx = PageContext(cs, slug, notes, self)
         resolved = resolve_pages(self.pages if pages is None else pages, page_opts)
         path = self.outdir / f"{slug}.pdf"
