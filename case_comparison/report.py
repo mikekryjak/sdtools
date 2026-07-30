@@ -158,6 +158,7 @@ class Report:
         self.dpi = dpi
 
     def build(self, pages, ctx):
+        self._page_no = 0
         with PdfPages(self.path) as pdf:
             for fn, opts in pages:
                 name = getattr(fn, "__name__", str(fn))
@@ -194,6 +195,14 @@ class Report:
                 plt.close(f)
         return figs
 
+    def _stamp(self, fig):
+        """Number the page, counting the cover as 1 so the mark matches what a
+        PDF viewer shows -- otherwise "page 5" means two different pages
+        depending on who is looking."""
+        self._page_no += 1
+        fig.text(0.985, 0.012, str(self._page_no), ha="right", va="bottom",
+                 fontsize=9, color="0.45")
+
     def _write(self, pdf, fig):
         # rcParams the page laid itself out under, re-applied for the draw that
         # savefig triggers -- otherwise tick locators, which run at draw time,
@@ -201,6 +210,7 @@ class Report:
         page_rc = getattr(fig, "_cc_rc", None) or {}
 
         if getattr(fig, "_cc_raw", False):
+            self._stamp(fig)
             # sdtools' general/plotstyle.py sets rcParams["savefig.bbox"] =
             # "tight" globally, which would crop a full-page text figure back
             # to its text content unless overridden here.
@@ -233,6 +243,7 @@ class Report:
         ax.set_axis_off()
         ax.imshow(img, extent=(left, left + disp_w, bottom, bottom + disp_h),
                   aspect="auto")
+        self._stamp(page)
         with plt.rc_context({"savefig.bbox": None}):
             pdf.savefig(page, dpi=self.dpi)
         plt.close(page)

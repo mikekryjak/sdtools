@@ -17,7 +17,7 @@ from .. import provenance
 from ..report import raw_page, text_table, timestamp, priority_note
 
 
-def _cover_text(ctx):
+def _cover_text(ctx, case_table=None, dirs=None):
     cases = ctx.cases
     camp = ctx.campaign
 
@@ -32,21 +32,28 @@ def _cover_text(ctx):
         L += ["  " + wl for wl in (textwrap.wrap(para, 96) or [""])]
     L.append("")
 
-    dirs = cases.dirs()
+    # Both hooks exist for a campaign whose evidence is not the case directory.
+    # `dirs` redirects every provenance read (BOUT.log.0, BOUT.settings,
+    # BOUT.inp) at whatever holds those files -- a results bundle, say -- and
+    # `case_table` replaces the CASES table with one built from a record. A
+    # campaign that keeps its runs after the dumps are deleted needs both.
+    dirs = dirs(ctx) if callable(dirs) else cases.dirs()
 
     L.append("CASES (as run)")
-    crows = []
-    for name in cases.names:
-        ri = provenance.run_info(dirs[name])
-        crows.append([
-            cases.label(name), name, ri["date"], ri["hermes"], ri["bout"],
-            f"CHK{provenance.check_level(dirs[name])}",
-            provenance.run_status(dirs[name]),
-        ])
-    L += text_table(
-        ["label", "sim id", "run date", "hermes", "BOUT++", "check", "status"],
-        crows,
-    ).splitlines()
+    if callable(case_table):
+        header, crows = case_table(ctx)
+    else:
+        header = ["label", "sim id", "run date", "hermes", "BOUT++", "check",
+                  "status"]
+        crows = []
+        for name in cases.names:
+            ri = provenance.run_info(dirs[name])
+            crows.append([
+                cases.label(name), name, ri["date"], ri["hermes"], ri["bout"],
+                f"CHK{provenance.check_level(dirs[name])}",
+                provenance.run_status(dirs[name]),
+            ])
+    L += text_table(header, crows).splitlines()
     L.append("")
 
     diff, per, unrecorded, has_log = provenance.param_diff(
@@ -85,14 +92,22 @@ def _cover_text(ctx):
 
 
 @register_page("cover")
-def cover_page(ctx, fontsize=7):
-    """Provenance cover: environment, conclusions, cases, differing options."""
+def cover_page(ctx, fontsize=7, case_table=None, dirs=None):
+    """Provenance cover: environment, conclusions, cases, differing options.
+
+    case_table : callable(ctx) -> (header, rows), optional
+        Replaces the CASES table, for a campaign that records its runs
+        somewhere other than the case directory.
+    dirs : callable(ctx) -> {case name: directory}, optional
+        Where to read each case's BOUT.log.0 / BOUT.settings / BOUT.inp from.
+        Defaults to the case directories themselves.
+    """
     fig = plt.figure(figsize=ctx.page_size)
     fig.text(0.06, 0.96, ctx.slug, ha="left", va="top", fontsize=15,
              fontweight="bold")
     fig.text(0.06, 0.93,
              f"campaign: {ctx.campaign.name}    built {timestamp()}",
              ha="left", va="top", fontsize=8, color="0.35")
-    fig.text(0.06, 0.89, _cover_text(ctx), ha="left", va="top",
+    fig.text(0.06, 0.89, _cover_text(ctx, case_table, dirs), ha="left", va="top",
              family="monospace", fontsize=fontsize)
     return raw_page(fig)
