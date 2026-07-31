@@ -116,14 +116,15 @@ def rederive(case_dir, store_dir, row, rtol=1e-9, keep=False):
             if not _close(stored, value, rtol):
                 diffs.append(Difference("index", key, stored, value))
 
-        # A row migrated from the legacy CSV has no bundle and never did, so a
-        # missing one is "nothing to check", not a disagreement. Only a row the
-        # extractor itself wrote is expected to have tables behind it.
+        # Every row in the index was written by the extractor and so has a
+        # bundle behind it. A missing one is a real problem, not a row of a
+        # different kind -- the migrated rows that used to make this ambiguous
+        # were removed from the index on 2026-07-31.
         test_id = row.get("test_id") or report.test_id
         stored_bundle = os.path.join(store_dir, "runs", test_id or "")
         if report.bundle and os.path.isdir(stored_bundle):
             diffs += _compare_tables(stored_bundle, report.bundle, rtol)
-        elif test_id and row.get("state", "") in ("recorded", "unplanned"):
+        elif test_id:
             diffs.append(Difference("bundle", test_id, "expected", "not found"))
 
         return diffs
