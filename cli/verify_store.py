@@ -29,8 +29,18 @@ DEFAULT_ROOTS = [
 
 
 def find_case(case_dir, roots):
+    """The directory a row was run in, or None.
+
+    The empty check is not defensive padding. A legacy row carries no case_dir,
+    and os.path.join(root, "") is the root itself -- which exists, so without
+    this the row "verifies" against a directory that is not a case at all and
+    reports a match because an empty record has nothing to disagree with.
+    """
+
+    if not (case_dir or "").strip():
+        return None
     for root in roots:
-        path = os.path.join(root, case_dir)
+        path = os.path.join(root, case_dir.strip())
         if os.path.isdir(path):
             return path
     return None

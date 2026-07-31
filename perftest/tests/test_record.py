@@ -12,6 +12,9 @@ produces a record that looks entirely reasonable and is wrong. Hundreds of rows
 are machine-produced, so anything that fails quietly fails at scale.
 """
 
+import pathlib
+import sys
+
 import pytest
 
 from hermes3 import logparse as lp
@@ -385,3 +388,22 @@ def test_concurrency_skips_a_row_it_cannot_time():
     idx.recompute_concurrency(rows)
     assert rows[0]["concurrency"] == "1.00"
     assert rows[1]["concurrency"] == ""
+
+
+# =============================================================================
+# Resolving a row back to the directory it ran in
+# =============================================================================
+def test_a_row_with_no_case_dir_resolves_to_nothing(tmp_path):
+    """os.path.join(root, "") is the root, which exists. A legacy row carries no
+    case_dir, so without an explicit check it "verifies" against a directory
+    that is not a case and reports a match, because an empty record has nothing
+    to disagree with. This masked nine rows in the first run of the check."""
+
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "cli"))
+    from verify_store import find_case
+
+    assert find_case("", [str(tmp_path)]) is None
+    assert find_case("   ", [str(tmp_path)]) is None
+
+    (tmp_path / "a-real-case").mkdir()
+    assert find_case("a-real-case", [str(tmp_path)]) == str(tmp_path / "a-real-case")
