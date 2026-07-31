@@ -7,8 +7,9 @@ changed since it was written.
 
     verify_store.py --store /path/to/results-repo [--cases DIR ...] [--limit N]
 
-Exits non-zero if any record differs. Rows whose case directory has been
-deleted are skipped and counted, since there is nothing left to re-derive from.
+Exits non-zero if any record differs. A row is skipped when its case directory
+is not in the project area -- deleted after extraction, or belonging to earlier
+work this project does not own. Either way there is nothing to re-derive from.
 """
 
 import argparse
@@ -21,11 +22,10 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from perftest.verify import rederive  # noqa: E402
 
-DEFAULT_ROOTS = [
-    "/home/mike/work/cases/perftests/test2dev",
-    "/home/mike/work/cases/perftests/test4dev",
-    "/home/mike/work/cases/perftests/test5dev",
-]
+# One area, holding this project's runs and nothing else. The older test2dev /
+# test4dev / test5dev directories are deliberately NOT listed: they hold other
+# work, which this project does not extract, compare against or count.
+DEFAULT_ROOTS = ["/home/mike/work/cases/perftests/solver-opt"]
 
 
 def find_case(case_dir, roots):
@@ -81,7 +81,7 @@ def main():
             print(f"ok       {label}")
 
     print(f"\n{len(live)} checked, {len(live) - failed} match, {failed} differ,"
-          f" {skipped} skipped (case directory deleted)")
+          f" {skipped} skipped (no case directory in the project area)")
     return 1 if failed else 0
 
 
