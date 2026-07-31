@@ -56,7 +56,7 @@ def format_time(time):
     return f"{seconds * 1e3:.6g} ms"
 
 
-def reset_test(casepath):
+def reset_test(casepath, assume_yes=False):
     casepath = os.path.abspath(casepath)
     basepath = os.path.join(casepath, "base")
 
@@ -84,12 +84,22 @@ def reset_test(casepath):
         )
         for path in output_files:
             print(f"  {os.path.basename(path)}")
-        answer = (
-            input("Delete these files and reset the case? [yes/no] ").strip().lower()
-        )
-        if answer not in ("y", "yes"):
-            print("Aborted: no files were deleted or reset.")
-            return
+        if assume_yes:
+            print("Proceeding without confirmation (-y).")
+        else:
+            if not sys.stdin.isatty():
+                print(
+                    "Aborted: not running on a terminal and -y was not given."
+                )
+                return
+            answer = (
+                input("Delete these files and reset the case? [yes/no] ")
+                .strip()
+                .lower()
+            )
+            if answer not in ("y", "yes"):
+                print("Aborted: no files were deleted or reset.")
+                return
         for path in output_files:
             os.remove(path)
         print(f"Deleted {len(output_files)} dump/log/.pid file(s).")
@@ -112,6 +122,13 @@ if __name__ == "__main__":
         description="Reset a case to the baseline restart files in its 'base' directory."
     )
     parser.add_argument("casepath", help="Path to the case folder")
+    parser.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="Skip the confirmation prompt. Required when not on a terminal, "
+        "so this script can be driven from another script.",
+    )
     args = parser.parse_args()
 
-    reset_test(args.casepath)
+    reset_test(args.casepath, assume_yes=args.yes)

@@ -25,6 +25,8 @@ Usage: sdrun.py -s=1|2|3 -d CASE [-restart] [-append] [extra BOUT options...]
   -d=CASE   Case directory: a path relative to your current directory, or an absolute path
   -restart  Pass restart to Hermes/BOUT++
   -append   Pass append to Hermes/BOUT++ (implies restart)
+  -y        Skip the confirmation prompt. Required when not on a terminal,
+            so this script can be driven from another script.
 
 Shell variables like $hermes or ${cases} and ~ are expanded in any argument.
 """
@@ -79,6 +81,7 @@ def parse_args(argv):
     case_arg = ""
     pass_restart = False
     pass_append = False
+    assume_yes = False
     extra_args = []
 
     def need_value(flag, rest):
@@ -114,6 +117,8 @@ def parse_args(argv):
         elif arg == "-d":
             case_arg = need_value("-d", argv[i + 1:])
             i += 1
+        elif arg in ("-y", "--yes"):
+            assume_yes = True
         elif arg in ("-restart", "restart"):
             pass_restart = True
         elif arg in ("-append", "append"):
@@ -126,6 +131,7 @@ def parse_args(argv):
         i += 1
 
     return {
+        "assume_yes": assume_yes,
         "slot": slot,
         "core_spec": core_spec,
         "build": build,
@@ -294,15 +300,19 @@ def main():
     print(f"  {s.c}└─{s.r}")
     print()
 
-    try:
-        reply = input(f"  Proceed? {s.b}[y/N]{s.r} ")
-    except (EOFError, KeyboardInterrupt):
-        print("\n  Aborted.")
-        sys.exit(1)
-    if reply.strip().lower() not in ("y", "yes"):
-        print("  Aborted.")
-        sys.exit(1)
-    print()
+    if not opts["assume_yes"]:
+        if not sys.stdin.isatty():
+            print("  Not running on a terminal and -y was not given. Aborted.")
+            sys.exit(1)
+        try:
+            reply = input(f"  Proceed? {s.b}[y/N]{s.r} ")
+        except (EOFError, KeyboardInterrupt):
+            print("\n  Aborted.")
+            sys.exit(1)
+        if reply.strip().lower() not in ("y", "yes"):
+            print("  Aborted.")
+            sys.exit(1)
+        print()
 
     os.execvp(cmd[0], cmd)
 
