@@ -97,6 +97,14 @@ def scan_cover_page(ctx, options=(), fontsize=6.5, wrap=110):
         L.append(f"  {label.ljust(width)} : {provenance.git_describe(path)}")
     L.append("")
 
+    L.append("ABOUT THIS REPORT")
+    if ctx.about:
+        for para in cleandoc(ctx.about).splitlines():
+            L += ["  " + wl for wl in (textwrap.wrap(para, wrap) or [""])]
+    else:
+        L.append("  !! NO DESCRIPTION -- pass about= to @camp.study")
+    L.append("")
+
     L.append("CONCLUSIONS")
     for para in cleandoc(ctx.notes or "(none recorded)").splitlines():
         L += ["  " + wl for wl in (textwrap.wrap(para, wrap) or [""])]
@@ -134,7 +142,8 @@ def scan_cover_page(ctx, options=(), fontsize=6.5, wrap=110):
         # The SAME core the case covers use: compares EVERY option of every
         # case, with the campaign's key list only ORDERING the result.
         priority = tuple(options) or camp.param_diff_priority
-        differing, per, _ = provenance.diff_option_sets(optvals, priority=priority)
+        differing, per, _, _ = provenance.diff_option_sets(optvals,
+                                                           priority=priority)
         labels = list(optvals)
         order = priority_note(priority)
         L.append(f"DIFFERING OPTIONS  (source: BOUT.log.0, i.e. what each run "

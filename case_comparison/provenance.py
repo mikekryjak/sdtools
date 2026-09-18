@@ -177,17 +177,25 @@ _OPTION_SCAN_MAX = 60_000
 _OPTION_SCAN_GAP = 5_000
 
 
-def _parse_log_options(case_dir):
+DEFAULT_ORIGINS = ("default", "user_default")
+
+
+def _parse_log_options(case_dir, with_origins=False):
     """{key: value} for every option BOUT logged READING, last occurrence wins.
 
     A key is logged more than once when BOUT re-reads it after defaults are
     applied (MXG appears as 0 then 2); last-wins is what matches the finalised
     BOUT.settings (12/13 against 9/13 for first-wins on a calibration case).
+
+    with_origins also returns {key: origin}, the parenthesised note BOUT prints
+    after each value: "default", "user_default", or the input file's path. That
+    distinguishes a value someone CHOSE from one the code computed, which the
+    diff needs -- see diff_option_sets.
     """
     log = os.path.join(case_dir, "BOUT.log.0") if case_dir else None
     if not (log and os.path.exists(log)):
-        return {}
-    values, last_hit = {}, 0
+        return ({}, {}) if with_origins else {}
+    values, origins, last_hit = {}, {}, 0
     with open(log, errors="ignore") as f:
         for i, line in enumerate(f):
             if i > _OPTION_SCAN_MAX or (values and i - last_hit > _OPTION_SCAN_GAP):
@@ -195,11 +203,12 @@ def _parse_log_options(case_dir):
             m = _OPTION_LINE.match(line)
             if m:
                 values[m.group(1)] = m.group(2)
+                origins[m.group(1)] = m.group(3)
                 last_hit = i
-    return values
+    return (values, origins) if with_origins else values
 
 
-def options_used(case_dir, with_sources=False):
+def options_used(case_dir, with_sources=False, with_defaulted=False):
     """The best available record of a case's options, layered by trustworthiness.
 
     No single file is both complete and interruption-proof, so three are
@@ -235,13 +244,18 @@ def options_used(case_dir, with_sources=False):
     with_sources=True, where layer is "BOUT.inp" / "BOUT.log.0" /
     "BOUT.settings".
     """
-    values, sources = {}, {}
+    values, sources, defaulted = {}, {}, set()
 
     for k, v in case_options(case_dir).items():
         values[k], sources[k] = v, "BOUT.inp"
 
-    for k, v in _parse_log_options(case_dir).items():
+    logged, origins = _parse_log_options(case_dir, with_origins=True)
+    for k, v in logged.items():
         values[k], sources[k] = v, "BOUT.log.0"
+        if origins.get(k) in DEFAULT_ORIGINS:
+            defaulted.add(k)
+        else:
+            defaulted.discard(k)  # a later layer chose it; no longer derived
 
     if case_dir and run_finished(case_dir):
         p = os.path.join(case_dir, "BOUT.settings")
@@ -255,6 +269,8 @@ def options_used(case_dir, with_sources=False):
             if k not in values:  # gap-fill only -- never override
                 values[k], sources[k] = v, "BOUT.settings"
 
+    if with_defaulted:
+        return values, sources, defaulted
     return (values, sources) if with_sources else values
 
 
@@ -306,7 +322,7 @@ def collapse_options(option_sets):
     return out
 
 
-def diff_option_sets(per_label, priority=(), sources=None):
+def diff_option_sets(per_label, priority=(), sources=None, defaulted=None):
     """THE option-diff core. Every campaign type goes through this.
 
     per_label : ordered {column label: {option key: value}}. A column is one
@@ -318,7 +334,11 @@ def diff_option_sets(per_label, priority=(), sources=None):
         with_sources=True). Used only to suppress one specific kind of noise --
         see `unrecorded` below.
 
-    Returns (differing_keys, filled_per_label, unrecorded).
+    defaulted : optional {column label: set of keys that column took from a
+        code default}, from options_used(with_defaulted=True). Splits off the
+        `derived` group below. With defaulted=None nothing is split.
+
+    Returns (differing_keys, filled_per_label, unrecorded, derived).
 
     `unrecorded` holds keys that LOOK like differences but are really just
     missing data: values the code FORCES into the options tree (build flags
@@ -363,23 +383,47 @@ def diff_option_sets(per_label, priority=(), sources=None):
                 keep.append(k)
         differing = keep
 
-    differing.sort(key=lambda k: (_priority_rank(k, priority), k))
-    unrecorded.sort(key=lambda k: (_priority_rank(k, priority), k))
-    return differing, per, unrecorded
+    # Split off values NOBODY CHOSE. A defaulted option can still differ
+    # between cases, because BOUT's defaults are often computed from other
+    # options: solver:pseudo_alpha defaults to 100*atol*timestep, so relaxing
+    # atol moves it four decades. Reporting that beside atol says one change
+    # three times, and the reader has to know the formula to see they are the
+    # same change. Same-shaped noise appears wherever a default is derived.
+    #
+    # A key is derived when it differs but EVERY case that has it got it from a
+    # default. If any case set it deliberately, the difference is deliberate
+    # somewhere and stays in the main list.
+    derived = []
+    if defaulted:
+        keep = []
+        for k in differing:
+            present = [l for l in labels if per[l][k] != ABSENT]
+            if present and all(k in defaulted.get(l, ()) for l in present):
+                derived.append(k)
+            else:
+                keep.append(k)
+        differing = keep
+
+    for group in (differing, unrecorded, derived):
+        group.sort(key=lambda k: (_priority_rank(k, priority), k))
+    return differing, per, unrecorded, derived
 
 
 def param_diff(case_dirs, priority=()):
     """Diff the options ACTUALLY USED across cases (see options_used).
 
     case_dirs : ordered {case name: case directory}.
-    Returns (differing_keys, {name: {key: value}}, unrecorded, {name: has_log}).
+    Returns (differing_keys, {name: {key: value}}, unrecorded, derived,
+    {name: has_log}).
     """
-    per, srcs, has_log = {}, {}, {}
+    per, srcs, dflt, has_log = {}, {}, {}, {}
     for name, d in case_dirs.items():
-        per[name], srcs[name] = options_used(d, with_sources=True)
+        per[name], srcs[name], dflt[name] = options_used(
+            d, with_defaulted=True
+        )
         log = os.path.join(d, "BOUT.log.0") if d else None
         has_log[name] = bool(log and os.path.exists(log))
-    differing, filled, unrecorded = diff_option_sets(
-        per, priority=priority, sources=srcs
+    differing, filled, unrecorded, derived = diff_option_sets(
+        per, priority=priority, sources=srcs, defaulted=dflt
     )
-    return differing, filled, unrecorded, has_log
+    return differing, filled, unrecorded, derived, has_log

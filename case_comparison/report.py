@@ -122,6 +122,9 @@ class PageContext:
     series    : alias of `data`, read by scan pages
     slug      : str -- "NN_study_name", also the PDF stem
     notes     : str -- the study's written conclusion (its docstring)
+    about     : str -- what the report is: what it compares and what its pages
+                show, stated without findings. Empty when the study declared no
+                `about=`, which the cover reports as missing.
     campaign  : Campaign
     page_size : (w, h) inches
 
@@ -130,10 +133,11 @@ class PageContext:
     handles one object.
     """
 
-    def __init__(self, data, slug, notes, campaign):
+    def __init__(self, data, slug, notes, campaign, about=""):
         self.data = data
         self.slug = slug
         self.notes = notes
+        self.about = about
         self.campaign = campaign
         self.page_size = campaign.page_size
 

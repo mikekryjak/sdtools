@@ -7,7 +7,9 @@ studies stay comparable) and the case root the study names resolve against.
 A *study* is a case selection plus a written conclusion, emitted as ONE
 self-contained PDF with a provenance cover. It is declared once as an
 ``@camp.study`` function: the function name becomes the PDF name, its docstring
-the cover notes, and its position in the file its number.
+the cover notes, and its position in the file its number. Its ``about=`` says
+what the report IS -- what it compares and what its pages show -- so the cover
+describes itself even before the conclusion is written.
 
     from case_comparison import Campaign
 
@@ -22,7 +24,9 @@ the cover notes, and its position in the file its number.
         ],
     )
 
-    @camp.study
+    @camp.study(about="Compares the MC and VanAlbada limiters on the same "
+                      "grid and boundary conditions, over the standard page "
+                      "set: profiles, solver performance and runtime.")
     def mc_vs_va():
         '''VA is faster after the slow initial phase.'''
         return {"case-dir-mc": "MC limiter", "case-dir-va": "VanAlbada"}
@@ -138,8 +142,14 @@ class Campaign:
         Extra kwargs passed to CaseDB.load_case_2D.
     """
 
+    # Only repos whose state at PDF-BUILD time means something belong here.
+    # sdtools qualifies: it is the code that made the plots. hermes-3 does NOT,
+    # and was removed 2026-08-11 -- that clone is checked out for whatever its
+    # owner is working on, so the line reported an unrelated branch. It was
+    # also sometimes accidentally right, which reads as provenance and is not.
+    # The authoritative Hermes commit is the PER-CASE one in the cases table,
+    # read from each run's BOUT.log.0.
     DEFAULT_REPOS = {
-        "hermes-3": "/home/mike/work/hermes-3",
         "sdtools": "/home/mike/work/sdtools",
     }
 
@@ -147,7 +157,7 @@ class Campaign:
                  repos=None, param_diff_priority=(), palette=None,
                  page_size=(14.0, 9.5), load_kwargs=None,
                  collection=None, collection_opts=None, numbered=True,
-                 needs_dumps=True, dir_fallback=None):
+                 prefix=None, needs_dumps=True, dir_fallback=None):
         self.name = name
         self.pages = list(pages)
         # needs_dumps=False for a campaign whose pages read no simulation
@@ -170,6 +180,14 @@ class Campaign:
         # pattern and scalar function.
         self.collection = collection or CaseSet
         self.collection_opts = dict(collection_opts or {})
+        # A PDF name starts with the KIND of report it is, so an output
+        # directory holding both sorts reads as two groups instead of one
+        # interleaved list. It comes from the collection type -- CaseSet
+        # reports are "analysis", SeriesSet ones "scan" -- so a campaign gets
+        # it without asking for it. Pass prefix="" to opt out, or any string
+        # to override.
+        self.prefix = (prefix if prefix is not None
+                       else getattr(self.collection, "REPORT_PREFIX", ""))
         self.repos = dict(self.DEFAULT_REPOS if repos is None else repos)
         self.param_diff_priority = tuple(param_diff_priority)
         self.palette = list(palette or DEFAULT_PALETTE)
@@ -183,11 +201,14 @@ class Campaign:
         self._studies = {}  # function name -> dict(fn=, num=)
 
     # --- study registration -------------------------------------------------
-    def study(self, fn=None, *, num=None, name=None, pages=None, page_opts=None):
+    def study(self, fn=None, *, num=None, name=None, pages=None,
+              page_opts=None, about=None):
         """Register a study. The function returns its cases dict
         ({sim dir name: label-or-dict}); everything else is derived:
 
-          * PDF name    = NN_<function name>  (output/NN_<function name>.pdf)
+          * PDF name    = <prefix>_NN_<function name>, the prefix naming
+                          the kind of report -- "analysis" for a case
+                          campaign, "scan" for a scan one
           * cover notes = the function's docstring
           * NN          = registration order, i.e. position in the file -- an
                           append-only chronological record, so numbers stay
@@ -204,6 +225,11 @@ class Campaign:
         page_opts : {page name: {...}} patched over the campaign page options
             for this study only -- e.g. dropping a reference dataset that is
             meaningless for this study's machine.
+        about : what the report is, printed on the cover above the conclusion:
+            what it compares, why these cases, what its pages show. It states
+            no findings and no numbers -- those belong in the docstring. A
+            study without one builds, but its cover says the description is
+            missing.
         """
         def register(f):
             self._studies[f.__name__] = dict(
@@ -212,6 +238,7 @@ class Campaign:
                 name=name or f.__name__,
                 pages=pages,
                 page_opts=page_opts or {},
+                about=about,
             )
             return f
         return register(fn) if fn is not None else register
@@ -221,9 +248,19 @@ class Campaign:
         return dict(self._studies)
 
     def slug_for(self, key):
-        """PDF stem for a registered study (see `numbered`)."""
+        """PDF stem for a registered study (see `numbered` and `prefix`).
+
+        <prefix>_NN_<name>, e.g. "scan_06_regularisation_ladder". A name
+        already beginning with the prefix does not repeat it: the study
+        `scan_regularisation_ladder` emits that same stem, not
+        `scan_06_scan_regularisation_ladder`.
+        """
         e = self._studies[key]
-        return f"{e['num']:02d}_{e['name']}" if self.numbered else e["name"]
+        name = e["name"]
+        if self.prefix and name.startswith(f"{self.prefix}_"):
+            name = name[len(self.prefix) + 1:]
+        stem = f"{e['num']:02d}_{name}" if self.numbered else name
+        return f"{self.prefix}_{stem}" if self.prefix else stem
 
     def listing(self):
         return ", ".join(f"{e['num']}={n}" for n, e in self._studies.items())
@@ -271,11 +308,13 @@ class Campaign:
             slug=self.slug_for(key),
             cases=entry["fn"](),
             notes=entry["fn"].__doc__,
+            about=entry["about"],
             pages=pages if pages is not None else entry["pages"],
             page_opts=entry["page_opts"],
         )
 
-    def run_cases(self, slug, cases, notes="", pages=None, page_opts=None):
+    def run_cases(self, slug, cases, notes="", pages=None, page_opts=None,
+                  about=""):
         """Build a PDF for an ad-hoc selection (no @study registration).
 
         Normally you want run() on a registered study, so the selection and its
@@ -285,7 +324,7 @@ class Campaign:
                              **self.collection_opts)
         if self.needs_dumps:
             cs = cs.load()
-        ctx = PageContext(cs, slug, notes, self)
+        ctx = PageContext(cs, slug, notes, self, about=about)
         resolved = resolve_pages(self.pages if pages is None else pages, page_opts)
         path = self.outdir / f"{slug}.pdf"
         Report(path, page_size=self.page_size).build(resolved, ctx)
@@ -356,7 +395,7 @@ class Campaign:
         if args and args[0] in ("-l", "--list"):
             for n, e in self._studies.items():
                 slug = self.slug_for(n)
-                alias = f"   -> {slug}.pdf" if slug != f"{e['num']:02d}_{n}" else ""
+                alias = f"   -> {slug}.pdf" if e["name"] != n else ""
                 print(f"  {e['num']:02d}  {n}{alias}")
             return
         if not args:

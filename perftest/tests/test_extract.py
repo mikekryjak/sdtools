@@ -21,6 +21,7 @@ import xhermes  # noqa: F401 -- registers the .hermes accessors
 from perftest.extract import (
     Report,
     _ddt_series,
+    _infer_test,
     _interior,
     _interior_mask,
     _residual_shares,
@@ -202,3 +203,30 @@ def test_existing_column_order_is_never_rearranged():
 def test_columns_the_schema_has_never_heard_of_are_kept():
     merged = _merge_columns(list(INDEX_COLUMNS) + ["someones_private_note"])
     assert "someones_private_note" in merged
+
+
+# =============================================================================
+# Test name inference
+# =============================================================================
+# A wrong test name does not raise: it lands in the index, and test_id is built
+# from it, so a whole row is mislabelled silently. Span-style names such as
+# test2_0-20ms contain hyphens, so the date is the only reliable anchor.
+@pytest.mark.parametrize(
+    "case_dir, expected",
+    [
+        # Span-style names, whose hyphens must survive
+        ("test2_0-20ms-2026-07-31", "test2_0-20ms"),
+        ("test2_0-20ms-2026-07-31-mc-a35e2f5e", "test2_0-20ms"),
+        ("test4_3-3.5ms-2026-07-31-mc", "test4_3-3.5ms"),
+        # Legacy adjective names must keep working
+        ("test2scratch-2026-07-31", "test2scratch"),
+        ("test4steady-2026-07-30-va-mumps1", "test4steady"),
+        # A description containing something date-like must not win over the
+        # real date, which comes first
+        ("test2_0-20ms-2026-07-31-rebuild-of-2025-08-01", "test2_0-20ms"),
+        # No date at all: fall back rather than fail
+        ("test2scratch", "test2scratch"),
+    ],
+)
+def test_test_name_survives_hyphens_in_the_name(case_dir, expected):
+    assert _infer_test(case_dir) == expected

@@ -161,16 +161,26 @@ def main():
         print(f"\n== {os.path.basename(plan)} ==")
         any_line = False
         for line in open(plan):
-            m = re.match(r"\s*(#?)\s*echo y \| sdrun\.py\s+(.*-d\s+(\S+).*)", line)
+            # The `echo y |` prefix is the old way of answering sdrun's prompt;
+            # sdrun now takes -y instead, so the prefix is optional here.
+            m = re.match(
+                r"\s*(#?)\s*(?:echo y\s*\|\s*)?sdrun\.py\s+(.*-d\s+(\S+).*)", line
+            )
             if not m:
                 continue
             commented, case = bool(m.group(1)), m.group(3)
             if commented:
                 continue
             any_line = True
+            slot = (re.search(r"-s=(\d)", m.group(2)) or [None, "?"])[1]
+            if "$" in case:
+                # A loop over a shell variable: the queue is real but this tool
+                # cannot expand it, so say so rather than classify the literal.
+                print(f"  s{slot}  {'UNEXPANDED':18s} {case}"
+                      "   <- shell variable, list the cases to see their status")
+                continue
             cd = case if os.path.isabs(case) else os.path.join(root, case)
             status = classify(os.path.abspath(cd), procs)
-            slot = (re.search(r"-s=(\d)", m.group(2)) or [None, "?"])[1]
             note = "   <- done but line not commented out" if status == "DONE" else ""
             print(f"  s{slot}  {status:18s} {case}{note}")
         if not any_line:

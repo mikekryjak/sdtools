@@ -17,7 +17,13 @@ STATE_UNPLANNED = "unplanned"
 STATE_CANCELLED = "cancelled"
 
 # Declared by hand before the run. Everything else is measured.
-INTENT_COLUMNS = ["case_dir", "test", "recipe", "varied", "epoch", "note"]
+INTENT_COLUMNS = ["project", "case_dir", "test", "recipe", "varied", "epoch", "note"]
+
+# Which study a row belongs to. Rows from different projects share the store
+# and the tooling but must never be compared to each other, so the marker is a
+# column rather than a naming convention: case_dir holds a bare directory name,
+# so nothing else in the row distinguishes them.
+PROJECT_DEFAULT = "solver-opt"
 
 # Canonical column order. Meaning first -- what was tried, what happened, how
 # much it cost -- with provenance and bookkeeping trailing, so nobody has to
@@ -25,6 +31,7 @@ INTENT_COLUMNS = ["case_dir", "test", "recipe", "varied", "epoch", "note"]
 INDEX_COLUMNS = [
     # what was tried
     "test_id",
+    "project",
     "case_dir",
     "state",
     "test",
@@ -41,6 +48,7 @@ INDEX_COLUMNS = [
     "lin_its",
     "ms_per_24h",
     "solver_fails",
+    "solver_fails_max",
     # where the time went
     "t_jac_frac",
     "t_pcsetup_frac",

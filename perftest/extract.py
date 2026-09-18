@@ -145,10 +145,24 @@ def _resolve_grid(case_dir, grid_path=None):
     return None
 
 
-def _infer_test(case_dir):
-    """Test name from the directory, which is named `<test>-<date>[-<desc>]`."""
+_RUN_DATE = re.compile(r"-\d{4}-\d{2}-\d{2}(?=-|$)")
 
-    return idx.case_key(case_dir).split("-")[0]
+
+def _infer_test(case_dir):
+    """Test name from the directory, which is named `<test>-<date>[-<desc>]`.
+
+    Anchored on the YYYY-MM-DD date rather than the first hyphen, so a test
+    name may itself contain hyphens (e.g. test2_0-20ms). Splitting on the
+    first hyphen would silently return a truncated name, and the test_id is
+    built from it, so the whole row would be mislabelled without an error.
+    Falls back to the old rule for directories with no date in them.
+    """
+
+    key = idx.case_key(case_dir)
+    match = _RUN_DATE.search(key)
+    if match:
+        return key[: match.start()]
+    return key.split("-")[0]
 
 
 # =============================================================================
@@ -830,7 +844,14 @@ def extract_case(
     if not snes.empty:
         measured["nl_its"] = int(snes["nl_its"].sum())
         measured["lin_its"] = int(snes["lin_its"].sum())
-        measured["solver_fails"] = int(snes["solver_fails"].max())
+        # Cumulative, matching nl_its and lin_its above: this is the number
+        # that explains a run's cost, since each failure rejects a step, cuts
+        # the timestep and forces a Jacobian rebuild. The per-step worst is
+        # kept separately because it is what approaches max_snes_failures, the
+        # consecutive-failure count a run aborts on -- a different question
+        # from how much work the failures cost.
+        measured["solver_fails"] = int(snes["solver_fails"].sum())
+        measured["solver_fails_max"] = int(snes["solver_fails"].max())
 
     if events is not None:
         total = events["time_max"].get("Total BOUT++")

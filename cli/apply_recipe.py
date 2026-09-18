@@ -4,6 +4,7 @@ import argparse
 import os
 import re
 import sys
+import textwrap
 
 """
 select_recipe.py - Apply a solver "recipe" to a case's BOUT.inp.
@@ -31,6 +32,72 @@ SECTION_RE = re.compile(r"^\s*\[([^\]]+)\]")
 
 # Sections that this tool manages.
 MANAGED = ["solver", "petsc"]
+
+
+# Options a recipe may still name that current BOUT++ no longer accepts.
+# Applying such a recipe unmodified ABORTS THE RUN AT STARTUP -- either the
+# solver throws outright, or nothing reads the option and
+# error_on_unused_options stops the run. Recipes can live in a read-only
+# repository and so cannot always be fixed where they are, and each abort
+# otherwise costs a full setup-and-launch cycle before anyone sees it.
+#
+# So translate, and say so. The rule is FAITHFULNESS, never tidiness: an entry
+# must reproduce exactly what the retired option did, or it does not belong
+# here. Getting one wrong silently changes what a recipe means, which is worse
+# than the abort it prevents -- cvode_precon_method is the cautionary case,
+# since its own default (none) and its auto value BOTH differ from what
+# use_precon = true meant.
+#
+# {(section, option): (reason, {lowercased value: replacement})}
+# A key of None in the mapping means "any value not otherwise listed".
+RETIRED_OPTIONS = {
+    ("solver", "pid_controller"): (
+        "renamed; nothing reads pid_controller, so the run aborts under "
+        "error_on_unused_options. pid_nonlinear_its is timestep_control's "
+        "own default, i.e. the behaviour the recipe already intended.",
+        {None: "timestep_control = pid_nonlinear_its"},
+    ),
+    ("solver", "use_precon"): (
+        "retired; CVODE throws on it. NOT the same as cvode_precon_method's "
+        "default (none), and not the same as auto, which falls through to the "
+        "petsc preconditioner when the model registers none of its own.",
+        {"true": "cvode_precon_method = user",
+         "false": "cvode_precon_method = none"},
+    ),
+}
+
+_ASSIGN_RE = re.compile(r"^(\s*)([A-Za-z_]\w*)\s*=\s*([^#\n]*?)\s*(#.*)?$")
+
+
+def translate_retired(body, section):
+    """Rewrite retired options in one section body.
+
+    Returns (new_body, [(old, new, reason)]). Anything not listed in
+    RETIRED_OPTIONS passes through untouched.
+    """
+    out, changes = [], []
+    for line in body:
+        m = _ASSIGN_RE.match(line)
+        entry = RETIRED_OPTIONS.get((section, m.group(2).lower())) if m else None
+        if entry is None:
+            out.append(line)
+            continue
+        reason, mapping = entry
+        value = m.group(3).strip().lower()
+        replacement = mapping.get(value, mapping.get(None))
+        if replacement is None:
+            # Known-retired option, unrecognised value: refuse rather than
+            # guess. A wrong translation is worse than a failed run.
+            sys.exit(
+                f"Error: recipe sets {section}:{m.group(2)} = {m.group(3)}, "
+                f"which current BOUT++ rejects, and no faithful translation "
+                f"is known for that value. Fix the recipe by hand.\n  {reason}"
+            )
+        out.append(f"{m.group(1)}{replacement}"
+                   f"   # was {m.group(2)} = {m.group(3)} "
+                   f"(translated by apply_recipe.py)\n")
+        changes.append((line.strip(), replacement, reason))
+    return out, changes
 
 
 def section_name(line):
@@ -91,9 +158,11 @@ def select_recipe(case, recipe_path):
 
     # Pull the managed sections out of the recipe (empty body if absent).
     recipe_bodies = {}
+    translations = []
     for name in MANAGED:
         _, body = extract_section_body(recipe_lines, name)
-        recipe_bodies[name] = body
+        recipe_bodies[name], changed = translate_retired(body, name)
+        translations += [(name, *c) for c in changed]
 
     target_sections = {
         section_name(l) for l in target_lines if section_name(l) is not None
@@ -156,6 +225,16 @@ def select_recipe(case, recipe_path):
             print(f"   [{name}] {state} (emptied - not in recipe)")
         else:
             print(f"   [{name}] {state} ({nlines} lines)")
+
+    for section, old, new, reason in translations:
+        print(f"\n   !! TRANSLATED [{section}] {old}")
+        print(f"                -> {new}")
+        for wl in textwrap.wrap(reason, 70):
+            print(f"                   {wl}")
+    if translations:
+        print("\n   The recipe is stale against this BOUT++. The case now "
+              "differs from\n   the named recipe, so record these in the run's "
+              "record as deliberate.")
 
 
 # ------------------------------------------------------------

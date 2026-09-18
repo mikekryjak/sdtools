@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import os, sys
+import re
 import traceback
 import platform
 from datetime import datetime as dt
@@ -21,6 +22,43 @@ from hermes3.utils import *
 from hermes3.named_selections import *
 from hermes3.plotting import *
 from hermes3.fluxes import *
+
+
+#: Two neutral coefficient names in neutral_mixed differed between branches and
+#: were settled on 2026-07-31 in favour of optimise-neutral-fluxlim's spelling:
+#: the D cap is ``Dnnd_max`` (neutral-fluxlim-full wrote ``Dnn_max_d``), and the
+#: per-channel kappa/eta caps are ``kappa_d_max_perp`` / ``eta_d_max_perp``
+#: (neutral-fluxlim-full wrote ``kappa_max_d_perp`` / ``eta_max_d_perp``).
+#: Analysis code reads the settled names only; this map presents older datasets
+#: under them at load time.
+#:
+#: ``Dnnd``, ``Dnnd_unlimited``, ``kappa_d_perp`` and friends are absent because
+#: they never differed. Nothing here matches the plasma-side ``kappa_par_d+`` or
+#: ``kappa_par_e``, which are a different component's outputs.
+_NEUTRAL_COEFF_RENAMES = [
+    (re.compile(r"^Dnn_max_(?P<sp>[^_]+)$"), "Dnn{sp}_max"),
+    (re.compile(r"^kappa_max_(?P<sp>[^_]+)_(?P<dir>perp|par)$"), "kappa_{sp}_max_{dir}"),
+    (re.compile(r"^eta_max_(?P<sp>[^_]+)_(?P<dir>perp|par)$"), "eta_{sp}_max_{dir}"),
+]
+
+
+def rename_legacy_neutral_coeffs(ds):
+    """Present older neutral coefficient names under the settled spelling.
+
+    A no-op on datasets already using the settled names. Any rename whose target
+    is already present is skipped, so a dataset holding both forms keeps both
+    rather than losing one to the collision.
+    """
+    mapping = {}
+    for var in ds.data_vars:
+        for pattern, template in _NEUTRAL_COEFF_RENAMES:
+            match = pattern.match(str(var))
+            if match:
+                new = template.format(**match.groupdict())
+                if new not in ds.data_vars:
+                    mapping[str(var)] = new
+                break
+    return ds.rename(mapping) if mapping else ds
 
 
 def drop_incomplete_final_records(ds):
@@ -209,7 +247,7 @@ class Case:
         use_xhermes=False,
     ):
 
-        self.ds = ds
+        self.ds = rename_legacy_neutral_coeffs(ds)
         self.name = os.path.split(casepath)[-1]
         self.datapath = os.path.join(casepath, "BOUT.dmp.*.nc")
         self.inputfilepath = os.path.join(casepath, "BOUT.settings")

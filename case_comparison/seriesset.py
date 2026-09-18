@@ -49,6 +49,9 @@ class SeriesSet:
     perf_metric : which variability scalar (see scalars.perf_scalars).
     """
 
+    # What a report built from this collection is called (Campaign.prefix).
+    REPORT_PREFIX = "scan"
+
     def __init__(self, series, loader, palette=None, markers=None,
                  x_pattern=r"flim([0-9]+\.?[0-9]*)", x_label="Flux limiter",
                  x_name=None, exclude=(), scalar_fn=None,

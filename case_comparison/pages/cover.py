@@ -91,6 +91,14 @@ def _cover_text(ctx, case_table=None, dirs=None, max_chars=200):
         L.append(f"  {label.ljust(width)} : {provenance.git_describe(path)}")
     L.append("")
 
+    L.append("ABOUT THIS REPORT")
+    if ctx.about:
+        for para in cleandoc(ctx.about).splitlines():
+            L += ["  " + wl for wl in (textwrap.wrap(para, 96) or [""])]
+    else:
+        L.append("  !! NO DESCRIPTION -- pass about= to @camp.study")
+    L.append("")
+
     L.append("CONCLUSIONS")
     for para in cleandoc(ctx.notes or "(none recorded)").splitlines():
         L += ["  " + wl for wl in (textwrap.wrap(para, 96) or [""])]

@@ -181,6 +181,9 @@ class CaseSet:
     black (the baseline), later cases take palette colours in order.
     """
 
+    # What a report built from this collection is called (Campaign.prefix).
+    REPORT_PREFIX = "analysis"
+
     def __init__(self, cases, loader, palette=None):
         palette = palette or DEFAULT_PALETTE
         self.loader = loader
