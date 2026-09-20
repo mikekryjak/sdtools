@@ -314,6 +314,12 @@ def main():
             sys.exit(1)
         print()
 
+    # execvp replaces this process, so whatever is still in Python's stdout
+    # buffer is lost. Through a pipe -- which `| tee BOUT.log.console` makes
+    # it -- that buffer holds the entire banner, so every captured console
+    # began at BOUT++'s own first line and the slot and branch went unrecorded.
+    sys.stdout.flush()
+    sys.stderr.flush()
     os.execvp(cmd[0], cmd)
 
 
