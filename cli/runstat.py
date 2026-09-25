@@ -164,7 +164,8 @@ def main():
             # The `echo y |` prefix is the old way of answering sdrun's prompt;
             # sdrun now takes -y instead, so the prefix is optional here.
             m = re.match(
-                r"\s*(#?)\s*(?:echo y\s*\|\s*)?sdrun\.py\s+(.*-d\s+(\S+).*)", line
+                r"\s*(#?)\s*(?:echo y\s*\|\s*)?(?:timeout\s+\S+\s+)?sdrun\.py\s+(.*-d\s+(\S+).*)",
+                line,
             )
             if not m:
                 continue

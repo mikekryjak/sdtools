@@ -19,6 +19,7 @@ import importlib
 # page name -> module in this package providing it
 _PAGE_MODULES = {
     "cover": "cover",
+    "cover_details": "cover",
     "profiles": "profiles",
     "profiles_vs_solps": "profiles_vs_solps",
     "monitor": "monitor",
