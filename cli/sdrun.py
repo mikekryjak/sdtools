@@ -20,6 +20,8 @@ Usage: sdrun.py -s=1|2|3 -d CASE [-restart] [-append] [extra BOUT options...]
   -s=3      Run on cores 22-31
   -c=SPEC   Run on an explicit core list (e.g. 2-11 or 2,4,6-9); overrides -s
             and sets mpirun -np to the number of cores in the list
+  -np=N     Start N MPI ranks instead of one per core; if N exceeds the core
+            count, add mpirun --oversubscribe (e.g. -c=2 -np=10)
   -b=NAME   Hermes-3 build folder to use (default: build-mc-master)
   -p=PATH   Path to the Hermes-3 executable to use (overrides -b)
   -d=CASE   Case directory: a path relative to your current directory, or an absolute path
@@ -76,6 +78,7 @@ def expand(value):
 def parse_args(argv):
     slot = ""
     core_spec = ""
+    nranks = 0
     build = "build-mc-master"
     exe_path = ""
     case_arg = ""
@@ -101,6 +104,11 @@ def parse_args(argv):
             core_spec = arg.split("=", 1)[1]
         elif arg == "-c":
             core_spec = need_value("-c", argv[i + 1:])
+            i += 1
+        elif arg.startswith("-np="):
+            nranks = arg.split("=", 1)[1]
+        elif arg == "-np":
+            nranks = need_value("-np", argv[i + 1:])
             i += 1
         elif arg.startswith("-b="):
             build = arg.split("=", 1)[1]
@@ -134,6 +142,7 @@ def parse_args(argv):
         "assume_yes": assume_yes,
         "slot": slot,
         "core_spec": core_spec,
+        "nranks": nranks,
         "build": build,
         "exe_path": exe_path,
         "case_arg": case_arg,
@@ -193,7 +202,15 @@ def main():
         cores = CORES[slot]
     else:
         die("choose -s=1, -s=2, -s=3, or -c=SPEC (e.g. -c=2-11)", with_usage=True)
-    np = count_cores(cores)
+    ncores = count_cores(cores)
+    np = ncores
+    if opts["nranks"]:
+        try:
+            np = int(opts["nranks"])
+        except ValueError:
+            die(f"invalid -np value: {opts['nranks']}", with_usage=True)
+        if np < 1:
+            die(f"invalid -np value: {np}", with_usage=True)
 
     if not opts["case_arg"]:
         die("missing case directory: pass it with -d=CASE", with_usage=True)
@@ -244,8 +261,10 @@ def main():
     cmd = [
         "taskset", "-c", cores,
         "mpirun", "--bind-to", "none", "-np", str(np),
-        exe, "-d", case_dir,
     ]
+    if np > ncores:
+        cmd.append("--oversubscribe")
+    cmd += [exe, "-d", case_dir]
     if pass_restart:
         cmd.append("restart")
     if pass_append:
@@ -294,6 +313,8 @@ def main():
     print(f"  {s.c}┌─ {s.r}{s.d}Running: {s.r}{s.c}{s.b}{case_name}{s.r}")
     pathrow("Path", case_dir)
     cores_note = f"slot {slot}, {np} procs" if slot and not core_spec else f"{np} procs"
+    if np > ncores:
+        cores_note += f" on {ncores} cores, oversubscribed"
     row("Cores", f"{cores} {s.d}({cores_note}){s.r}")
     row("Build", f"{build_label} {s.d}@{s.r} {s.y}{branch}{s.r}, {s.y}{commit}{s.r}")
     row("Flags", flags)
