@@ -68,6 +68,7 @@ NO_SUBMODULE_UPDATE=false
 OVERRIDE_WARNINGS=false
 BOUTPP=false
 WRITE_LOG=false
+BOUT_TEST_TARGET=""
 
 # Flags that change the CMake configuration, and so cannot be used with -e.
 # Collected as they are parsed rather than inferred by comparing values.
@@ -108,12 +109,14 @@ Build options:
   -w          Override compilation error on warnings
   -p          Compile with the BOUT++ python interface
   -l          Write build log to hermes-buildlog.out
+  -T <target> Also configure BOUT++'s tests (BOUT_TESTS=ON) and build this
+              test target after the main build, e.g. MMS-spatial-finite-volume
 EOF
   exit 1
 }
 
 # Parse flags
-while getopts "b:s:m:r:P:j:k:S:C:yftnec:duwpl" opt; do
+while getopts "b:s:m:r:P:j:k:S:C:yftnec:duwplT:" opt; do
   case $opt in
     b) BUILD_NAME="$OPTARG" ;;
     s) LIMITER="$OPTARG" ;;
@@ -137,6 +140,7 @@ while getopts "b:s:m:r:P:j:k:S:C:yftnec:duwpl" opt; do
     w) OVERRIDE_WARNINGS=true; CONFIG_OPTS_GIVEN="$CONFIG_OPTS_GIVEN -w" ;;
     p) BOUTPP=true; CONFIG_OPTS_GIVEN="$CONFIG_OPTS_GIVEN -p" ;;
     l) WRITE_LOG=true ;;
+    T) BOUT_TEST_TARGET="$OPTARG"; CONFIG_OPTS_GIVEN="$CONFIG_OPTS_GIVEN -T" ;;
     *) usage ;;
   esac
 done
@@ -345,6 +349,11 @@ if [ "$EXPRESS" = false ]; then
     CMAKE_ARGS="$CMAKE_ARGS -DHERMES_ERROR_ON_WARNINGS=ON"
   fi
 
+  if [ -n "$BOUT_TEST_TARGET" ]; then
+    CMAKE_ARGS="$CMAKE_ARGS -DBOUT_TESTS=ON"
+    echo "Configuring BOUT++ tests to build $BOUT_TEST_TARGET"
+  fi
+
   if [ "$DISABLE_TESTS" = true ]; then
     CMAKE_ARGS="$CMAKE_ARGS -DHERMES_TESTS=OFF -DHERMES_COPY_TESTS_TO_BUILD=OFF"
     echo "Disabling Hermes tests"
@@ -374,3 +383,8 @@ else
 fi
 
 $TASKSET cmake --build "$BUILD_DIR" -j "$JOBS" #--verbose
+
+# BOUT++ test targets are excluded from the default build, so build -T's here
+if [ -n "$BOUT_TEST_TARGET" ]; then
+  $TASKSET cmake --build "$BUILD_DIR" --target "$BOUT_TEST_TARGET" -j "$JOBS"
+fi
