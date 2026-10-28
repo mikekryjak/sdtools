@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import os, sys
+import glob
 import re
 import traceback
 import platform
@@ -61,7 +62,23 @@ def rename_legacy_neutral_coeffs(ds):
     return ds.rename(mapping) if mapping else ds
 
 
-def drop_incomplete_final_records(ds):
+def _complete_records(t):
+    """Length of the leading run of good timestamps in one t array."""
+    t = np.asarray(t, dtype="float64")
+    finite = np.isfinite(t)
+    if not finite.all():
+        return int(np.argmin(finite))                    # first NaN/inf
+    dt = np.diff(t)
+    good = dt[dt > 0]
+    bad = (
+        np.where(dt > 1e6 * np.median(good))[0]          # first fill-value jump
+        if good.size
+        else np.array([], dtype=int)
+    )
+    return int(bad[0]) + 1 if bad.size else t.size
+
+
+def drop_incomplete_final_records(ds, casepath=None):
     """Drop trailing time records left by an interrupted BOUT++ write.
 
     When a run is killed mid-output the time dimension is extended but the final
@@ -75,26 +92,30 @@ def drop_incomplete_final_records(ds):
     magnitude above the median step) and slice to it positionally. Boolean /
     ``isfinite`` masking on the dask-backed arrays would itself yield unknown
     chunks, so a positional ``slice`` is required.
+
+    The loaded ``t`` comes from BOUT.dmp.0.nc alone, but a write can be cut
+    off with processor 0's timestamp flushed and the others not. Given
+    ``casepath``, the rule is also applied to every dump's own ``t_array``
+    and the shortest result wins.
     """
     if "t" not in ds.dims:
         return ds
-    t = np.asarray(ds["t"].values, dtype="float64")
-    finite = np.isfinite(t)
-    if not finite.all():
-        n = int(np.argmin(finite))                       # first NaN/inf
-    else:
-        dt = np.diff(t)
-        good = dt[dt > 0]
-        bad = (
-            np.where(dt > 1e6 * np.median(good))[0]      # first fill-value jump
-            if good.size
-            else np.array([], dtype=int)
-        )
-        n = int(bad[0]) + 1 if bad.size else t.size
-    if n < t.size:
+    nt = ds.sizes["t"]
+    n = _complete_records(ds["t"].values)
+    if casepath is not None:
+        import netCDF4
+
+        for dump in glob.glob(os.path.join(casepath, "BOUT.dmp.*.nc")):
+            with netCDF4.Dataset(dump) as f:
+                f.set_auto_mask(False)
+                t = np.asarray(f["t_array"][:], dtype="float64")
+            t[np.abs(t) >= 9e36] = np.nan                # netCDF fill values
+            n = min(n, _complete_records(t))
+    if n < nt:
         print(
-            f"  WARNING: dropping {t.size - n} incomplete final time record(s) "
-            f"(interrupted write: fill-value/NaN timestamp)"
+            f"  WARNING: dropping {nt - n} incomplete final time record(s) "
+            f"(interrupted write: fill-value/NaN timestamp in at least one "
+            f"processor)"
         )
         ds = ds.isel(t=slice(0, n))
     return ds
@@ -146,7 +167,7 @@ class Load:
         if squeeze is True:
             ds = ds.squeeze(drop=True)
 
-        ds = drop_incomplete_final_records(ds)
+        ds = drop_incomplete_final_records(ds, casepath)
 
         if use_xhermes:
             unnormalise_in_sdtools = False
@@ -172,8 +193,11 @@ class Load:
         use_squash=False,
         force_squash=False,
         use_xhermes=True,
+        source="auto",
         **xbout_kwargs,
     ):
+        """source picks the output read: "auto", "dumps", "squash" or
+        "distilled"; see output_path. use_squash=True means source="squash"."""
 
         default_xbout_kwargs = dict(
             keep_xboundaries=True, keep_yboundaries=True, info=False, cache=False
@@ -185,15 +209,26 @@ class Load:
             print(f"- Reading case {os.path.split(casepath)[-1]}")
             print("-----------------------")
 
-        loadfilepath = os.path.join(casepath, "BOUT.dmp.*.nc")
         inputfilepath = os.path.join(casepath, "BOUT.inp")
-        squashfilepath = os.path.join(
-            casepath, "BOUT.squash.nc"
-        )  # Squashoutput hardcoded to this filename
 
         if use_squash is True:
+            source = "squash"
+        if source == "squash" and glob.glob(os.path.join(casepath, "BOUT.dmp.*.nc")):
             squash(casepath, verbose=verbose, force=force_squash)
-            loadfilepath = squashfilepath
+        loadfilepath = output_path(casepath, source)
+        if not loadfilepath.endswith("*.nc"):
+            # xBOUT's lazy loader opens BOUT.dmp.0.nc whatever single file it
+            # is given. Remove once the boutproject/xbout fix for squashed
+            # files is merged.
+            xbout_kwargs.setdefault("lazy_load", False)
+            if not xbout_kwargs["keep_yboundaries"]:
+                # boutproject/xbout labels the y guards of a squashed double-null
+                # file removed without removing them.
+                raise ValueError(
+                    "keep_yboundaries=False on a single squashed file: xBOUT keeps the "
+                    "y guards there but labels them removed (double-null grids). "
+                    "Load with keep_yboundaries=True and use the region selectors."
+                )
 
         if use_xhermes is True:
             ds = xhermes.open_hermesdataset(
@@ -217,7 +252,7 @@ class Load:
         if squeeze:
             ds = ds.squeeze(drop=False)
 
-        ds = drop_incomplete_final_records(ds)
+        ds = drop_incomplete_final_records(ds, casepath)
 
         # Only calculate Mach number if the required variables exist
         if all(var in ds for var in ["Vd+", "Td+", "Te"]):
@@ -1344,6 +1379,55 @@ class Case:
         print(
             f" - nx: {meta['nx']}    // total cells in X (radial, includes guard cells)"
         )
+
+
+#: Values of Load.case_2D's `source`: which output of a case it reads.
+OUTPUT_SOURCES = ("auto", "dumps", "squash", "distilled")
+
+
+def output_path(casepath, source="auto"):
+    """The output file(s) of a case to read, saying so when it is not the dumps.
+
+    source
+        "auto"       the dumps if there are any, otherwise BOUT.distilled.nc
+        "dumps"      BOUT.dmp.*.nc
+        "squash"     BOUT.squash.nc, which the caller makes from the dumps
+        "distilled"  BOUT.distilled.nc, left by hermes-backup's `distill` in
+                     place of the dumps: undeclared fields are NaN before the
+                     last output, and the case's DISTILLED.toml says which
+    """
+    if source not in OUTPUT_SOURCES:
+        raise ValueError(f"source must be one of {OUTPUT_SOURCES}, not {source!r}")
+    dumps = os.path.join(casepath, "BOUT.dmp.*.nc")
+    squashed = os.path.join(casepath, "BOUT.squash.nc")
+    distilled = os.path.join(casepath, "BOUT.distilled.nc")
+    have_dumps = bool(glob.glob(dumps))
+    have_distilled = os.path.exists(distilled)
+
+    if source == "auto":
+        if have_dumps:
+            if have_distilled:
+                print("- Reading the dumps; BOUT.distilled.nc is also present and is ignored")
+            return dumps
+        if not have_distilled:
+            raise FileNotFoundError(
+                f"{casepath} has neither BOUT.dmp.*.nc nor BOUT.distilled.nc")
+        source = "distilled"
+
+    if source == "dumps":
+        if not have_dumps:
+            raise FileNotFoundError(f"{casepath} has no BOUT.dmp.*.nc")
+        return dumps
+    if source == "squash":
+        if not os.path.exists(squashed):
+            raise FileNotFoundError(f"{casepath} has no BOUT.squash.nc and no dumps to make it from")
+        print("- Reading BOUT.squash.nc")
+        return squashed
+    if not have_distilled:
+        raise FileNotFoundError(f"{casepath} has no BOUT.distilled.nc")
+    print("- Reading BOUT.distilled.nc (distilled: undeclared fields are NaN "
+          "before the last output)")
+    return distilled
 
 
 def squash(casepath, verbose=True, force=False):
