@@ -15,10 +15,9 @@ def clean(path_case):
     files_removed = []
 
     for file in os.listdir(os.getcwd()):
-        if any(x in file for x in [".nc", "log", "restart", "kate-swp", "pid"]):
-            if "BOUT" in file:
-                files_removed.append(file)
-                os.remove(file)
+        if any(x in file for x in [".nc", "log", "restart", "kate-swp", "pid", "vtkhdf", "h5", "h5part", "settings", "png", "gif"]):
+            files_removed.append(file)
+            os.remove(file)
 
     if len(files_removed) > 0:
         print(f"-> Case {path_case} cleaned, files removed: {files_removed}")
