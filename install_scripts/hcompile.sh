@@ -81,8 +81,8 @@ Usage: $0 [-b <name>] [-s <limiter>] [-m <method>] [-r <dir>] [-P <dir>]
 
 Settings (defaults in brackets):
   -b <name>   Build name; build dir becomes
-              build-<va|mc>[-<conduction>]-<name>                  [$BUILD_NAME]
-  -s <lim>    Slope limiter: MC or VanAlbada                       [$LIMITER]
+              build-<va|vas|mc>[-<conduction>]-<name>              [$BUILD_NAME]
+  -s <lim>    Slope limiter: MC, VanAlbada or VanAlbadaSmooth      [$LIMITER]
   -m <meth>   Conduction method: Original, ProductJK or Harmonic   [$CONDMETHOD]
   -r <dir>    Hermes repo directory; relative paths resolve
               against this script's directory                      [$HERMES_DIR]
@@ -158,7 +158,8 @@ fi
 case "$LIMITER" in
   MC)        LIMITER_CODE="mc" ;;
   VanAlbada) LIMITER_CODE="va" ;;
-  *) echo "Error: unknown slope limiter '$LIMITER'. Use MC or VanAlbada."; exit 2 ;;
+  VanAlbadaSmooth) LIMITER_CODE="vas" ;;
+  *) echo "Error: unknown slope limiter '$LIMITER'. Use MC, VanAlbada or VanAlbadaSmooth."; exit 2 ;;
 esac
 
 # Original is the default and is left out of the name, matching the existing
