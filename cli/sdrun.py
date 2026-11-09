@@ -263,7 +263,9 @@ def main():
         "mpirun", "--bind-to", "none", "-np", str(np),
     ]
     if np > ncores:
-        cmd.append("--oversubscribe")
+        # taskset hides the oversubscription from Open MPI, so ask it to yield
+        # explicitly, or waiting ranks spin and starve the one with work.
+        cmd += ["--oversubscribe", "--mca", "mpi_yield_when_idle", "1"]
     cmd += [exe, "-d", case_dir]
     if pass_restart:
         cmd.append("restart")
