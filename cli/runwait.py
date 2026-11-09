@@ -7,6 +7,8 @@ Watches the cases on the live (uncommented) sdrun.py lines of
 runplan<slot>.sh. Returns when none is running for IDLE_S seconds, when one
 stalls (no write, or no new simulated time in BOUT.log.0, for --stall-min
 minutes, default 60), or at the deadline (--max-s seconds, default 3600).
+While the slot's slotd reports its runplan running, the wait is not done,
+so it also covers lines such as ctest that start no sdrun.py case.
 Prints why it returned (done, stalled or deadline), then one
 "<state>\t<case>" line per case. A second wait on a watched runplan exits at
 once, so one wait covers each slot.
@@ -26,6 +28,9 @@ import os
 import re
 import sys
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import slotlib  # noqa: E402
 
 RUNPLAN = os.environ.get("RUNWAIT_RUNPLAN",
                          "/home/mike/work/cases/runplan{}.sh")
@@ -120,16 +125,21 @@ def status(case, stall_min=60):
     return "queued"
 
 
-def wait_cases(cases_fn, stall_min, deadline, idle_s=IDLE_S):
+def wait_cases(cases_fn, stall_min, deadline, idle_s=IDLE_S,
+               busy_fn=lambda: False):
     """Poll cases_fn() each minute until none runs for idle_s, one stalls, or
-    the deadline passes. Return (why, {case: state})."""
+    the deadline passes. busy_fn() True (a slotd still running its runplan,
+    ctest lines included) counts as running. Return (why, {case: state})."""
     idle_since = None
     progress = {}   # case -> (last simulated time, when it last changed)
     while True:
         cases = cases_fn()
         states = {c: status(c, stall_min) for c in cases}
+        if busy_fn():
+            states["<slot runplan>"] = "running"
         now = time.time()
-        for c in [c for c, s in states.items() if s == "running"]:
+        for c in [c for c, s in states.items()
+                  if s == "running" and c in cases]:
             t, since = progress.get(c, (None, now))
             new = sim_time(c) or t   # a row pushed out of the tail is no news
             if new != t:
@@ -157,9 +167,16 @@ def main():
     p.add_argument("--max-s", type=int, default=3600)
     a = p.parse_args()
     held = lock([RUNPLAN.format(n) for n in a.slots])  # noqa: F841
+    cfg = slotlib.config()
+
+    def busy():
+        return any(st["alive"] and st.get("state") == "running"
+                   for st in (slotlib.read_state(cfg, str(n))
+                              for n in a.slots))
+
     why, states = wait_cases(
         lambda: [c for n in a.slots for c in queued(n)],
-        a.stall_min, time.time() + a.max_s)
+        a.stall_min, time.time() + a.max_s, busy_fn=busy)
     print(why)
     for c, s in sorted(states.items()):
         print(f"{s}\t{c}")

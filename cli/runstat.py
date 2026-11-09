@@ -120,6 +120,30 @@ def run_record(case_dir, procs):
                 exe=exe.split("/work/")[-1] + restart)
 
 
+def show_slots():
+    """One line per configured slot from its slotd state file, when the
+    machine has a slot config."""
+    sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+    import slotlib
+    cfg = slotlib.config()
+    if not cfg["present"]:
+        return
+    print("== SLOTS (slotd) ==")
+    for n in sorted(cfg["cores"]):
+        st = slotlib.read_state(cfg, n)
+        if not st["alive"]:
+            what = f"slotd NOT RUNNING (last state: {st.get('state')})"
+        elif st.get("state") == "running":
+            since = datetime.datetime.fromtimestamp(st["since"])
+            what = f"running runplan{n}.sh, pid {st.get('pid')}, since {since:%H:%M}"
+        else:
+            last = st.get("last_exit")
+            what = "idle" + (f", last exit {last}" if last is not None else "")
+        lock = "" if slotlib.lock_free(cfg, n) else ", run lock held"
+        print(f"  s{n}  {what}{lock}")
+    print()
+
+
 def show_history(root, n_last, procs):
     recs = []
     for d in sorted(glob.glob(os.path.join(root, "*/"))):
@@ -148,6 +172,7 @@ def main():
     root = os.path.abspath(args[0] if args else ".")
     procs = running_procs()
 
+    show_slots()
     print("== RUNNING ==")
     if not procs:
         print("  (nothing)")

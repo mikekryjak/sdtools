@@ -63,6 +63,39 @@ def count_cores(spec):
     return total
 
 
+def slotlib_config():
+    sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+    import slotlib
+    return slotlib, slotlib.config()
+
+
+def slot_table():
+    """Slot -> cores: the machine's slot config if it has one, else CORES."""
+    slotlib, cfg = slotlib_config()
+    return cfg["cores"] if cfg["enforce"] else CORES
+
+
+def check_slot(slot, core_spec, cores):
+    """On a machine whose slot config enforces it, start only under slotd:
+    HERMES_SLOT must name the slot, and the cores must lie inside it."""
+    slotlib, cfg = slotlib_config()
+    if not cfg["enforce"]:
+        return
+    held = os.environ.get("HERMES_SLOT", "")
+    if held not in cfg["cores"]:
+        die("runs start only through slotd: queue the line in the slot's "
+            "runplan and run `runlaunch.py <slot>` (SDTOOLS_SLOT_ENFORCE=0 "
+            "lifts this for a manual run)")
+    if slot and not core_spec and slot != held:
+        die(f"this runplan belongs to slot {held}, but the line asks for "
+            f"-s={slot}")
+    if not slotlib.cpu_set(cores) <= slotlib.cpu_set(cfg["cores"][held]):
+        die(f"cores {cores} leave slot {held}'s cores {cfg['cores'][held]}")
+    if not slotlib.cpu_set(cores) <= os.sched_getaffinity(0):
+        die(f"cores {cores} lie outside this process's pinning "
+            f"{sorted(os.sched_getaffinity(0))}")
+
+
 def die(msg, with_usage=False):
     print(f"error: {msg}", file=sys.stderr)
     if with_usage:
@@ -195,14 +228,16 @@ def main():
 
     slot = opts["slot"]
     core_spec = opts["core_spec"]
+    slot_cores = slot_table()
     if core_spec:
         # Explicit core list overrides the slot.
         cores = core_spec
-    elif slot in CORES:
-        cores = CORES[slot]
+    elif slot in slot_cores:
+        cores = slot_cores[slot]
     else:
         die("choose -s=1, -s=2, -s=3, or -c=SPEC (e.g. -c=2-11)", with_usage=True)
     ncores = count_cores(cores)
+    check_slot(slot, core_spec, cores)
     np = ncores
     if opts["nranks"]:
         try:
