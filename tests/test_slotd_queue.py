@@ -354,3 +354,35 @@ def test_a_mandate_job_runs_only_on_the_mandates_slots(env):
     env["slotd"]("1")
     [j] = done(env)
     assert j["outcome"] == "ok" and j["slot_ran"] == "1"
+
+
+def test_slotd_restarts_for_a_commit_not_for_an_edit(env, tmp_path):
+    """A copy of cli/ in its own git repository: an edit to slotd.py leaves
+    the running slotd alone until the edit is committed."""
+    import shutil
+    repo = tmp_path / "repo"
+    shutil.copytree(CLI, repo / "cli",
+                    ignore=shutil.ignore_patterns("__pycache__"))
+    git = ["git", "-C", str(repo), "-c", "user.name=t", "-c",
+           "user.email=t@t"]
+    subprocess.run(git + ["init", "-q"], check=True)
+    subprocess.run(git + ["add", "."], check=True)
+    subprocess.run(git + ["commit", "-qm", "a"], check=True)
+    p = subprocess.Popen([PY, str(repo / "cli" / "slotd.py"), "1",
+                          "--no-screen-check"],
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    try:
+        cfg = env["cfg"]
+        first = until(lambda: (lambda s: s["alive"] and s)(
+            slotlib.read_state(cfg, "1")))
+        with open(repo / "cli" / "slotd.py", "a") as f:
+            f.write("# an edit\n")
+        time.sleep(3)
+        assert slotlib.read_state(cfg, "1")["started"] == first["started"]
+        subprocess.run(git + ["commit", "-qam", "b"], check=True)
+        until(lambda: slotlib.read_state(cfg, "1")["started"] >
+              first["started"] and slotlib.read_state(cfg, "1")["alive"])
+        assert slotlib.read_state(cfg, "1")["slotd_pid"] == p.pid
+    finally:
+        p.terminate()
+        p.wait(10)

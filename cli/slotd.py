@@ -22,8 +22,9 @@ AI_AGENT*) and SDTOOLS_SLOT_ENFORCE. sdrun.py refuses to start without
 HERMES_SLOT once the slot config enforces it, so a run can only start
 through this loop.
 
-slotd restarts itself, in place, when it is idle and its mode file or its
-source (slotd.py, slotlib.py, runcheck.py) has changed.
+slotd restarts itself, in place, when it is idle and its mode file has
+changed, or a new commit has changed its source (slotd.py, slotlib.py,
+runcheck.py). An uncommitted edit to the source waits for its commit.
 
 State, heartbeat and last exit code go to <state_dir>/slot<N>.state, which
 runlaunch.py, runwait.py, runq.py and runstat.py read. Ctrl-C while idle
@@ -73,17 +74,39 @@ def run_env(slot, job_id=None):
     return env
 
 
-def fingerprint(cfg, slot):
-    """What a change of restarts slotd: its sources and the mode file."""
-    out = []
-    for p in [os.path.join(HERE, n) for n in SOURCES] + \
-            [slotlib.path(cfg, slot, "mode")]:
-        try:
-            s = os.stat(p)
-            out.append((p, s.st_mtime_ns, s.st_size))
-        except FileNotFoundError:
-            out.append((p, None, None))
-    return out
+def stamp(path):
+    try:
+        s = os.stat(path)
+        return (path, s.st_mtime_ns, s.st_size)
+    except FileNotFoundError:
+        return (path, None, None)
+
+
+def code_version():
+    """The last commit that changed slotd's sources, or None while one of
+    them differs from it: an edit nobody has committed yet. Outside a git
+    checkout, the sources' times and sizes."""
+    try:
+        git = [subprocess.run(["git", "-C", HERE, *cmd, "--", *SOURCES],
+                              capture_output=True, text=True, timeout=10)
+               for cmd in (["log", "-1", "--format=%H"],
+                           ["status", "--porcelain"])]
+    except (OSError, subprocess.SubprocessError):
+        git = None
+    if git is None or any(g.returncode for g in git) or \
+            not git[0].stdout.strip():
+        return [stamp(os.path.join(HERE, n)) for n in SOURCES]
+    return None if git[1].stdout.strip() else git[0].stdout.strip()
+
+
+def fingerprint(cfg, slot, seen=None):
+    """What a change of restarts slotd: its committed sources and its mode
+    file. An uncommitted edit counts only once it is committed, so editing
+    sdtools in place never puts untested code into a live slot."""
+    code = code_version()
+    if code is None:
+        code = seen[0] if seen else None
+    return (code, stamp(slotlib.path(cfg, slot, "mode")))
 
 
 def take_lock(cfg, slot):
@@ -485,7 +508,7 @@ def main():
     while True:
         try:
             busy = queue is not None and bool(queue.runs)
-            if not busy and fingerprint(cfg, slot) != seen:
+            if not busy and fingerprint(cfg, slot, seen) != seen:
                 log(slot, "mode or source changed: restarting")
                 st.update(state="restarting")
                 slotlib.write_state(cfg, slot, st)

@@ -387,3 +387,14 @@ def test_a_mandate_module_that_will_not_load_stops_agents_only(
                who=AGENT) == 1
     assert "will not load" in capsys.readouterr().out
     assert run(env, "add", "1", "c1", f"-p={env['exe']}") == 0
+
+
+def test_add_json_names_each_rule(env, capsys):
+    case(env)
+    assert run(env, "add", "1", "c1", "--dry-run", "--json") == 1
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "refused"
+    assert [r["rule"] for r in out["refusals"]] == ["binary-unnamed"]
+    assert run(env, "add", "1", "c1", f"-p={env['exe']}", "--json") == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["result"] == "queued" and out["jobs"] == [stored(env)[0]["id"]]

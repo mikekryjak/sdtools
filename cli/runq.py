@@ -6,6 +6,7 @@ Usage:
     runq add <slot|any> <case> [sdrun.py options] [job options] [--dry-run]
     runq add <slot|any> [job options] -- <command> [args]   [--dry-run]
     runq add <slot|any> -f <batch file> [--dry-run]
+    runq add ... --json                 print the result as JSON, with rule ids
     runq ls [--json]
     runq rm <job>
     runq cancel <slot>
@@ -42,6 +43,7 @@ with the command that started it.
 
 Exit status: 0 queued (or the dry run passed), 1 refused, 2 bad usage.
 """
+import dataclasses
 import datetime as dt
 import glob
 import json
@@ -268,8 +270,8 @@ def cmd_add(cfg, args, who, cwd):
     words = args[1:]
     cut = words.index("--") if "--" in words else len(words)
     head, tail = words[:cut], words[cut:]
-    dry = "--dry-run" in head
-    head = [w for w in head if w != "--dry-run"]
+    dry, as_json = "--dry-run" in head, "--json" in head
+    head = [w for w in head if w not in ("--dry-run", "--json")]
     if head[:1] == ["-f"]:
         if len(head) != 2 or tail:
             raise Usage("give -f <batch file> and nothing else")
@@ -335,16 +337,25 @@ def cmd_add(cfg, args, who, cwd):
                           for r in mod.check_jobs(state,
                                                   [j for _, j in jobs])]
         what = "dry run" if dry else "nothing queued"
-        status = show(found, f"runq add: refused, {what}")
+        if as_json:
+            status = 1 if any(not r.warn for r in found) else 0
+        else:
+            status = show(found, f"runq add: refused, {what}")
+        note = ""
         if status and m and not dry:
             # One refused call counts as one denial, as one denied tool call
             # does in the mandate's own guard.
             first = next(r for r in found if not r.warn)
-            note = m[0].record_refusal(m[1], first.rule, first.target)
-            if note:
-                print(note.strip())
+            note = m[0].record_refusal(m[1], first.rule, first.target).strip()
+            if note and not as_json:
+                print(note)
+        if as_json and (status or dry):
+            print(json.dumps({
+                "result": "refused" if status else "passed",
+                "refusals": [dataclasses.asdict(r) for r in found],
+                "mandate": note or None}, indent=1))
         if status or dry:
-            if not status:
+            if not status and not as_json:
                 print(f"runq add: dry run passes for {len(jobs)} job"
                       f"{'s' * (len(jobs) != 1)}; nothing queued")
             return status
@@ -354,6 +365,11 @@ def cmd_add(cfg, args, who, cwd):
                                   "expires": m[2]["bounds"]["expires"]}
                 job["only_slots"] = [str(n) for n in m[2]["bounds"]["slots"]]
             slotlib.write_job(cfg, "queue", slot, job)
+    if as_json:
+        print(json.dumps({"result": "queued",
+                          "refusals": [dataclasses.asdict(r) for r in found],
+                          "jobs": [j["id"] for _, j in jobs]}, indent=1))
+        return 0
     for _, job in jobs:
         after = f", after {job['after']}" if job.get("after") else ""
         print(f"queued {job['id']} on slot {slot}{after}: {label(job)}")
