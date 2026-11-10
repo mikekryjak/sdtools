@@ -15,16 +15,28 @@ config file (default ~/.config/sdtools/slots.json, or $SDTOOLS_SLOT_CONFIG):
 into its own clone, e.g. to run unit tests from the repo root.
 
 Without the file nothing is enforced, so the tools behave as before on other
-machines. Setting SDTOOLS_SLOT_ENFORCE=0 lifts enforcement for one command.
+machines. A file that exists but does not parse, or names no cores, stops
+every tool with a message: a typo must never turn enforcement off. Setting
+SDTOOLS_SLOT_ENFORCE=0 lifts enforcement for one command.
+
+Each slot's mode sits in its own file, <state_dir>/slot<N>.mode: "runplan"
+(the default, when the file is absent) or "queue". In queue mode the slot's
+owner sits in <state_dir>/slot<N>.owner, written by runq own; in runplan mode
+it is the runplan's "# owner:" line.
 """
 import fcntl
+import glob
 import json
 import os
+import re
+import sys
 import time
 
 DEFAULT_CORES = {"1": "2-11", "2": "12-21", "3": "22-31"}
 HEARTBEAT_S = 5      # slotd rewrites its state file at least this often
 STALE_S = 30         # a state file older than this means slotd is not running
+MODES = ("runplan", "queue")
+OWNER_LINE = re.compile(r"(?m)^#\s*owner:\s*([A-Za-z0-9._-]*)")
 
 
 def config():
@@ -33,9 +45,14 @@ def config():
     try:
         with open(path, encoding="utf-8") as f:
             cfg = json.load(f)
-        cfg["present"] = True
-    except (OSError, ValueError):
+    except FileNotFoundError:
         cfg = {"enforce": False, "present": False}
+    except (OSError, ValueError) as e:
+        sys.exit(f"slot config {path} is unreadable: {e}")
+    else:
+        if not isinstance(cfg, dict) or not isinstance(cfg.get("cores"), dict):
+            sys.exit(f"slot config {path} names no cores")
+        cfg["present"] = True
     cfg.setdefault("enforce", False)
     cfg.setdefault("cases", "/home/mike/work/cases")
     cfg.setdefault("cores", DEFAULT_CORES)
@@ -46,22 +63,69 @@ def config():
     return cfg
 
 
-def owner_clone(cfg, owner):
-    """Realpath of the clone the owner's campaign file names, or None."""
-    import glob
+def campaigns(cfg):
+    """Each campaign file's name, cases directory and clone (realpaths, or
+    None when the file names none), from the config's "campaigns" glob."""
     import tomllib
     pattern = cfg.get("campaigns")
-    if not pattern or owner in ("", "none"):
-        return None
-    for p in glob.glob(os.path.expanduser(pattern), recursive=True):
+    out = []
+    for p in sorted(glob.glob(os.path.expanduser(pattern), recursive=True)
+                    if pattern else []):
         try:
             with open(p, "rb") as f:
                 c = tomllib.load(f)
         except (OSError, ValueError):
             continue
-        if c.get("name") == owner and c.get("clone"):
-            return os.path.realpath(c["clone"])
-    return None
+        if not c.get("name"):
+            continue
+        out.append({k: os.path.realpath(os.path.expanduser(c[k]))
+                    if c.get(k) else None for k in ("cases", "clone")})
+        out[-1]["name"] = c["name"]
+    return out
+
+
+def owner_clone(cfg, owner):
+    """Realpath of the clone the owner's campaign file names, or None."""
+    if owner in ("", "none", None):
+        return None
+    return next((c["clone"] for c in campaigns(cfg)
+                 if c["name"] == owner and c["clone"]), None)
+
+
+def mode(cfg, slot):
+    """'runplan' or 'queue', from <state_dir>/slot<N>.mode. Raises ValueError
+    for any other text, so a bad file stops its slot instead of guessing."""
+    p = path(cfg, slot, "mode")
+    try:
+        with open(p, encoding="utf-8") as f:
+            text = f.read().strip()
+    except FileNotFoundError:
+        return "runplan"
+    if text not in MODES:
+        raise ValueError(f"{p} says {text!r}; it must say queue or runplan")
+    return text
+
+
+def owner(cfg, slot):
+    """The campaign that owns the slot, or None. Raises ValueError when the
+    mode file or the owner file is bad."""
+    if mode(cfg, slot) == "queue":
+        p = path(cfg, slot, "owner")
+        try:
+            with open(p, encoding="utf-8") as f:
+                name = json.load(f).get("campaign")
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError, AttributeError) as e:
+            raise ValueError(f"{p} is unreadable: {e}")
+    else:
+        try:
+            with open(runplan(cfg, slot), encoding="utf-8") as f:
+                m = OWNER_LINE.search(f.read(4000))
+        except FileNotFoundError:
+            return None
+        name = m.group(1) if m else None
+    return None if name in ("", "none", None) else name
 
 
 def cpu_set(spec):
@@ -81,7 +145,8 @@ def runplan(cfg, slot):
 
 
 def path(cfg, slot, kind):
-    """State file of one slot: kind is 'state', 'lock', 'go' or 'daemon'."""
+    """State file of one slot: kind is 'state', 'lock', 'go', 'daemon',
+    'mode', 'owner', 'hold' or 'cancel'."""
     os.makedirs(cfg["state_dir"], exist_ok=True)
     return os.path.join(cfg["state_dir"], f"slot{slot}.{kind}")
 
@@ -126,3 +191,4 @@ def lock_free(cfg, slot):
             return False
         fcntl.flock(f, fcntl.LOCK_UN)
         return True
+

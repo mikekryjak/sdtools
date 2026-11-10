@@ -108,7 +108,13 @@ def expand(value):
     return os.path.expanduser(os.path.expandvars(value))
 
 
+class UsageError(ValueError):
+    """A bad command line; main() prints it with the usage text."""
+
+
 def parse_args(argv):
+    """Parse sdrun's options into a dict. Raises UsageError, so another tool
+    (runcheck.py) can parse a queued command without exiting."""
     slot = ""
     core_spec = ""
     nranks = 0
@@ -118,11 +124,12 @@ def parse_args(argv):
     pass_restart = False
     pass_append = False
     assume_yes = False
+    show_help = False
     extra_args = []
 
     def need_value(flag, rest):
         if not rest:
-            die(f"{flag} requires a value", with_usage=True)
+            raise UsageError(f"{flag} requires a value")
         return rest[0]
 
     i = 0
@@ -165,14 +172,15 @@ def parse_args(argv):
         elif arg in ("-append", "append"):
             pass_append = True
         elif arg in ("-h", "--help"):
-            print(USAGE, end="")
-            sys.exit(0)
+            show_help = True
+            break
         else:
             extra_args.append(arg)
         i += 1
 
     return {
         "assume_yes": assume_yes,
+        "help": show_help,
         "slot": slot,
         "core_spec": core_spec,
         "nranks": nranks,
@@ -224,7 +232,13 @@ class Style:
 
 
 def main():
-    opts = parse_args(sys.argv[1:])
+    try:
+        opts = parse_args(sys.argv[1:])
+    except UsageError as e:
+        die(str(e), with_usage=True)
+    if opts["help"]:
+        print(USAGE, end="")
+        sys.exit(0)
 
     slot = opts["slot"]
     core_spec = opts["core_spec"]
