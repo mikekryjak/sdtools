@@ -207,6 +207,21 @@ def job_path(cfg, where, slot, job_id):
     return os.path.join(d, f"{job_id}.json")
 
 
+def read_jobs(cfg, where, slot):
+    """The jobs in <where>/<slot>/, oldest first. A file that will not parse
+    is skipped."""
+    d = os.path.join(cfg["state_dir"], where, str(slot))
+    out = []
+    for name in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if name.endswith(".json") and not name.startswith("."):
+            try:
+                with open(os.path.join(d, name), encoding="utf-8") as f:
+                    out.append(json.load(f))
+            except (OSError, ValueError):
+                continue
+    return out
+
+
 def write_job(cfg, where, slot, job):
     """Write `job` to <where>/<slot>/<id>.json; return its path."""
     p = job_path(cfg, where, slot, job["id"])

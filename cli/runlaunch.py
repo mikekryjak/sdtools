@@ -15,6 +15,8 @@ Refuses, and starts nothing, unless every check passes:
   - no sdrun.py line without -restart or -append targets a case whose
     BOUT.log.0 already has a "Run time" (re-running it would destroy it);
   - slotd for the slot is alive and idle, and the slot's run lock is free.
+On a slot in queue mode it refuses, and prints a `runq add` line for each
+live runplan line instead.
 Then it writes the trigger and waits for slotd to confirm. --check runs the
 checks and stops there. Exit status: 0 launched (or checks passed), 1 refused,
 2 slotd did not confirm in time.
@@ -24,6 +26,7 @@ import glob
 import json
 import os
 import re
+import shlex
 import sys
 import time
 import uuid
@@ -134,6 +137,55 @@ def problems(cfg, slot):
     return errs
 
 
+def queue_lines(cfg, slot):
+    """A `runq add` line for each live line of the slot's runplan, or a
+    note for a line runq cannot express."""
+    try:
+        text = open(slotlib.runplan(cfg, slot), encoding="utf-8").read()
+    except OSError:
+        return []
+    root, out = cfg["cases"], []
+    for s in [p for line in live_lines(text)
+              for p in re.split(r"\s*(?:&&|;)\s*", line) if p]:
+        cd = re.match(r"(?:cd|pushd)\s+(\S+)$", s)
+        if cd:
+            root = os.path.realpath(os.path.join(root, cd.group(1)))
+            continue
+        head = re.split(r"\s*(?:2>&1|\||>)", s)[0]
+        try:
+            words = shlex.split(head)
+        except ValueError:
+            words = []
+        timeout = []
+        if words[:1] == ["timeout"] and len(words) > 2:
+            timeout, words = ["--timeout", words[1]], words[2:]
+        if words and words[0].endswith("sdrun.py"):
+            case, rest, i = None, [], 1
+            while i < len(words):
+                w = words[i]
+                if w in ("-d", "-s") and i + 1 < len(words):
+                    case = words[i + 1] if w == "-d" else case
+                    i += 2
+                    continue
+                if w.startswith("-d="):
+                    case = w[3:]
+                elif not (w.startswith("-s=") or w in ("-y", "--yes")):
+                    rest.append(w)
+                i += 1
+            if case:
+                case = os.path.realpath(os.path.join(root, case))
+                cwd = [] if root == os.path.dirname(case) else ["--cwd", root]
+                out.append("runq add " + shlex.join(
+                    [slot, case, *rest, *cwd, *timeout]))
+                continue
+        elif words and not re.search(r"[|<>&$`]", s):
+            out.append("runq add " + shlex.join(
+                [slot, "--cwd", root, *timeout, "--", *words]))
+            continue
+        out.append(f"# cannot convert, queue it by hand: {s}")
+    return out
+
+
 def main():
     args = sys.argv[1:]
     check_only = "--check" in args
@@ -144,6 +196,17 @@ def main():
     cfg = slotlib.config()
     if slot not in cfg["cores"]:
         sys.exit(f"unknown slot {slot}; slots are {sorted(cfg['cores'])}")
+    try:
+        mode = slotlib.mode(cfg, slot)
+    except ValueError as e:
+        sys.exit(f"runlaunch {slot}: refused: {e}")
+    if mode == "queue":
+        print(f"runlaunch {slot}: refused, nothing started: slot {slot} runs "
+              f"its queue, not runplan{slot}.sh. Queue the runplan's lines "
+              "with runq (an agent's job also needs --timeout):")
+        for line in queue_lines(cfg, slot) or ["(the runplan has no live line)"]:
+            print(f"  {line}")
+        sys.exit(1)
     # One launch per slot at a time, from the checks to slotd's answer.
     held = open(slotlib.path(cfg, slot, "launch"), "a")
     try:

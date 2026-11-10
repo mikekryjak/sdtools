@@ -210,6 +210,29 @@ if [ -n "$CORES" ]; then
   fi
 fi
 
+# A build on a slot takes the slot's run lock, so slotd starts no queued job
+# there until the build ends. A build inside that slot's own run (a runplan
+# or queued job, which sets HERMES_SLOT) already holds the lock.
+if [ -n "$SLOT" ] && [ "${HERMES_SLOT:-}" != "$SLOT" ]; then
+  SDTOOLS_CLI="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../cli"
+  SLOT_LOCK="$(python3 -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+import slotlib
+cfg = slotlib.config()
+if cfg["present"] and sys.argv[2] in cfg["cores"]:
+    print(slotlib.path(cfg, sys.argv[2], "lock"))
+' "$SDTOOLS_CLI" "$SLOT")"
+  if [ -n "$SLOT_LOCK" ]; then
+    exec 9>>"$SLOT_LOCK"
+    if ! flock -n 9; then
+      echo "Error: slot $SLOT is running something (a runplan or a queued job holds its run lock)."
+      echo "In queue mode, run 'runq hold $SLOT' so no new job starts, wait for the job to end, then build."
+      exit 1
+    fi
+  fi
+fi
+
 if [ -z "$BUILD_NAME" ]; then
   echo "Error: build name (-b) must not be empty."
   exit 2

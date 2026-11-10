@@ -9,7 +9,10 @@ stalls (no write, or no new simulated time in BOUT.log.0, for --stall-min
 minutes, default 60), or at the deadline (--max-s seconds, default 3600).
 While the slot's slotd reports its runplan running, the wait is not done,
 so it also covers lines such as ctest that start no sdrun.py case.
-Prints why it returned (done, stalled or deadline), then one
+A slot in queue mode is busy while it runs a job, or has jobs queued and no
+hold; the cases watched are its jobs' cases. A held slot with jobs still
+queued ends the wait as held, not done.
+Prints why it returned (done, held, stalled or deadline), then one
 "<state>\t<case>" line per case. A second wait on a watched runplan exits at
 once, so one wait covers each slot.
 
@@ -61,6 +64,49 @@ def queued(slot):
     except OSError:
         return []
     return cases_in(text, os.path.dirname(RUNPLAN.format(slot)))
+
+
+def queue_mode(cfg, slot):
+    try:
+        return slotlib.mode(cfg, slot) == "queue"
+    except ValueError:
+        return False
+
+
+def waiting_jobs(cfg, slot):
+    """Jobs queued for the slot itself."""
+    return slotlib.read_jobs(cfg, "queue", slot)
+
+
+def held(cfg, slot):
+    return os.path.exists(slotlib.path(cfg, slot, "hold"))
+
+
+def slot_busy(cfg, slot):
+    """True while the slot's slotd runs its runplan or a job, or, in queue
+    mode, has jobs queued and no hold."""
+    st = slotlib.read_state(cfg, slot)
+    if st["alive"] and st.get("state") == "running":
+        return True
+    if queue_mode(cfg, slot):
+        return bool(slotlib.read_jobs(cfg, "running", slot)) or (
+            bool(waiting_jobs(cfg, slot)) and not held(cfg, slot))
+    return False
+
+
+def slot_held(cfg, slot):
+    """True for a queue-mode slot that is held with jobs still queued."""
+    return queue_mode(cfg, slot) and held(cfg, slot) and \
+        bool(waiting_jobs(cfg, slot))
+
+
+def slot_cases(cfg, slot):
+    """The cases to report on: the runplan's, or in queue mode the cases of
+    the slot's running and queued jobs."""
+    if not queue_mode(cfg, slot):
+        return queued(slot)
+    return [j["case"] for w in ("running", "queue")
+            for j in slotlib.read_jobs(cfg, w, slot) if j.get("case")]
 
 
 def lock(runplans):
@@ -170,13 +216,13 @@ def main():
     cfg = slotlib.config()
 
     def busy():
-        return any(st["alive"] and st.get("state") == "running"
-                   for st in (slotlib.read_state(cfg, str(n))
-                              for n in a.slots))
+        return any(slot_busy(cfg, str(n)) for n in a.slots)
 
     why, states = wait_cases(
-        lambda: [c for n in a.slots for c in queued(n)],
+        lambda: [c for n in a.slots for c in slot_cases(cfg, str(n))],
         a.stall_min, time.time() + a.max_s, busy_fn=busy)
+    if why == "done" and any(slot_held(cfg, str(n)) for n in a.slots):
+        why = "held"
     print(why)
     for c, s in sorted(states.items()):
         print(f"{s}\t{c}")

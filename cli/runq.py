@@ -13,6 +13,7 @@ Usage:
     runq go <slot>
     runq own <slot> <campaign|none> "<the user's words>"
     runq mode <slot> queue|runplan
+    runq restart <slot>
 
 Job options: --cwd DIR, --timeout T (e.g. 90s, 30m, 10h), --after JOB,
 --study S<nn>, --validate, --rerun. A case job runs
@@ -32,13 +33,20 @@ and rm or cancel only its campaign's jobs. An agent's campaign is the one
 whose cases directory or clone holds its working directory. The user may do
 everything.
 
+runq restart stops an idle slot's slotd and starts its screen h<slot> again
+with the command that started it.
+
 Exit status: 0 queued (or the dry run passed), 1 refused, 2 bad usage.
 """
 import datetime as dt
+import glob
 import json
 import os
 import shlex
+import signal
+import subprocess
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 import runcheck  # noqa: E402
@@ -95,18 +103,7 @@ def agent_campaign(cfg, cwd):
     return runcheck.campaign_of(cfg, os.path.realpath(cwd))
 
 
-def store_jobs(cfg, where, slot):
-    """The jobs in <where>/<slot>/, oldest first."""
-    d = os.path.join(cfg["state_dir"], where, str(slot))
-    out = []
-    for name in sorted(os.listdir(d)) if os.path.isdir(d) else []:
-        if name.endswith(".json") and not name.startswith("."):
-            try:
-                with open(os.path.join(d, name), encoding="utf-8") as f:
-                    out.append(json.load(f))
-            except (OSError, ValueError):
-                continue
-    return out
+store_jobs = slotlib.read_jobs
 
 
 def owner_or_none(cfg, slot):
@@ -553,8 +550,99 @@ def cmd_mode(cfg, args, who, cwd):
     return 0
 
 
+# --- restart -----------------------------------------------------------
+
+RESTART_WAIT_S = 60   # the screen's spack setup takes several seconds
+
+
+def screen_of(slot):
+    """(argv, environ, cwd) of the screen session h<slot> as it was started,
+    read from /proc, else None."""
+    for d in glob.glob("/proc/[0-9]*"):
+        try:
+            with open(os.path.join(d, "cmdline"), "rb") as f:
+                argv = [a.decode() for a in f.read().split(b"\0") if a]
+        except OSError:
+            continue
+        if not argv or os.path.basename(argv[0]).lower() != "screen":
+            continue
+        k = next((i for i, a in enumerate(argv[:-1]) if a.startswith("-")
+                  and a.endswith("S") and argv[i + 1] == f"h{slot}"), None)
+        if k is None:
+            continue
+        try:
+            with open(os.path.join(d, "environ"), "rb") as f:
+                env = dict(e.decode().split("=", 1) for e in
+                           f.read().split(b"\0") if b"=" in e)
+            cwd = os.readlink(os.path.join(d, "cwd"))
+            # screen renames itself SCREEN, so run the file it came from.
+            exe = os.readlink(os.path.join(d, "exe"))
+        except OSError:
+            return None
+        return [exe] + argv[1:], env, cwd
+    return None
+
+
+def cmd_restart(cfg, args, who, cwd):
+    if len(args) != 1:
+        raise Usage("runq restart takes one slot")
+    slot = slot_arg(cfg, args[0])
+    found = []
+    st = slotlib.read_state(cfg, slot)
+    if store_jobs(cfg, "running", slot):
+        found.append(Refusal("slot-busy", slot, f"slot {slot} runs a job",
+                             f"runq cancel {slot}, or wait for it"))
+    elif st.get("alive") and st.get("state") not in ("idle", "held",
+                                                      "stopped"):
+        found.append(Refusal("slot-busy", slot, f"slotd {slot} is "
+                             f"{st.get('state')}"))
+    elif not slotlib.lock_free(cfg, slot):
+        found.append(Refusal("slot-busy", slot, f"slot {slot}'s run lock is "
+                             "held"))
+    screen = screen_of(slot)
+    if screen is None:
+        found.append(Refusal("screen-missing", f"h{slot}", f"no screen "
+                             f"session h{slot} runs, so runq cannot tell "
+                             "how to start slotd; the user starts it"))
+    if show(found, "runq restart: refused"):
+        return 1
+    argv, env, home = screen
+    # The screen may have been started from an agent's shell; slotd and its
+    # runs must not inherit that shell's markers.
+    env = {k: v for k, v in env.items() if not runcheck.AGENT_MARK.match(k)
+           and k not in ("SDTOOLS_SLOT_ENFORCE", "HERMES_SLOT", "RUNQ_JOB")}
+    old = st.get("slotd_pid") if st.get("alive") else None
+    if old:
+        os.kill(old, signal.SIGINT)    # slotd stops; its screen then ends
+        deadline = time.time() + 15
+        while time.time() < deadline and (slotlib.pid_alive(old) or
+                                          screen_of(slot)):
+            time.sleep(0.2)
+        if slotlib.pid_alive(old) or screen_of(slot):
+            print(f"runq restart: slotd {slot} (pid {old}) or screen h{slot} "
+                  "did not stop within 15 s; nothing started")
+            return 1
+    elif screen_of(slot):
+        print(f"runq restart: screen h{slot} runs without a live slotd; "
+              f"the user closes it (screen -S h{slot} -X quit) first")
+        return 1
+    subprocess.run(argv, env=env, cwd=home, check=False)
+    deadline = time.time() + RESTART_WAIT_S
+    while time.time() < deadline:
+        new = slotlib.read_state(cfg, slot)
+        if new.get("alive") and new.get("slotd_pid") != old:
+            print(f"slot {slot}: slotd restarted in screen h{slot}, pid "
+                  f"{new['slotd_pid']}, {new.get('mode') or 'runplan'} mode")
+            return 0
+        time.sleep(0.5)
+    print(f"runq restart: screen h{slot} started, but no new slotd "
+          f"reported within {RESTART_WAIT_S} s; check screen h{slot}")
+    return 1
+
+
 COMMANDS = {"add": cmd_add, "ls": cmd_ls, "rm": cmd_rm, "cancel": cmd_cancel,
-            "hold": cmd_hold, "go": cmd_go, "own": cmd_own, "mode": cmd_mode}
+            "hold": cmd_hold, "go": cmd_go, "own": cmd_own, "mode": cmd_mode,
+            "restart": cmd_restart}
 
 
 def main(argv=None, who=None, cwd=None):
