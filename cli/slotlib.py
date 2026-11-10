@@ -192,3 +192,57 @@ def lock_free(cfg, slot):
         fcntl.flock(f, fcntl.LOCK_UN)
         return True
 
+
+# The job store: one JSON file per job, under <state_dir>/<where>/<slot>/,
+# where `where` is queue, running or done and `slot` is a number or "any".
+# runq.py writes queue/; slotd.py moves jobs on. Every write goes to a
+# temporary file first and is renamed into place, so a reader never sees
+# half a job.
+WHERES = ("queue", "running", "done")
+
+
+def job_path(cfg, where, slot, job_id):
+    d = os.path.join(cfg["state_dir"], where, str(slot))
+    os.makedirs(d, exist_ok=True)
+    return os.path.join(d, f"{job_id}.json")
+
+
+def write_job(cfg, where, slot, job):
+    """Write `job` to <where>/<slot>/<id>.json; return its path."""
+    p = job_path(cfg, where, slot, job["id"])
+    tmp = os.path.join(os.path.dirname(p), f".{job['id']}.json.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(job, f, indent=1)
+    os.replace(tmp, p)
+    return p
+
+
+def move_job(cfg, job_id, src, dst):
+    """Move a job file from src to dst, each a (where, slot) pair, with one
+    rename. Return the new path, or None when the file has gone: another
+    process moved it first, so only one slotd can claim a job."""
+    old = job_path(cfg, *src, job_id)
+    new = job_path(cfg, *dst, job_id)
+    try:
+        os.rename(old, new)
+    except FileNotFoundError:
+        return None
+    return new
+
+
+class queue_lock:
+    """Hold <state_dir>/queue.lock: runq holds it from its checks to its
+    write, so two calls cannot both pass the duplicate check."""
+
+    def __init__(self, cfg):
+        os.makedirs(cfg["state_dir"], exist_ok=True)
+        self.path = os.path.join(cfg["state_dir"], "queue.lock")
+
+    def __enter__(self):
+        self.f = open(self.path, "a")
+        fcntl.flock(self.f, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc):
+        fcntl.flock(self.f, fcntl.LOCK_UN)
+        self.f.close()
