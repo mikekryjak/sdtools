@@ -170,9 +170,12 @@ def job_cores(job):
     return slotlib.cpu_set(spec) if spec else None
 
 
-def may_take(job, owner):
-    """True if a slot with this owner may take this `any` job: the owner's
-    campaign's job, or a user's job outside every campaign."""
+def may_take(job, owner, slot):
+    """True if this slot, with this owner, may take this `any` job: the
+    owner's campaign's job, or a user's job outside every campaign. A job
+    added under a mandate runs only on the mandate's slots."""
+    if job.get("only_slots") and str(slot) not in job["only_slots"]:
+        return False
     if job.get("campaign") is None:
         return (job.get("by") or {}).get("kind") == "user"
     return job["campaign"] == owner
@@ -246,7 +249,7 @@ class Queue:
         except ValueError:
             owner = None
         anys = [j for j in slotlib.read_jobs(self.cfg, "queue", "any")
-                if may_take(j, owner)]
+                if may_take(j, owner, self.slot)]
         return sorted(own + anys, key=lambda j: j["id"])
 
     # Starting --------------------------------------------------------------

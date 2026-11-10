@@ -28,6 +28,10 @@ job on the line before. If one line is refused, no line is queued.
 
 --dry-run runs every check and queues nothing.
 
+Under an agent's live mandate (the slot config's "mandate" module), runq
+also runs the mandate's checks on each job and charges it to the budget;
+the agent may not own, mode or restart.
+
 An agent may add, rm, cancel, hold and go only on a slot its campaign owns,
 and rm or cancel only its campaign's jobs. An agent's campaign is the one
 whose cases directory or clone holds its working directory. The user may do
@@ -160,6 +164,83 @@ def mode_refusal(cfg, slot, verb):
     return []
 
 
+# --- mandates ----------------------------------------------------------
+# The slot config may name the dev-campaign skill's mandate module
+# ("mandate": "<path to mandate.py>"). Under an agent's live mandate, runq
+# adds the mandate's checks to its own; sdtools never imports the skill by
+# a fixed path.
+
+def mandate_module(cfg):
+    """The mandate module the slot config names, or None if it names none.
+    Raises on a module that will not load."""
+    import importlib.util
+    path = cfg.get("mandate")
+    if not path:
+        return None
+    path = os.path.expanduser(path)
+    spec = importlib.util.spec_from_file_location("mandate", path)
+    if spec is None:
+        raise ImportError(f"no module at {path}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def live_mandates(mod):
+    """(state path, state) of each live mandate."""
+    out, t = [], dt.datetime.now()
+    for p in sorted(glob.glob(os.path.join(mod.STATE, "*.json"))):
+        try:
+            st = mod.load(p)
+            if mod.expiry(st["bounds"]["expires"]) > t:
+                out.append((p, st))
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    return out
+
+
+def agent_mandate(cfg, who, slots):
+    """For an agent: ((module, state path, state) of its live mandate, or
+    None; refusals when runq cannot tell which mandate applies). `slots`
+    are the slots the command acts on; [] means any slot."""
+    if who.get("kind") != "agent":
+        return None, []
+    try:
+        mod = mandate_module(cfg)
+    except Exception as e:
+        return None, [Refusal("mandate-module", cfg.get("mandate"),
+                              f"the mandate module {cfg.get('mandate')}, "
+                              f"named in the slot config, will not load "
+                              f"({e!r}), so runq cannot check an agent's "
+                              "command against a mandate")]
+    if mod is None:
+        return None, []
+    live = live_mandates(mod)
+    sid = who.get("session")
+    if sid:
+        mine = mod.state_path(sid)
+        return next(((mod, p, st) for p, st in live if p == mine), None), []
+    held = [p for p, st in live if not slots or
+            set(slots) & {str(n) for n in st["bounds"]["slots"]}]
+    if held:
+        return None, [Refusal("mandate-unknown", ", ".join(slots) or "any",
+                              "a live mandate holds this slot, and this "
+                              "agent shell names no session "
+                              "(CLAUDE_CODE_SESSION_ID), so runq cannot tell "
+                              "whether that mandate is this agent's")]
+    return None, []
+
+
+def no_mandate(cfg, who, slot, verb):
+    """Refusals for an agent that would `verb` a slot under a mandate."""
+    m, found = agent_mandate(cfg, who, [slot])
+    if m:
+        found.append(Refusal("mandate-live", slot, f"under a mandate an "
+                             f"agent does not {verb}; the user does, or the "
+                             "agent after the mandate ends"))
+    return found
+
+
 # --- add ---------------------------------------------------------------
 
 def read_batch(path, cwd):
@@ -234,14 +315,44 @@ def cmd_add(cfg, args, who, cwd):
                     r.message = f"line {n}: {r.message}"
             job["warnings"] = [r.message for r in mine if r.warn]
             found += mine
+        m, why = agent_mandate(cfg, who, [] if slot == "any" else [slot])
+        found += why
+        if m:
+            mod, state_path, state = m
+            line_of = {j["id"]: n for n, j in jobs}
+            more = mod.check_jobs(state, [j for _, j in jobs], dry_run=True)
+            for r in more:
+                n = line_of.get(r.get("job"))
+                found.append(Refusal(r["rule"], r["target"],
+                                     (f"line {n}: " if n else "") +
+                                     "mandate: " + r["message"],
+                                     r.get("fix", "")))
+            if not dry and not any(not r.warn for r in found):
+                # Charge the batch to the budget; the ledger may have
+                # moved since the dry check.
+                found += [Refusal(r["rule"], r["target"],
+                                  "mandate: " + r["message"], r.get("fix", ""))
+                          for r in mod.check_jobs(state,
+                                                  [j for _, j in jobs])]
         what = "dry run" if dry else "nothing queued"
         status = show(found, f"runq add: refused, {what}")
+        if status and m and not dry:
+            # One refused call counts as one denial, as one denied tool call
+            # does in the mandate's own guard.
+            first = next(r for r in found if not r.warn)
+            note = m[0].record_refusal(m[1], first.rule, first.target)
+            if note:
+                print(note.strip())
         if status or dry:
             if not status:
                 print(f"runq add: dry run passes for {len(jobs)} job"
                       f"{'s' * (len(jobs) != 1)}; nothing queued")
             return status
         for _, job in jobs:
+            if m:
+                job["mandate"] = {"state": m[1],
+                                  "expires": m[2]["bounds"]["expires"]}
+                job["only_slots"] = [str(n) for n in m[2]["bounds"]["slots"]]
             slotlib.write_job(cfg, "queue", slot, job)
     for _, job in jobs:
         after = f", after {job['after']}" if job.get("after") else ""
@@ -422,7 +533,8 @@ def cmd_own(cfg, args, who, cwd):
                     'user\'s words: runq own 2 core-flashes "take slot 2"')
     slot = slot_arg(cfg, args[0])
     camp, words = args[1], (args[2] if len(args) == 3 else "").strip()
-    found = mode_refusal(cfg, slot, "own")
+    found = mode_refusal(cfg, slot, "own") + \
+        no_mandate(cfg, who, slot, "record a slot owner")
     names = sorted(c["name"] for c in slotlib.campaigns(cfg))
     if camp != "none" and camp not in names:
         found.append(Refusal("campaign-unknown", camp, f"no campaign file "
@@ -491,7 +603,7 @@ def cmd_mode(cfg, args, who, cwd):
         raise Usage("runq mode takes a slot and queue or runplan")
     slot, want = slot_arg(cfg, args[0]), args[1]
     with slotlib.queue_lock(cfg):
-        found = []
+        found = no_mandate(cfg, who, slot, "switch a slot's mode")
         try:
             have = slotlib.mode(cfg, slot)
         except ValueError:
@@ -587,7 +699,7 @@ def cmd_restart(cfg, args, who, cwd):
     if len(args) != 1:
         raise Usage("runq restart takes one slot")
     slot = slot_arg(cfg, args[0])
-    found = []
+    found = no_mandate(cfg, who, slot, "restart a slotd")
     st = slotlib.read_state(cfg, slot)
     if store_jobs(cfg, "running", slot):
         found.append(Refusal("slot-busy", slot, f"slot {slot} runs a job",

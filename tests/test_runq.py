@@ -1,6 +1,7 @@
 """runq.py, the run queue command, and the slotlib job store. Each test calls
 runq.main() in-process with a chosen caller, against throwaway cases and slot
 config (the env fixture of test_runcheck.py)."""
+import datetime as dt
 import json
 import os
 import sys
@@ -274,3 +275,115 @@ def test_agent_cancels_only_its_campaigns_job(env, capsys):
 def test_ids_keep_the_order_they_were_made_in():
     ids = [runcheck.new_id() for _ in range(200)]
     assert ids == sorted(ids) and len(set(ids)) == 200
+
+
+FAKE_MANDATE = '''
+import datetime as dt, json, os
+STATE = {state!r}
+
+def load(p):
+    return json.load(open(p))
+
+def expiry(v):
+    return dt.datetime.fromisoformat(v)
+
+def state_path(sid):
+    return os.path.join(STATE, sid + ".json")
+
+def check_jobs(state, jobs, dry_run=False):
+    out = [{{"rule": "mandate-slot", "target": j["slot"], "job": j["id"],
+             "message": "slot " + j["slot"] + " is not the mandate's"}}
+           for j in jobs if j["slot"] not in ("1", "any")]
+    if not out and not dry_run:
+        with open(os.path.join(STATE, "charged"), "a") as f:
+            f.write(" ".join(j["id"] for j in jobs) + "\\n")
+    return out
+
+def record_refusal(path, rule, target):
+    with open(os.path.join(STATE, "refusals"), "a") as f:
+        f.write(rule + " " + target + "\\n")
+    return " counted"
+'''
+
+
+def mandated(env, tmp_path, live=True):
+    """A fake mandate module in the slot config, and a mandate for agent
+    session s1 on slot 1 (expired unless `live`)."""
+    st = tmp_path / "mandates"
+    st.mkdir()
+    mod = tmp_path / "mandate.py"
+    mod.write_text(FAKE_MANDATE.format(state=str(st)))
+    env["cfg"]["mandate"] = str(mod)
+    when = dt.datetime.now() + dt.timedelta(hours=1 if live else -1)
+    (st / "s1.json").write_text(json.dumps(
+        {"bounds": {"slots": [1], "expires": when.isoformat()}}))
+    return st
+
+
+def test_runq_adds_the_mandates_checks(env, tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(slotlib, "config", lambda: env["cfg"])
+    st = mandated(env, tmp_path)
+    case(env)
+    exe = f"-p={env['exe']}"
+    open(slotlib.path(env["cfg"], "2", "owner"), "w").write(
+        json.dumps({"campaign": "camp"}))
+    assert run(env, "add", "2", "c1", exe, "--timeout", "1h",
+               who=AGENT) == 1
+    assert "mandate: slot 2 is not the mandate's" in capsys.readouterr().out
+    assert (st / "refusals").read_text() == "mandate-slot 2\n"
+    assert run(env, "add", "2", "c1", exe, "--timeout", "1h", "--dry-run",
+               who=AGENT) == 1
+    assert (st / "refusals").read_text() == "mandate-slot 2\n"   # not counted
+    assert run(env, "add", "1", "c1", exe, "--timeout", "1h", who=AGENT) == 0
+    [j] = stored(env)
+    assert j["mandate"]["state"] == str(st / "s1.json")
+    assert j["only_slots"] == ["1"]
+    assert (st / "charged").read_text().split() == [j["id"]]
+    # The user's jobs, and other sessions' agents, meet no mandate.
+    assert run(env, "add", "2", "--", "true") == 0
+    other = dict(AGENT, session="s2")
+    assert run(env, "add", "2", "--cwd", str(env["camp"]), "--timeout", "1m",
+               "--", "true", who=other) == 0
+
+
+def test_under_a_mandate_an_agent_owns_modes_and_restarts_nothing(
+        env, tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(slotlib, "config", lambda: env["cfg"])
+    monkeypatch.setattr(runq, "screen_of", lambda slot: None)
+    mandated(env, tmp_path)
+    assert run(env, "own", "1", "camp", "words", who=AGENT) == 1
+    assert run(env, "mode", "1", "runplan", who=AGENT) == 1
+    assert run(env, "restart", "1", who=AGENT) == 1
+    assert capsys.readouterr().out.count("under a mandate an agent") == 3
+    assert run(env, "own", "1", "camp", "words") == 0       # the user may
+
+
+def test_an_agent_without_a_session_is_refused_on_a_mandate_slot(
+        env, tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(slotlib, "config", lambda: env["cfg"])
+    mandated(env, tmp_path)
+    case(env)
+    codex = dict(AGENT, session=None)
+    assert run(env, "add", "1", "c1", f"-p={env['exe']}", "--timeout", "1h",
+               who=codex) == 1
+    assert "names no session" in capsys.readouterr().out
+
+
+def test_an_expired_mandate_checks_nothing(env, tmp_path, monkeypatch):
+    monkeypatch.setattr(slotlib, "config", lambda: env["cfg"])
+    mandated(env, tmp_path, live=False)
+    case(env)
+    assert run(env, "add", "1", "c1", f"-p={env['exe']}", "--timeout", "1h",
+               who=AGENT) == 0
+    assert stored(env)[0]["mandate"] is None
+
+
+def test_a_mandate_module_that_will_not_load_stops_agents_only(
+        env, tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(slotlib, "config", lambda: env["cfg"])
+    env["cfg"]["mandate"] = str(tmp_path / "missing.py")
+    case(env)
+    assert run(env, "add", "1", "c1", f"-p={env['exe']}", "--timeout", "1h",
+               who=AGENT) == 1
+    assert "will not load" in capsys.readouterr().out
+    assert run(env, "add", "1", "c1", f"-p={env['exe']}") == 0

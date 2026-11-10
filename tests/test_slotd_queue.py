@@ -341,3 +341,16 @@ def test_restart_refuses_a_busy_slot_or_a_missing_screen(env, monkeypatch,
     assert "slot 1 runs a job" in out and "no screen session h1" in out
     assert runq.main(["restart", "2"], who=USER) == 1
     assert "no screen session h2" in capsys.readouterr().out
+
+
+def test_a_mandate_job_runs_only_on_the_mandates_slots(env):
+    add(env, "--", "true", slot="any")
+    [j] = slotlib.read_jobs(env["cfg"], "queue", "any")
+    j["only_slots"] = ["1"]
+    slotlib.write_job(env["cfg"], "queue", "any", j)
+    env["slotd"]("2")
+    time.sleep(3)
+    assert slotlib.read_jobs(env["cfg"], "queue", "any") != []
+    env["slotd"]("1")
+    [j] = done(env)
+    assert j["outcome"] == "ok" and j["slot_ran"] == "1"
