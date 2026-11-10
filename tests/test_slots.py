@@ -69,6 +69,22 @@ def test_refuses_without_owner(env, slotd):
     assert r.returncode == 1 and "no owner" in r.stdout
 
 
+def test_cd_into_the_owners_clone(env, tmp_path, monkeypatch, slotd):
+    clone = tmp_path / "hermes-3-camp"
+    clone.mkdir()
+    (tmp_path / "camp.toml").write_text(f'name = "camp"\nclone = "{clone}"\n')
+    cfg_path = tmp_path / "slots.json"
+    cfg = json.loads(cfg_path.read_text())
+    plan(env, f"cd {clone} && ./build-x/hermes_unit_tests")
+    assert "not inside 'camp'" in launch("1", "--check").stdout
+    cfg["campaigns"] = str(tmp_path / "*.toml")
+    cfg_path.write_text(json.dumps(cfg))
+    r = launch("1", "--check")
+    assert r.returncode == 0, r.stdout
+    plan(env, f"cd {tmp_path} && ./build-x/hermes_unit_tests")
+    assert "not inside 'camp'" in launch("1", "--check").stdout
+
+
 def test_refuses_without_slotd(env):
     plan(env, "echo hi")
     r = launch("1", "--check")

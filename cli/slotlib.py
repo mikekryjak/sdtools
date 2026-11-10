@@ -7,7 +7,12 @@ config file (default ~/.config/sdtools/slots.json, or $SDTOOLS_SLOT_CONFIG):
     {"enforce": true,
      "cases": "/home/mike/work/cases",
      "cores": {"1": "2-11", "2": "12-21", "3": "22-31"},
-     "state_dir": "~/.cache/sdtools-slots"}
+     "state_dir": "~/.cache/sdtools-slots",
+     "campaigns": "/home/mike/work/notebooks/**/campaign.toml"}
+
+"campaigns" is optional: a glob of TOML files, each naming a campaign
+(`name`) and its source clone (`clone`). A slot's owner may then also cd
+into its own clone, e.g. to run unit tests from the repo root.
 
 Without the file nothing is enforced, so the tools behave as before on other
 machines. Setting SDTOOLS_SLOT_ENFORCE=0 lifts enforcement for one command.
@@ -39,6 +44,24 @@ def config():
     if os.environ.get("SDTOOLS_SLOT_ENFORCE") == "0":
         cfg["enforce"] = False
     return cfg
+
+
+def owner_clone(cfg, owner):
+    """Realpath of the clone the owner's campaign file names, or None."""
+    import glob
+    import tomllib
+    pattern = cfg.get("campaigns")
+    if not pattern or owner in ("", "none"):
+        return None
+    for p in glob.glob(os.path.expanduser(pattern), recursive=True):
+        try:
+            with open(p, "rb") as f:
+                c = tomllib.load(f)
+        except (OSError, ValueError):
+            continue
+        if c.get("name") == owner and c.get("clone"):
+            return os.path.realpath(c["clone"])
+    return None
 
 
 def cpu_set(spec):

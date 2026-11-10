@@ -7,7 +7,8 @@ Refuses, and starts nothing, unless every check passes:
   - exactly the configured runplans exist (runplan1.sh .. runplanN.sh in the
     cases directory, and no runplan?.sh below it);
   - the runplan's "# owner:" line names an owner other than none, and every
-    cd target and every sdrun.py case path holds the owner as a path segment;
+    cd target and every sdrun.py case path holds the owner as a path segment
+    (a cd may also enter the owner's clone, from the config's "campaigns");
   - it queues at least one command line;
   - every sdrun.py line runs on this slot (-s=<slot>, or -c inside its cores)
     and tees to <case>/BOUT.log.console;
@@ -74,6 +75,7 @@ def problems(cfg, slot):
     lines = [part for s in live_lines(text)
              for part in re.split(r"\s*(?:&&|;)\s*", s) if part]
     root = cases
+    clone = slotlib.owner_clone(cfg, owner)
     cmds = []
     for s in lines:
         if ESCAPES.search(s):
@@ -83,7 +85,7 @@ def problems(cfg, slot):
         if cd:
             root = os.path.realpath(os.path.join(root, cd.group(1)))
             if owner not in ("", "none") and \
-                    f"/{owner}/" not in root + "/":
+                    f"/{owner}/" not in root + "/" and root != clone:
                 errs.append(f"cd target {root} is not inside '{owner}', "
                             "the slot's owner")
             continue
