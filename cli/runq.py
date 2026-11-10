@@ -8,6 +8,7 @@ Usage:
     runq add <slot|any> -f <batch file> [--dry-run]
     runq add ... --json                 print the result as JSON, with rule ids
     runq ls [--json]
+    runq wait [<slot> ...] [--mine] [--stall-min N] [--max-s S]
     runq rm <job>
     runq cancel <slot>
     runq hold <slot> [why]
@@ -38,6 +39,17 @@ and rm or cancel only its campaign's jobs. An agent's campaign is the one
 whose cases directory or clone holds its working directory. The user may do
 everything.
 
+runq ls flags a running job that has written no output for --stall-min
+minutes (default 60) as stalled, and a slot that has started none of its
+queued jobs for 2 minutes as idle.
+
+runq wait returns when the jobs it watches have all ended (done), when one of
+them is flagged (stalled or idle), when a watched slot is held with jobs
+queued (held), or after --max-s seconds (deadline, default 3600). It watches
+the jobs of the slots named, or of every slot; --mine watches only the jobs
+this agent session added. It prints why it returned, then one line per job.
+Run it as a background task after queuing.
+
 runq restart stops an idle slot's slotd and starts its screen h<slot> again
 with the command that started it.
 
@@ -61,6 +73,9 @@ import slotlib  # noqa: E402
 from runcheck import Refusal  # noqa: E402
 
 RECENT = 5    # ended jobs per slot that `runq ls` shows
+STALL_MIN = 60     # a running job quiet this long is flagged stalled
+IDLE_FLAG_S = 120  # a slot that starts no queued job this long is flagged idle
+WAIT_POLL_S = int(os.environ.get("RUNQ_WAIT_POLL_S", 30))
 
 
 class Usage(Exception):
@@ -387,7 +402,92 @@ def progress(case):
     return f"{done}/{nout if nout is not None else '?'}"
 
 
-def snapshot(cfg):
+def stamp_of(iso):
+    """Seconds since the epoch of one of the store's local ISO times; 0 if
+    absent or unreadable."""
+    try:
+        return dt.datetime.fromisoformat(iso).timestamp()
+    except (TypeError, ValueError):
+        return 0
+
+
+def last_output(job):
+    """When a job last wrote output: its console or log, and for a case job
+    the case's BOUT.log.0 and dump files. 0 if none exists."""
+    files = [job.get("output")]
+    case = job.get("validate_copy") or job.get("case")
+    if case:
+        files += [os.path.join(case, "BOUT.log.0"),
+                  *glob.glob(os.path.join(case, "BOUT.dmp.*"))]
+    return max((os.path.getmtime(f) for f in files
+                if f and os.path.isfile(f)), default=0)
+
+
+def may_take(job, owner, slot):
+    """True if a slot with this owner may take this `any` job; as slotd's."""
+    if job.get("only_slots") and str(slot) not in job["only_slots"]:
+        return False
+    if job.get("campaign") is None:
+        return (job.get("by") or {}).get("kind") == "user"
+    return job["campaign"] == owner
+
+
+def startable(cfg, job):
+    """False while the job's --after job is still queued or running."""
+    if not job.get("after"):
+        return True
+    where, _ = runcheck.find_job(cfg, job["after"])
+    return where not in ("queue", "running")
+
+
+def flags(cfg, snap, stall_min=STALL_MIN, t=None):
+    """The watch flags of a snapshot: a running job quiet for stall_min
+    minutes is stalled; a free queue-mode slot that has started none of its
+    startable queued jobs for IDLE_FLAG_S is idle. Each flag is a dict:
+    flag, slot, job, message."""
+    t = time.time() if t is None else t
+    out = []
+    for n, s in snap["slots"].items():
+        if s["mode"] != "queue":
+            continue
+        for j in s["running"]:
+            quiet = t - max(last_output(j), stamp_of(j.get("started")))
+            if quiet > 60 * stall_min:
+                out.append({"flag": "stalled", "slot": n, "job": j["id"],
+                            "message": f"job {j['id']} on slot {n} has "
+                            f"written no output for {quiet / 60:.0f} min"})
+        if s["running"] or s["hold"]:
+            continue
+        # The slot's own queue, and the `any` jobs it may take.
+        waiting = [j for j in s["queued"] + [
+            a for a in snap["any"] if may_take(a, s["owner"], n)]
+            if startable(cfg, j)]
+        if not waiting:
+            continue
+        ended = max((stamp_of(d.get("ended")) for d in s["done"]), default=0)
+        j = min(waiting, key=lambda j: j["id"])
+        since = max(stamp_of(j.get("added")), ended)
+        if t - since > IDLE_FLAG_S:
+            why = ("its slotd is not running" if s["slotd"] == "not running"
+                   else "a process left from an earlier job holds its run "
+                   "lock" if s["slotd"] == "orphan" else "slotd started "
+                   "nothing")
+            out.append({"flag": "idle", "slot": n, "job": j["id"],
+                        "message": f"slot {n} has started nothing for "
+                        f"{(t - since) / 60:.0f} min with job {j['id']} "
+                        f"queued: {why}"})
+    for a in snap["any"]:
+        if t - stamp_of(a.get("added")) > IDLE_FLAG_S and not any(
+                s["mode"] == "queue" and may_take(a, s["owner"], n)
+                for n, s in snap["slots"].items()):
+            out.append({"flag": "idle", "slot": "any", "job": a["id"],
+                        "message": f"no queue-mode slot may take job "
+                        f"{a['id']}: none is owned by its campaign "
+                        f"{a.get('campaign')}"})
+    return out
+
+
+def snapshot(cfg, stall_min=STALL_MIN):
     out = {"slots": {}, "any": store_jobs(cfg, "queue", "any")}
     for n in sorted(cfg["cores"]):
         try:
@@ -410,6 +510,7 @@ def snapshot(cfg):
             "running": store_jobs(cfg, "running", n),
             "queued": store_jobs(cfg, "queue", n),
             "done": store_jobs(cfg, "done", n)[-RECENT:]}
+    out["flags"] = flags(cfg, out, stall_min)
     return out
 
 
@@ -444,8 +545,83 @@ def cmd_ls(cfg, args, who, cwd):
         for j in s["done"]:
             print(f"        ended   {j['id']}  {j.get('outcome', '?')}  "
                   f"{label(j)}")
+        for f in snap["flags"]:
+            if f["slot"] == n:
+                print(f"        FLAG {f['flag']}: {f['message']}")
     for j in snap["any"]:
         print(f"any     queued  {j['id']}  {label(j)}  {by(j)}")
+    for f in snap["flags"]:
+        if f["slot"] == "any":
+            print(f"any     FLAG {f['flag']}: {f['message']}")
+    return 0
+
+
+# --- wait --------------------------------------------------------------
+
+def cmd_wait(cfg, args, who, cwd):
+    slots, mine, stall_min, max_s = [], False, STALL_MIN, 3600
+    it = iter(args)
+    for a in it:
+        try:
+            if a == "--mine":
+                mine = True
+            elif a == "--stall-min":
+                stall_min = float(next(it))
+            elif a == "--max-s":
+                max_s = float(next(it))
+            elif a in cfg["cores"]:
+                slots.append(a)
+            else:
+                raise Usage(f"runq wait takes slots ({', '.join(cfg['cores'])}),"
+                            f" --mine, --stall-min N and --max-s S, not {a}")
+        except (StopIteration, ValueError):
+            raise Usage(f"runq wait: {a} takes a number") from None
+    session = (who or {}).get("session")
+    if mine and not session:
+        raise Usage("runq wait --mine needs an agent session id "
+                    "(CLAUDE_CODE_SESSION_ID)")
+    slots = slots or sorted(cfg["cores"])
+
+    def watched(j):
+        return not mine or (j.get("by") or {}).get("session") == session
+
+    seen = {}       # job id -> latest copy of the job
+    deadline = time.time() + max_s
+    while True:
+        snap = snapshot(cfg, stall_min)
+        active = [j for n in slots for w in ("running", "queued")
+                  for j in snap["slots"][n][w] if watched(j)]
+        active += [j for j in snap["any"] if watched(j)]
+        ids = {j["id"] for j in active}
+        for j in active:
+            seen[j["id"]] = j
+        hit = [f for f in snap["flags"] if f["job"] in ids or (
+            f["flag"] == "idle" and f["slot"] in slots and not mine)]
+        held = [n for n in slots if snap["slots"][n]["hold"] and any(
+            watched(j) for j in snap["slots"][n]["queued"])]
+        if hit:
+            why = hit[0]["flag"]
+        elif held:
+            why = "held"
+        elif not active:
+            why = "done"
+        elif time.time() >= deadline:
+            why = "deadline"
+        else:
+            time.sleep(WAIT_POLL_S)
+            continue
+        break
+    print(why)
+    for f in hit:
+        print(f"FLAG {f['flag']}: {f['message']}")
+    for n in held:
+        print(f"HELD slot {n}: {by(snap['slots'][n]['hold'])}: "
+              f"{snap['slots'][n]['hold'].get('why') or 'no reason given'}")
+    for job_id, j in sorted(seen.items()):
+        where, now_j = runcheck.find_job(cfg, job_id)
+        j = now_j or j
+        state = j.get("outcome") if where == "done" else where or "gone"
+        print(f"{job_id}\t{state}\t{label(j)}")
     return 0
 
 
@@ -768,7 +944,8 @@ def cmd_restart(cfg, args, who, cwd):
     return 1
 
 
-COMMANDS = {"add": cmd_add, "ls": cmd_ls, "rm": cmd_rm, "cancel": cmd_cancel,
+COMMANDS = {"add": cmd_add, "ls": cmd_ls, "wait": cmd_wait, "rm": cmd_rm,
+            "cancel": cmd_cancel,
             "hold": cmd_hold, "go": cmd_go, "own": cmd_own, "mode": cmd_mode,
             "restart": cmd_restart}
 
