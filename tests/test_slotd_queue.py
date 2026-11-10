@@ -138,6 +138,19 @@ def test_a_case_job_runs_pinned_with_a_clean_environment(env):
     assert "Running:" in (c / "BOUT.log.console").read_text()   # sdrun banner
 
 
+def test_a_continuation_appends_to_the_console(env):
+    c = case(env)
+    env["slotd"]()
+    add(env, "c1", f"-p={env['exe']}")
+    done(env)
+    (c / "BOUT.log.console").write_text("first run\n")
+    add(env, "c1", f"-p={env['exe']}", "-restart", "-append")
+    [_, j] = done(env, 2)
+    assert j["outcome"] == "ok"
+    console = (c / "BOUT.log.console").read_text()
+    assert console.startswith("first run\n") and "Running:" in console
+
+
 def test_pipefail_keeps_the_exit_code(env):
     case(env, exit="3")
     env["slotd"]()

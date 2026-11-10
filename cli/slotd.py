@@ -321,7 +321,11 @@ class Queue:
             out = os.path.join(case, "BOUT.log.console")
             line = shlex.join([os.path.join(HERE, "sdrun.py"), *pin, "-y",
                                "-d", case, *argv])
-        line += " 2>&1 | tee " + shlex.quote(out)
+        # A continuation appends to the console, which alone keeps PETSc's
+        # finalize output of the earlier runs.
+        append = job.get("cmd") is None and not job.get("validate") and \
+            any(w in ("-append", "append") for w in job.get("argv") or [])
+        line += f" 2>&1 | tee {'-a ' if append else ''}" + shlex.quote(out)
         return ["taskset", "-c", self.cores, "bash", "-o", "pipefail", "-c",
                 line], out
 
